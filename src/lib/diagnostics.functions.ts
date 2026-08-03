@@ -30,12 +30,35 @@ export const getDiagnostics = createServerFn({ method: "GET" }).handler(async ()
   };
 });
 
+// Serializable projection: the scenario's returnValue is deliberately not sent
+// to the browser, it can hold any shape.
+interface HarnessScenarioView {
+  name: string;
+  active: boolean;
+  kind: "throw" | "timeout" | "return";
+  errorMessage: string;
+  delayMs: number | null;
+}
+
+function harnessView(): HarnessScenarioView[] {
+  return getFailureScenarios().map((scenario) => ({
+    name: scenario.name,
+    active: scenario.active,
+    kind: scenario.kind,
+    errorMessage: scenario.errorMessage,
+    delayMs: scenario.delayMs ?? null,
+  }));
+}
+
 // Failure simulation harness. It exists so recovery paths can be exercised on a
 // staging host; on a production host it is refused outright.
 export const getFailureHarness = createServerFn({ method: "GET" }).handler(async () => {
   await boot();
   const production = loadEnv().NODE_ENV === "production";
-  return { enabled: !production, scenarios: production ? [] : getFailureScenarios() };
+  return {
+    enabled: !production,
+    scenarios: production ? ([] as HarnessScenarioView[]) : harnessView(),
+  };
 });
 
 const harnessCommand = z.object({
@@ -51,7 +74,11 @@ export const setFailureScenario = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await boot();
     if (loadEnv().NODE_ENV === "production") {
-      return { ok: false, reason: "failure simulation is disabled on production hosts" };
+      return {
+        ok: false,
+        reason: "failure simulation is disabled on production hosts",
+        scenarios: [] as HarnessScenarioView[],
+      };
     }
     if (data.action === "clear-all") clearAllFailureScenarios();
     else if (data.action === "clear" && data.name) clearFailureScenario(data.name);
@@ -61,8 +88,8 @@ export const setFailureScenario = createServerFn({ method: "POST" })
         active: true,
         kind: data.kind,
         errorMessage: data.errorMessage,
-        delayMs: data.delayMs,
+        ...(data.delayMs === undefined ? {} : { delayMs: data.delayMs }),
       });
     }
-    return { ok: true, scenarios: getFailureScenarios() };
+    return { ok: true, reason: "", scenarios: harnessView() };
   });
