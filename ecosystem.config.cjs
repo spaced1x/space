@@ -3,7 +3,7 @@ module.exports = {
   apps: [
     {
       name: "space",
-      // Produced by `NITRO_PRESET=node_server bun run build` on the VPS.
+      // Produced by `NITRO_PRESET=node-server bun run build` on the VPS.
       script: "dist/server/index.mjs",
       exec_mode: "fork",
       instances: 1,
