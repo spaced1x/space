@@ -35,6 +35,14 @@ import { readRuntimeTarget } from "../core/runtime/target.server";
 // to this one snapshot so no two panels can disagree. It always carries both
 // runtimes: `active` is live telemetry from this process, `inactive` is a
 // read-only peek into the other environment's own database.
+/**
+ * Frozen runtime snapshot contract. Every operator page reads this shape and
+ * nothing else. Bump `SNAPSHOT_VERSION` only alongside a documented change.
+ */
+export const SNAPSHOT_VERSION = 1;
+
+let snapshotSequence = 0;
+
 export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async () => {
   await boot();
   // Refresh every connection from its live adapter before answering, so no two
@@ -70,6 +78,9 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
     },
   };
   return {
+    snapshotVersion: SNAPSHOT_VERSION,
+    sequence: ++snapshotSequence,
+    generatedAt: new Date().toISOString(),
     activeEnvironment: environment,
     target: readRuntimeTarget(),
     active,
