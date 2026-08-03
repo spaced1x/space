@@ -53,9 +53,15 @@ export function RuntimeDiagnostics() {
             {data.boot.trace.map((stage) => (
               <tr key={stage.stage}>
                 <Td mono>{stage.stage}</Td>
-                <Td className={stage.ok ? "text-ok" : "text-fail"}>{stage.ok ? "OK" : "FAILED"}</Td>
-                <Td mono>{stage.durationMs} ms</Td>
-                <Td>{stage.error ?? "—"}</Td>
+                <Td
+                  className={
+                    stage.error ? "text-fail" : stage.completedAt ? "text-ok" : "text-warn"
+                  }
+                >
+                  {stage.error ? "FAILED" : stage.completedAt ? "OK" : "RUNNING"}
+                </Td>
+                <Td mono>{stage.durationMs === undefined ? "—" : `${stage.durationMs} ms`}</Td>
+                <Td>{stage.error ?? stage.nextStage ?? "—"}</Td>
               </tr>
             ))}
           </tbody>
