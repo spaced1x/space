@@ -183,3 +183,31 @@ export function discoveryHealth(): HealthResult {
 export function discoveryStats(): DiscoveryStats {
   return { ...stats };
 }
+
+async function persistDiscovery(
+  picked: Partial<Record<MarketHorizon, DiscoveredMarket | null>>,
+): Promise<void> {
+  try {
+    for (const market of Object.values(picked)) {
+      if (!market) continue;
+      await replayRepository.upsertDiscovery({
+        condition_id: market.conditionId,
+        slug: market.slug,
+        horizon: market.horizon,
+        question: market.question,
+        status: market.status,
+        ptb: market.ptb,
+        close_at: market.closeAt,
+        settlement_at: market.settlementAt,
+        up_token_id: market.upTokenId,
+        down_token_id: market.downTokenId,
+        discovered_at: market.discoveredAt,
+        updated_at: clock().iso(),
+      });
+    }
+  } catch (error) {
+    log.warn("discovery not persisted", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
