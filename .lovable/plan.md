@@ -90,7 +90,7 @@ Runtime timeline: timestamped restart requested, restart completed, runtime star
 
 Market timeline: market discovered, discovery complete, TWAP started, trigger fired, intent created, risk approved, order submitted, filled, settlement, replay available. Both are projections of existing runtime events — no new event sources.
 
-Current Runtime Configuration table: environment, database, TWAP provider, provider state, strategy, execution mode, version, build, git commit, started at.
+Current Runtime Configuration table: environment, database, database schema version, TWAP provider, provider state, strategy, execution mode, version, build, git commit, started at.
 
 ## 15. Sidebar and desktop polish
 
@@ -111,7 +111,7 @@ Then UI: missing runtime bindings, placeholder loading text, empty cards, cards 
 
 ## Verification
 
-`bunx tsgo --noEmit`, `bunx vitest run`, `bun run build` (production), plus a Playwright and runtime walkthrough covering: cold boot, warm restart, V1 START, V1 STOP, V2 START, V2 STOP, ten restart cycles, every Mission Control tab, environment isolation, RTDS, Chainlink standby, CLOB authentication, the validation gate, provider persistence, connection timeline and market timeline. Pass conditions: no duplicate timers, no duplicate WebSocket connections, no increasing memory across the restart cycles, no console errors, all tests green.
+`bunx tsgo --noEmit`, `bunx vitest run`, `bun run build` (production), plus a Playwright and runtime walkthrough covering: cold boot, warm restart, V1 START, V1 STOP, V2 START, V2 STOP, ten restart cycles, every Mission Control tab, environment isolation, RTDS, Chainlink standby, CLOB authentication, the validation gate, provider persistence, connection timeline and market timeline. Pass conditions: no duplicate timers, no duplicate WebSocket connections, no increasing memory across the restart cycles, no console errors, all tests green. After every START/STOP cycle confirm all WebSockets close cleanly, all scheduler jobs are released, all database locks are released, no duplicate runtime tasks appear, and memory returns to the expected steady-state.
 
 ## Final deliverable
 
