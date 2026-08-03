@@ -148,8 +148,7 @@ export function preArmReadiness(): { ready: boolean; reason: string } {
   if (runtime.emergencyStop) {
     return { ready: false, reason: `emergency stop latched: ${runtime.emergencyStopReason}` };
   }
-  if (runtime.engineStatus === "ARMED") return { ready: false, reason: "engine is already ARMED" };
-  if (runtime.engineStatus === "PAUSED") return { ready: false, reason: "resume before arming" };
-  if (runtime.engineStatus !== "OBSERVE") return { ready: false, reason: "engine must be in OBSERVE to arm" };
-  return { ready: true, reason: "ready for validation" };
+  if (runtime.lifecycle === "RUNNING") return { ready: false, reason: "engine is already RUNNING" };
+  if (runtime.lifecycle === "READY") return { ready: true, reason: "ready for validation" };
+  return { ready: false, reason: `engine must be READY to arm, currently ${runtime.lifecycle}` };
 }

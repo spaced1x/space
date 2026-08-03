@@ -248,9 +248,9 @@ async function runBoot(): Promise<void> {
   // it; boot never waits on the UI.
   await stage("dashboard-snapshot", () => syncConnections());
 
-  if (getRuntimeState().engineStatus === "BOOTING") {
-    // Never auto-arm. OBSERVE is the only safe post-boot state.
-    updateRuntimeState({ engineStatus: "OBSERVE" }, "boot complete", cid);
+  if (getRuntimeState().lifecycle === "STARTING") {
+    // Boot completes in READY. Trading only begins after the operator arms.
+    updateRuntimeState({ lifecycle: "READY" }, "boot complete", cid);
   }
 
   bootCompletedAt = new Date().toISOString();
@@ -283,6 +283,6 @@ function windowHealth(key: "fiveMinute" | "fifteenMinute", label: string) {
   return {
     state: enabled ? ("OK" as const) : ("DISABLED" as const),
     message: enabled ? `${label} window enabled` : `${label} window switched off by operator`,
-    details: { window: label, enabled, engineStatus: state.engineStatus },
+    details: { window: label, enabled, lifecycle: state.lifecycle },
   };
 }
