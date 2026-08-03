@@ -62,6 +62,25 @@ src/lib/system.functions.ts   the single read/command surface for the dashboard
 
 Trading modules (`market`, `decision`, `trade`, `platform`) are not implemented yet; their health checks report `NOT_INITIALIZED`.
 
+### 2.3 Runtime services (milestone 2)
+
+```text
+src/core/scheduler   one authoritative heartbeat (100ms), drift-corrected, checkpointed to kv
+src/core/feeds       provider-neutral PriceFeed port · binance (WS) · chainlink (RPC pull)
+src/core/market      unified immutable MarketState, versioned · Polymarket discovery adapter
+src/core/engine      serialized engine loop; owns feed lifecycles and scheduler registrations
+```
+
+No module owns a timer. Every recurring job registers with the scheduler, which runs tasks
+sequentially on one heartbeat, so the single-writer guarantee holds without a mutex.
+Registered tasks: `engine.tick` (1s), `feed.binance.watchdog` (2s), `feed.chainlink.poll` (15s),
+`market.discovery` (20s). Health components added: `scheduler`, `market_discovery`, `binance`,
+`chainlink`. A missing `POLYGON_RPC_URL` reports `DISABLED`, never `FAILED`.
+
+`MarketState` is the only surface downstream modules read: active market per horizon, PTB,
+status, close and settlement times, Binance price and Chainlink price, with a monotonic
+`version`. TWAP, windows, risk and execution are still unimplemented.
+
 ### 2.2 Foundation refinements (milestone 1, final)
 
 **Health states.** Five states, ranked for the overall roll-up:
