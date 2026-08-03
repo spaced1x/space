@@ -22,7 +22,7 @@ let held: LockHandle | null = null;
 
 export function lockPath(): string {
   const env = loadEnv();
-  return `${env.DB_PATH}.lock`;
+  return `${resolveDbPath(env)}.lock`;
 }
 
 /**
