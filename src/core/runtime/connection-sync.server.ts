@@ -376,13 +376,13 @@ function syncVenues(): void {
   reportConnection("venue_selector", {
     state: "CONNECTED",
     reason: `${env.SPACE_ENVIRONMENT} resolves to the ${paper ? "paper" : "live"} executor`,
-    endpoint: description.venue ?? (paper ? "paper" : "polymarket"),
+    endpoint: description.kind,
     blocksTrading: false,
     recovery: "n/a — the selector is decided by SPACE_ENVIRONMENT at boot",
     action: null,
     details: {
       environment: env.SPACE_ENVIRONMENT,
-      venue: description.venue ?? null,
+      venue: description.kind,
       chainId: description.chainId ?? null,
       ready: description.ready,
     },
