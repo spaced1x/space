@@ -15,7 +15,7 @@ Confirmed by reading the runtime state store: engineStatus, mode and window flag
 memory only and are re-initialised to BOOTING -> OBSERVE on every process start. Nothing
 persists them.
 
-1. After a crash or PM2 restart while ARMED, SPACE currently comes back in OBSERVE and stops trading until you press ARM. Intended, or should SPACE restore ARMED automatically after a clean recovery pass? *An unattended overnight crash silently stops trading.*
+1. ~~After a crash or PM2 restart while ARMED, should SPACE restore ARMED automatically?~~ **Already resolved by the frozen specification (§14 Recovery: "Resume Engine — resume in OBSERVE, run Health Verification, then arm").** SPACE never self-arms. The only remaining sub-question, which does need an answer: should SPACE raise a Telegram alert when it comes back up in OBSERVE after having been ARMED, so an unattended overnight crash is not silently a trading stop?
 2. Should `mode` (STRATEGY/MANUAL) and the window enable flags survive restart? They currently reset to STRATEGY with both windows on — a restart would re-enable automatic execution after you deliberately switched to MANUAL.
 3. Should PAUSED be sticky across restart, or is PAUSE strictly within-session?
 4. Should there be a dead-man switch — drop from ARMED to OBSERVE after N hours with no operator contact?
@@ -44,7 +44,7 @@ Confirmed in the execution engine: recovery never resubmits; an order without a 
 16. In LIMIT_THEN_MARKET, should the market fallback use the original size or only the unfilled remainder?
 17. Should retries reprice against the current book, or resubmit the original price?
 18. If the venue rejects for insufficient balance mid-sequence — abort the intent, or downsize and continue?
-19. Should an intent whose window already expired still be executable if execution was delayed (a hard per-intent entry deadline)?
+19. ~~Should an intent whose window already expired still be executable?~~ **Already resolved by the frozen specification (§14: an expired window is completed with its stored outcome and never re-triggered).** No clarification required.
 
 ## 5. Manual Trading
 
@@ -55,9 +55,9 @@ Confirmed in the execution engine: recovery never resubmits; an order without a 
 
 ## 6. Recovery
 
-24. Must reconciliation complete successfully before an ARM command is even accepted?
-25. If reconciliation fails because the venue is unreachable at boot, should SPACE sit in a distinct RECOVERING/degraded state rather than plain OBSERVE?
-26. Is local SQLite always authoritative for positions, or should recovery rebuild positions from venue/on-chain truth?
+24. Must reconciliation complete *successfully* before an ARM command is accepted? The spec orders recovery before arming but does not say whether a failed reconciliation blocks ARM outright.
+25. If reconciliation fails because the venue is unreachable at boot, should SPACE sit in a distinct RECOVERING/degraded state rather than plain OBSERVE, so the operator cannot mistake it for a healthy idle engine?
+26. ~~Is local SQLite or the venue authoritative for positions on recovery?~~ **Already resolved by the frozen specification (§14: "Venue truth wins; divergence is recorded and alerted").** No clarification required.
 
 ## 7. Feeds (Binance / Chainlink)
 
@@ -79,13 +79,13 @@ Confirmed in the execution engine: recovery never resubmits; an order without a 
 ## 10. Database (SQLite / WAL)
 
 35. Retention policy for price samples, events and order events — unbounded growth, or a pruning job with a configurable window?
-36. Do you want scheduled automatic backups (VACUUM INTO) alongside manual export, and at what interval?
+36. ~~Do you want scheduled automatic backups?~~ **Already resolved by the frozen specification (§15: scheduled local backups with retention, hot `VACUUM INTO` snapshot).** Only the interval and retention count still need numbers.
 37. Is a corrupted database at boot a hard stop, or should SPACE start read-only/degraded so you can inspect it?
 
 ## 11. Backup / Export / Import
 
 38. Should import ever be permitted into a running instance, or only at boot with the engine stopped? *Importing live would duplicate order history and corrupt recovery.*
-39. Should exports ever include secrets (I assume never), and should operations config be exportable separately from trade history?
+39. ~~Should exports include secrets, and is config exportable separately?~~ **Already resolved by the frozen specification (§15: "Backups never contain secrets"; configuration exports as JSON independently of the database).** No clarification required.
 40. After restoring to a new VPS, should the instance refuse to ARM until the operator confirms the original is not still running?
 
 ## 12. Operations Desk / Configuration
@@ -99,7 +99,7 @@ Confirmed in the execution engine: recovery never resubmits; an order without a 
 Confirmed: no Telegram module exists yet; the env vars are defined but unused.
 
 44. Which commands may Telegram issue — full parity including ARM, or a restricted read + PAUSE/DISARM kill-switch set? Kill-switch-only is the safer default.
-45. How is Telegram authorised — chat-id allowlist only, or an extra confirmation step for destructive commands?
+45. Telegram authorisation by chat-id allow-list is **already resolved by the frozen specification (§16)**. Remaining question: should destructive commands (ARM, flatten, import) require a second confirmation step over Telegram, or is the allow-list sufficient?
 46. If Telegram is unreachable, should Health degrade, and should SPACE refuse to ARM without a working alert channel?
 47. Should commands carry a command id so duplicate Telegram delivery cannot double-execute?
 
@@ -144,8 +144,94 @@ Confirmed: no Telegram module exists yet; the env vars are defined but unused.
 ## 21. Deployment
 
 65. Should PM2 restarts be capped so a crash-loop halts instead of repeatedly re-entering recovery against the venue?
-66. Should SPACE hold a single-instance lock (file or DB lock) so two processes can never trade the same wallet?
+66. PM2 fork mode with exactly 1 instance is **already resolved by the frozen specification (§21)**. Remaining question: should SPACE additionally hold its own single-instance lock (lock file or SQLite lock) so a manually started second process — or a restored clone on another VPS — can never trade the same wallet?
 67. Are off-box automated backups in scope, or is Clone -> Restore manual only?
+
+## 22. Venue rate limiting (new)
+
+Gamma and the CLOB both rate limit, and discovery polls every 20s while execution polls fills every 1s. A 429 storm during an active window is the realistic failure mode, and the current adapters have no defined policy for it.
+
+68. On a 429 or rate-limit error from **Gamma during discovery**: retry with exponential backoff and keep the last known market, or immediately mark discovery DEGRADED and skip the market? *Skipping loses a trading window; retrying blindly can extend the ban.*
+69. On a 429 from the **CLOB during order submission**: is a retry safe given the idempotency key, and how many attempts before the intent is abandoned with a distinct outcome code? *A blind retry against a venue that actually accepted the order is a duplicate-execution path.*
+70. On a 429 during **fill polling**, should SPACE back off the poll interval automatically, and should an unfilled order's timeout clock be paused while it cannot see the venue? *Otherwise a rate limit is misread as "no fill" and triggers a spurious fallback to market.*
+71. Should sustained rate limiting degrade Health, and should it block ARM or auto-disarm? My assumption: degrade Health, block new entries, never auto-disarm with an open position.
+72. Should SPACE apply a client-side request budget (max requests/second per venue endpoint) so it can never trip the limit in the first place, and should that budget be fixed or configurable?
+
+## 23. Clock drift monitoring (new)
+
+The clock service already reports `driftMs`, but nothing compares VPS time to an external reference.
+
+73. Should SPACE periodically compare VPS time against a trusted external reference (Binance server time and/or NTP) and surface the offset in Diagnostics? *TWAP capture windows are 30s and 60s — a few seconds of drift silently corrupts every TWAP.*
+74. What drift threshold is merely a warning versus ARM-blocking or auto-disarming?
+75. Should SPACE ever correct for drift internally (apply an offset to its own clock), or only report it and rely on system NTP?
+
+## 24. Operator editing session (new)
+
+76. If the operator refreshes the browser mid-edit on the Operations Desk with unsaved changes, should those edits be restored (kept as a staged draft), silently discarded, or should the browser warn before unload? *Staged config is currently server-side; unsaved form state is not, so behaviour today is "silently discarded".*
+77. Should an unsaved/staged-but-unpromoted config be visible in Diagnostics or Mission Control so the operator cannot forget a half-finished change?
+78. If two browser tabs edit configuration at once, should the second save be rejected on a version mismatch, or last-write-wins?
+
+## 25. Host resources (new)
+
+79. Should low disk space **block ARM**, only warn, stop after the current market completes, or continue trading? At what free-space thresholds? *SQLite WAL plus rotating logs on a small VPS will eventually fill the disk; a failed write mid-order is the worst possible moment to discover it.*
+80. Should disk, memory and CPU be first-class health checks alongside the existing subsystem checks?
+81. Should `max_memory_restart` be treated as an acceptable safety net, given a restart while ARMED drops SPACE back to OBSERVE and stops trading?
+
+## 26. Long-running memory retention (new)
+
+SPACE keeps orders, fills, intents, events and price samples in memory for the life of the process; several are unbounded.
+
+82. What is the in-memory retention policy for price samples, market state history, the event log and the recent-rejections list — a fixed ring buffer size, a time window, or unbounded?
+83. Should the in-memory order/fill maps be trimmed to open + recently-settled only, with older records served from SQLite on demand?
+84. Should Replay always read from SQLite, never from an in-memory cache, so a long-running process cannot answer a replay query from stale memory?
+85. Should Diagnostics expose collection sizes and process RSS so growth is observable before it becomes a restart?
+
+## 27. Replay chain integrity (new)
+
+86. Should Replay actively verify that every persisted market forms one complete chain — Market -> Window -> Frozen Trigger -> Execution Intent -> Risk Decision -> Order -> Fill -> Settlement -> Statistics — and flag any broken or missing link? *This is the only mechanism that would catch a silently lost write.*
+87. Should chain integrity run as a scheduled background audit (and degrade Health on a break), or only on demand when the operator opens Replay?
+88. When a chain is legitimately short — a window that ended `NO_TRIGGER` has no order — should that be recorded as an explicit terminal link rather than an absent one, so "incomplete" always means "broken"? The §3.3 outcome table already defines the vocabulary; the question is whether every window is *required* to carry one.
+
+## 28. Statistics immutability and reset (new)
+
+89. Are statistics intended to be permanently immutable? May they ever be reset or a bad day excluded from the UI, or is replacing the database the only way to clear history?
+90. Should there be a distinction between "real" trading history and test/manual trades — e.g. a flag so manual or testnet trades can be excluded from headline PnL without deleting anything?
+91. If a settlement is later corrected by the venue, should the original statistics row be amended in place or superseded by a correcting entry?
+
+## 29. Environment protection (new)
+
+92. Should a database created under V1 (Testnet) ever be openable by a V2 (Mainnet) runtime? *If not, the environment must be stamped in the database at creation and checked at boot — a mismatch should be a hard refusal to start, not a warning.*
+93. Should the same protection apply in reverse (a mainnet database opened by a testnet runtime), and should the wallet address also be stamped so a restored backup cannot be run against a different wallet?
+94. Should switching environment require a distinct `DB_PATH`, enforced by SPACE rather than by operator discipline?
+
+---
+
+## Duplicates removed
+
+None. Reviewing all 67 original questions, no two ask the same thing. The nearest overlaps were checked and kept because they ask different things: Q4 (dead-man switch) vs Q60 (auto-disarm on health failure); Q35 (on-disk retention) vs Q82 (in-memory retention); Q38 (import into a running instance) vs Q40 (restored clone refusing to ARM).
+
+## Already answered by the frozen specification
+
+Marked in place above rather than deleted, so the audit trail is intact:
+
+- **Q1** — recovery always resumes in OBSERVE and never self-arms (§14).
+- **Q19** — expired windows complete with their stored outcome and are never re-triggered (§14).
+- **Q26** — venue truth wins on reconciliation divergence (§14).
+- **Q36** — scheduled local backups with retention using hot `VACUUM INTO` (§15); only interval/retention numbers remain.
+- **Q39** — backups never contain secrets; configuration exports independently (§15).
+- **Q45** — Telegram is authorised by chat-id allow-list through the same command bus and audit trail (§16); only the confirmation-step question remains.
+- **Q54** — the outcome vocabulary itself is defined (§3.3 window outcomes); the open part is whether every path is *required* to emit one (now Q88).
+- **Q66** — PM2 fork mode, 1 instance (§21); the separate process lock question remains.
+
+## Note on Q14
+
+Q14 is not an open design question in the specification — §14 already mandates querying the venue for open orders and using a deterministic `(market, window, attempt)` idempotency key. The current implementation does neither: recovery marks an order without a persisted venue id as FAILED and does not enumerate venue orders. This is a **conformance gap between frozen spec and Milestone 4 code**, and should be scheduled as a defect fix rather than treated as a new decision.
+
+## Review status
+
+The review is now **complete and ready for operator responses**: 94 questions across 29 subsystem groups, every subsystem in scope covered, duplicates checked, and spec-answered items marked rather than re-asked.
+
+Highest-priority additions from this pass, alongside the original five: **Q69** (retry-on-429 during submission is a duplicate-execution path), **Q73/74** (clock drift silently corrupts TWAP), **Q79** (disk exhaustion mid-order), **Q86** (chain integrity is the only detector of a lost write) and **Q92** (testnet/mainnet database cross-contamination).
 
 ---
 
