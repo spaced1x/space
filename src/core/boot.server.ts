@@ -2,6 +2,8 @@ import { describeEnvReadiness, loadEnv } from "./config/env.server";
 import { databaseHealth, initDatabase } from "./db/database.server";
 import { registerAutoDisarmTask } from "./health/auto-disarm.server";
 import { registerHealthCheck } from "./health/registry";
+import { conformanceHealth, evaluateEnvironmentConformance } from "./config/environment.server";
+import { settlementHealth } from "./settlement/settlement.server";
 import { installFileSink } from "./logging/file-sink.server";
 import { configureLogging, createLogger } from "./logging/logger";
 import { eventBus } from "./bus/events";
