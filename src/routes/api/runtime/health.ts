@@ -26,15 +26,15 @@ export const Route = createFileRoute("/api/runtime/health")({
             (connection) => connection.blocksTrading && connection.health === "FAILED",
           );
           const body = {
-            status: blocking.length === 0 ? health.overall : "FAILED",
+            status: blocking.length === 0 ? health.state : "FAILED",
             environment: activeEnvironment(),
             lifecycle: runtime.lifecycle,
-            armed: runtime.armed,
+            mode: runtime.mode,
             emergencyStop: runtime.emergencyStop,
             bootStartedAt: times.startedAt,
             bootCompletedAt: times.completedAt,
             uptimeSeconds: Math.round(process.uptime()),
-            checks: health.checks,
+            checks: health.components,
             connections: connections.map((connection) => ({
               id: connection.id,
               state: connection.state,
