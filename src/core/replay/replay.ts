@@ -10,6 +10,8 @@ import type {
   TransitionRow,
   WindowRow,
 } from "../db/repositories/replay.repository";
+import type { SettlementRow } from "../db/repositories/settlement.repository";
+import { directionWasCorrect } from "../settlement/apply";
 import type { ReplayMarket, ReplayWindow } from "./types";
 
 // Pure Replay assembler.
@@ -29,6 +31,7 @@ export interface ReplayInput {
   orders: OrderRecord[];
   orderEvents: OrderEventRow[];
   fills: FillRecord[];
+  settlement?: SettlementRow | null;
 }
 
 /** Human explanation for every window outcome. Replay's core promise. */
@@ -169,6 +172,18 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
   const first = input.windows[0];
   const filledSize = input.fills.reduce((sum, fill) => sum + fill.size, 0);
   const cost = input.fills.reduce((sum, fill) => sum + fill.size * fill.price, 0);
+  const settlement = input.settlement ?? null;
+  const resolved = settlement && settlement.resolved_outcome !== "UNRESOLVED";
+  // A winning share settles at 1, a losing share at 0. Reconstructed from the
+  // persisted fills and the venue outcome only.
+  const settledValue = resolved
+    ? input.fills.reduce(
+        (sum, fill) => sum + (fill.outcome === settlement.resolved_outcome ? fill.size : 0),
+        0,
+      )
+    : null;
+  const tradedDirection =
+    (input.intents[0]?.direction as "UP" | "DOWN" | undefined) ?? null;
 
   return {
     market: {
@@ -206,10 +221,18 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
       filledSize,
       cost,
       avgPrice: filledSize > 0 ? cost / filledSize : null,
+      resolvedOutcome: settlement?.resolved_outcome ?? null,
+      directionCorrect: directionWasCorrect(tradedDirection, settlement),
+      settledValue,
+      realizedPnl: settledValue === null ? null : settledValue - cost,
       note:
         input.fills.length === 0
-          ? "no fills on this market"
-          : `${input.fills.length} fill(s) reconstructed from immutable venue trade ids`,
+          ? resolved
+            ? `market resolved ${settlement.resolved_outcome} with no fills on this market`
+            : "no fills on this market"
+          : resolved
+            ? `${input.fills.length} fill(s) settled against venue outcome ${settlement.resolved_outcome}`
+            : `${input.fills.length} fill(s) reconstructed from immutable venue trade ids; settlement not yet ingested`,
     },
     windows,
   };
