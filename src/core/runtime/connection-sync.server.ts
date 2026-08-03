@@ -1,15 +1,21 @@
-import { loadEnv, resolveDbPath } from "../config/env.server";
+import { describeEnvReadiness, loadEnv, resolveDbPath } from "../config/env.server";
+import { conformanceHealth } from "../config/environment.server";
 import { databaseHealth } from "../db/database.server";
+import { instanceLockHeld, lockPath } from "../db/lock.server";
 import { chainCheck, walletStatus } from "../execution/wallet.server";
-import { venueAdapter } from "../execution/adapter.server";
+import { activeVenue, venueAdapter } from "../execution/adapter.server";
 import { rateLimitStatus } from "../execution/rate-limit.server";
 import { feeds } from "../engine/loop.server";
 import { discoveryStats } from "../market/discovery.server";
+import { clobMarketFeedStatus } from "../market/clob-ws.server";
 import { getMarketState } from "../market/state";
 import { schedulerStatus } from "../scheduler/scheduler.server";
 import { strategySnapshot } from "../strategy/strategy.server";
 import { telegramHealth } from "../telegram/telegram.service";
 import { twapServiceSnapshot } from "../twap/service.server";
+import { rtdsSocketStats } from "../twap/rtds-socket.server";
+import { lastValidationReport } from "../startup/validation.server";
+import { readRuntimeTarget, targetMatchesEnvironment } from "./target.server";
 import { reportConnection } from "./connections.server";
 
 // Adapters already track their own statistics. This module is the single place
@@ -25,16 +31,68 @@ export function signerLabel(signatureType: number): string {
 export async function syncConnections(): Promise<void> {
   const env = loadEnv();
 
+  syncConfiguration();
+  syncEnvironment();
   await syncDatabase();
+  syncDatabaseLock();
+  syncRuntimeTarget();
   syncScheduler();
   syncWallet();
   syncRpc();
   syncGamma(env.POLYMARKET_GAMMA_URL);
   syncDiscovery();
   syncBinance(env.BINANCE_WS_URL, env.BINANCE_SYMBOL);
+  syncRtds();
+  syncChainlinkStreams();
+  syncTwapService();
+  syncProviderRegistry();
   syncTwap();
+  syncClobMarketFeed();
   syncClob();
+  syncVenues();
   syncTelegram();
+  syncValidator();
+}
+
+function syncConfiguration(): void {
+  const readiness = describeEnvReadiness();
+  reportConnection("configuration", {
+    state: !readiness.valid ? "FAILED" : readiness.missingForArmed.length ? "DEGRADED" : "CONNECTED",
+    reason: readiness.message,
+    endpoint: ".env + operations document",
+    lastError: readiness.valid ? null : readiness.message,
+    blocksTrading: !readiness.valid,
+    recovery: readiness.valid ? "n/a" : "manual — correct .env and restart SPACE",
+    action: readiness.missingForArmed.length
+      ? `Set ${readiness.missingForArmed.join(", ")} in .env to allow ARM`
+      : null,
+    details: {
+      environment: readiness.environment,
+      missingForArmed: readiness.missingForArmed.join(", ") || "none",
+    },
+  });
+}
+
+function syncEnvironment(): void {
+  const health = conformanceHealth();
+  const details = (health.details ?? {}) as Record<string, unknown>;
+  reportConnection("environment", {
+    state:
+      health.state === "OK"
+        ? "CONNECTED"
+        : health.state === "FAILED"
+          ? "FAILED"
+          : health.state === "NOT_INITIALIZED"
+            ? "NOT_STARTED"
+            : "DEGRADED",
+    reason: health.message,
+    endpoint: String(details["environment"] ?? loadEnv().SPACE_ENVIRONMENT),
+    lastError: health.state === "FAILED" ? health.message : null,
+    blocksTrading: health.state === "FAILED",
+    recovery: "automatic — re-evaluated on every boot and before every ARM",
+    action: health.state === "FAILED" ? "Align .env with the selected environment and restart" : null,
+    details: { evaluatedAt: String(details["at"] ?? "never") },
+  });
 }
 
 async function syncDatabase(): Promise<void> {
@@ -81,6 +139,312 @@ function syncScheduler(): void {
       tasks: status.tasks.length,
       maxTickDriftMs: status.maxTickDriftMs,
       startedAt: status.startedAt,
+    },
+  });
+}
+
+function syncDatabaseLock(): void {
+  const held = instanceLockHeld();
+  reportConnection("database_lock", {
+    state: held ? "CONNECTED" : "FAILED",
+    reason: held
+      ? "single-instance lock held by this process"
+      : "single-instance lock is not held",
+    endpoint: lockPath(),
+    lastError: held ? null : "lock not acquired",
+    blocksTrading: !held,
+    recovery: held ? "n/a" : "manual — stop any other SPACE process and restart",
+    action: held ? null : "Verify no second SPACE process is running, then restart",
+    details: { held },
+  });
+}
+
+function syncRuntimeTarget(): void {
+  const target = readRuntimeTarget();
+  const matches = targetMatchesEnvironment();
+  reportConnection("runtime_target", {
+    state: matches ? "CONNECTED" : "DEGRADED",
+    reason: matches
+      ? `runtime target agrees with the active environment (${target.environment})`
+      : `target requests ${target.environment} but this process runs ${loadEnv().SPACE_ENVIRONMENT}`,
+    endpoint: `runtime-target v${target.version}`,
+    lastError: matches ? null : "runtime target mismatch",
+    blocksTrading: false,
+    recovery: matches ? "n/a" : "manual — restart the process to adopt the requested environment",
+    action: matches ? null : "Restart SPACE so the requested environment takes effect",
+    details: {
+      targetEnvironment: target.environment,
+      activeEnvironment: loadEnv().SPACE_ENVIRONMENT,
+      version: target.version,
+      requestedBy: target.requestedBy ?? null,
+      updatedAt: target.updatedAt ?? null,
+    },
+  });
+}
+
+function syncRtds(): void {
+  const stats = rtdsSocketStats();
+  const state: Parameters<typeof reportConnection>[1]["state"] =
+    stats.state === "IDLE"
+      ? "NOT_STARTED"
+      : stats.connected
+        ? "CONNECTED"
+        : stats.state === "FAILED"
+          ? "FAILED"
+          : stats.state === "RECONNECTING"
+            ? "RECONNECTING"
+            : stats.state === "STALE"
+              ? "STALE"
+              : "CONNECTING";
+
+  reportConnection("rtds", {
+    state,
+    reason:
+      stats.state === "IDLE"
+        ? "No data observed yet — the RTDS socket has not been started"
+        : stats.connected
+          ? `${stats.topics.length} topic(s) subscribed`
+          : (stats.lastError ?? `socket ${String(stats.state).toLowerCase()}`),
+    endpoint: stats.endpoint,
+    reconnects: stats.reconnects,
+    lastSuccessAt: stats.lastMessageAt,
+    lastError: stats.lastError,
+    blocksTrading: !stats.connected,
+    recovery: stats.budgetExhausted
+      ? "manual — the retry budget is exhausted, restart SPACE"
+      : "automatic — the watchdog reconnects with backoff",
+    action: stats.budgetExhausted ? "Restart SPACE to rebuild the RTDS socket" : null,
+    details: {
+      topics: stats.topics.join(", ") || "none",
+      messages: stats.messages,
+      errors: stats.errors,
+      attempts: stats.attempts,
+      ageMs: stats.ageMs,
+      lastConnectedAt: stats.lastConnectedAt,
+      budgetExhausted: stats.budgetExhausted,
+    },
+  });
+}
+
+function syncChainlinkStreams(): void {
+  const status = twapServiceSnapshot().providers.find(
+    (provider) => provider.id === "chainlink_streams",
+  );
+  if (!status) {
+    reportConnection("chainlink_streams", {
+      state: "NOT_STARTED",
+      reason: "No data observed yet — the Chainlink Streams provider is not registered",
+      blocksTrading: false,
+      recovery: "starts with the TWAP provider registry",
+      action: null,
+    });
+    return;
+  }
+  reportConnection("chainlink_streams", {
+    state:
+      status.state === "CONNECTED"
+        ? "CONNECTED"
+        : status.state === "FAILED"
+          ? "FAILED"
+          : status.state === "DISABLED"
+            ? "DISABLED"
+            : status.state === "NOT_CONFIGURED"
+              ? "NOT_CONFIGURED"
+              : status.state === "RECONNECTING"
+                ? "RECONNECTING"
+                : status.state === "STALE"
+                  ? "STALE"
+                  : "WAITING",
+    reason: status.reason,
+    endpoint: status.endpoint,
+    latencyMs: status.latencyMs,
+    reconnects: status.reconnects,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    // Optional dependency: Chainlink Streams never blocks trading on its own.
+    blocksTrading: false,
+    recovery: "automatic — reconnects with backoff while enabled",
+    action: status.action,
+    details: {
+      active: status.active,
+      enabled: status.enabled,
+      symbol: status.symbol,
+      transport: status.transport,
+      price: status.price,
+      freshnessMs: status.freshnessMs,
+      samples: status.samples,
+      errors: status.errors,
+    },
+  });
+}
+
+function syncTwapService(): void {
+  const service = twapServiceSnapshot();
+  reportConnection("twap_service", {
+    state: !service.started
+      ? "NOT_STARTED"
+      : service.published > 0
+        ? "CONNECTED"
+        : "WAITING",
+    reason: !service.started
+      ? "No data observed yet — the TWAP service has not started"
+      : service.published > 0
+        ? `${service.published} settlement sample(s) published from ${service.activeProviderId}`
+        : "started, waiting for the first settlement sample from the active provider",
+    endpoint: `active provider · ${service.activeProviderId}`,
+    lastSuccessAt: service.lastPublishedAt,
+    blocksTrading: !service.started,
+    recovery: "automatic — samples resume as soon as the active provider reports",
+    action: service.started ? null : "Start the runtime to bring the TWAP service up",
+    details: {
+      started: service.started,
+      published: service.published,
+      activeProvider: service.activeProviderId,
+      providers: service.providers.length,
+    },
+  });
+}
+
+function syncProviderRegistry(): void {
+  const service = twapServiceSnapshot();
+  const connected = service.providers.filter((provider) => provider.state === "CONNECTED").length;
+  reportConnection("twap_provider_registry", {
+    state: service.providers.length === 0 ? "NOT_STARTED" : connected > 0 ? "CONNECTED" : "DEGRADED",
+    reason:
+      service.providers.length === 0
+        ? "No data observed yet — no provider is registered"
+        : `${connected}/${service.providers.length} provider(s) connected; ${service.activeProviderId} is active`,
+    endpoint: service.providers.map((provider) => provider.id).join(", ") || null,
+    blocksTrading: false,
+    recovery: "automatic — providers reconnect independently of the active selection",
+    action: connected > 0 ? null : "Review provider configuration in Operations",
+    details: Object.fromEntries(
+      service.providers.map((provider) => [provider.id, `${provider.state} · ${provider.reason}`]),
+    ),
+  });
+}
+
+function syncClobMarketFeed(): void {
+  const status = clobMarketFeedStatus();
+  reportConnection("clob_market_ws", {
+    state:
+      status.state === "IDLE"
+        ? "NOT_STARTED"
+        : status.connected
+          ? status.subscribedAssets === 0
+            ? "WAITING"
+            : "CONNECTED"
+          : status.state === "FAILED"
+            ? "FAILED"
+            : status.state === "RECONNECTING"
+              ? "RECONNECTING"
+              : status.state === "STALE"
+                ? "STALE"
+                : "CONNECTING",
+    reason:
+      status.state === "IDLE"
+        ? "No data observed yet — the CLOB market socket has not been started"
+        : status.connected
+          ? status.subscribedAssets === 0
+            ? "connected, waiting for a BTC market to subscribe to"
+            : `streaming ${status.books} order book(s)`
+          : (status.lastError ?? `socket ${String(status.state).toLowerCase()}`),
+    endpoint: status.endpoint,
+    reconnects: status.reconnects,
+    lastSuccessAt: status.lastMessageAt,
+    lastError: status.lastError,
+    blocksTrading: status.state === "FAILED",
+    recovery: "automatic — the watchdog reconnects and resubscribes on the next tick",
+    action: status.state === "FAILED" ? "None — SPACE retries automatically" : null,
+    details: {
+      subscribedAssets: status.subscribedAssets,
+      books: status.books,
+      messages: status.messages,
+      errors: status.errors,
+      sequenceGaps: status.sequenceGaps,
+      ageMs: status.ageMs,
+    },
+  });
+}
+
+function syncVenues(): void {
+  const env = loadEnv();
+  const paper = env.SPACE_ENVIRONMENT === "V1_TESTNET";
+  const description = activeVenue().describe();
+  const health = activeVenue().health();
+
+  reportConnection("venue_selector", {
+    state: "CONNECTED",
+    reason: `${env.SPACE_ENVIRONMENT} resolves to the ${paper ? "paper" : "live"} executor`,
+    endpoint: description.kind,
+    blocksTrading: false,
+    recovery: "n/a — the selector is decided by SPACE_ENVIRONMENT at boot",
+    action: null,
+    details: {
+      environment: env.SPACE_ENVIRONMENT,
+      venue: description.kind,
+      chainId: description.chainId ?? null,
+      ready: description.ready,
+    },
+  });
+
+  reportConnection("paper_venue", {
+    state: paper ? (health.state === "OK" ? "CONNECTED" : "DEGRADED") : "DISABLED",
+    reason: paper
+      ? health.message
+      : "paper executor is not selected in this environment",
+    endpoint: paper ? (description.host ?? "in-process simulator") : null,
+    blocksTrading: paper && health.state === "FAILED",
+    recovery: paper ? "automatic — the simulator matches against the live book" : "n/a",
+    action: null,
+    details: { selected: paper, ready: paper ? description.ready : false },
+  });
+
+  reportConnection("live_venue", {
+    state: !paper
+      ? health.state === "OK"
+        ? "CONNECTED"
+        : health.state === "FAILED"
+          ? "FAILED"
+          : "DEGRADED"
+      : "DISABLED",
+    reason: !paper ? health.message : "live executor is not selected in this environment",
+    endpoint: !paper ? (description.host ?? null) : null,
+    blocksTrading: !paper && health.state !== "OK",
+    recovery: !paper ? "automatic — reconnects and re-authenticates on demand" : "n/a",
+    action: null,
+    details: { selected: !paper, ready: !paper ? description.ready : false },
+  });
+}
+
+function syncValidator(): void {
+  const report = lastValidationReport();
+  if (!report) {
+    reportConnection("runtime_validator", {
+      state: "NOT_STARTED",
+      reason: "No data observed yet — the validation gate has not run",
+      blocksTrading: true,
+      recovery: "runs automatically during boot and before every ARM",
+      action: null,
+    });
+    return;
+  }
+  reportConnection("runtime_validator", {
+    state: report.valid ? "CONNECTED" : "FAILED",
+    reason: report.valid
+      ? `all ${report.items.filter((item) => item.required).length} mandatory checks passed`
+      : report.blockers.join("; "),
+    endpoint: `${report.items.length} checks`,
+    lastSuccessAt: report.valid ? report.at : undefined,
+    lastError: report.valid ? null : report.blockers.join("; "),
+    blocksTrading: !report.valid,
+    recovery: "automatic — re-run on every boot and before every ARM",
+    action: report.valid ? null : "Clear the listed blockers, then ARM again",
+    details: {
+      evaluatedAt: report.at,
+      mandatory: report.items.filter((item) => item.required).length,
+      optional: report.items.filter((item) => !item.required).length,
+      blockers: report.blockers.length,
     },
   });
 }
@@ -340,7 +704,7 @@ function syncClob(): void {
   );
   const environmentMatch = wallet.chainId === (env.SPACE_ENVIRONMENT === "V1_TESTNET" ? 80002 : 137);
 
-  reportConnection("clob", {
+  reportConnection("clob_trading", {
     state: !apiKeyLoaded
       ? "NOT_CONFIGURED"
       : description.ready

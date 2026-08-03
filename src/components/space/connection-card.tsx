@@ -5,10 +5,13 @@ const TONE: Record<ConnectionState, string> = {
   CONNECTED: "text-ok",
   CONNECTING: "text-warn",
   WAITING: "text-warn",
+  RECONNECTING: "text-warn",
+  STALE: "text-warn",
   DEGRADED: "text-warn",
   DISCONNECTED: "text-fail",
   FAILED: "text-fail",
   NOT_CONFIGURED: "text-muted-foreground",
+  DISABLED: "text-muted-foreground",
   NOT_STARTED: "text-muted-foreground",
 };
 

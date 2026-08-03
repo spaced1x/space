@@ -1,8 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import type { ReactNode } from "react";
 
-import { getSystemSnapshot } from "../../lib/system.functions";
+import { useRuntimeSnapshot } from "../../lib/use-runtime-snapshot";
 import { MissionControl } from "./mission-control";
 import { WorkspaceNav } from "./workspace-nav";
 
@@ -20,12 +18,7 @@ export function ConsoleShell({
   subtitle: string;
   children: ReactNode;
 }) {
-  const fetchSnapshot = useServerFn(getSystemSnapshot);
-  const snapshot = useQuery({
-    queryKey: ["system-snapshot"],
-    queryFn: () => fetchSnapshot(),
-    refetchInterval: 5000,
-  });
+  const snapshot = useRuntimeSnapshot();
 
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
@@ -37,6 +30,7 @@ export function ConsoleShell({
           strategy={snapshot.data.engine.strategy}
           execution={snapshot.data.engine.execution}
           environment={snapshot.data.environment}
+          snapshot={{ lifecycle: snapshot.lifecycle, reason: snapshot.reason }}
         />
       ) : (
         <aside className="w-full shrink-0 border-r border-sidebar-border bg-sidebar p-5 lg:w-72">
@@ -47,8 +41,7 @@ export function ConsoleShell({
             <WorkspaceNav />
           </div>
           <p className="mt-6 font-mono text-status leading-relaxed text-muted-foreground">
-            Reading the runtime snapshot — the terminal only renders values the engine has
-            actually reported.
+            {snapshot.reason}
           </p>
         </aside>
       )}

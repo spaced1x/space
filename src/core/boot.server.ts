@@ -76,11 +76,18 @@ function resetBootState(): void {
 
 export interface BootStageTrace {
   stage: string;
+  /** Lifecycle of one stage. RETRYING means the stage failed and is being retried. */
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "RETRYING" | "FAILED";
   startedAt: string;
   completedAt?: string;
   durationMs?: number;
   nextStage?: string;
   error?: string;
+  /** Plain-language cause when the stage is not COMPLETED. */
+  reason?: string;
+  /** Whether SPACE recovers on its own, and what the operator must do if not. */
+  recovery?: string;
+  attempts?: number;
 }
 
 const bootTrace: BootStageTrace[] = [];
@@ -106,7 +113,12 @@ async function stage<T>(name: string, run: () => T | Promise<T>): Promise<T> {
   const previous = bootTrace[bootTrace.length - 1];
   if (previous) previous.nextStage = name;
 
-  const entry: BootStageTrace = { stage: name, startedAt: new Date().toISOString() };
+  const entry: BootStageTrace = {
+    stage: name,
+    status: "RUNNING",
+    startedAt: new Date().toISOString(),
+    attempts: 1,
+  };
   bootTrace.push(entry);
   const started = Date.now();
   stageLog.info(`boot stage started: ${name}`);
@@ -115,11 +127,17 @@ async function stage<T>(name: string, run: () => T | Promise<T>): Promise<T> {
     const result = await run();
     entry.completedAt = new Date().toISOString();
     entry.durationMs = Date.now() - started;
+    entry.status = "COMPLETED";
     stageLog.info(`boot stage completed: ${name}`, { durationMs: entry.durationMs });
     return result;
   } catch (error) {
     entry.durationMs = Date.now() - started;
     entry.error = error instanceof Error ? error.message : String(error);
+    entry.status = "FAILED";
+    entry.reason = entry.error;
+    entry.recovery =
+      "manual — resolve the reported cause and restart SPACE; the boot sequence does not skip stages";
+    entry.completedAt = new Date().toISOString();
     stageLog.error(`boot stage failed: ${name}`, { durationMs: entry.durationMs, reason: entry.error });
     throw error;
   }

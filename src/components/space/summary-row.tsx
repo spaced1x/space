@@ -18,7 +18,7 @@ export function SummaryRow({
   const byId = new Map(connections.map((record) => [record.id, record]));
   const twap = byId.get("twap_provider");
   const market = byId.get("market_discovery");
-  const clob = byId.get("clob");
+  const clob = byId.get("clob_trading");
 
   const component = (name: string) =>
     health.components.find((entry) => entry.component === name)?.state ?? "NOT_INITIALIZED";
