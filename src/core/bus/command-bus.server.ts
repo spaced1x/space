@@ -144,6 +144,38 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       await sendTelegramMessage(command.message, "operator");
       return verdict("ACCEPTED", "message queued for Telegram", command.kind, context.correlationId);
     }
+    case "STAGE_OPERATIONS": {
+      // Imported lazily so the command bus stays free of configuration and
+      // execution module cycles.
+      const { stageOperations } = await import("../config/operations.server");
+      const result = await stageOperations(command.document);
+      if (!result.ok) {
+        return reject(`configuration rejected: ${result.errors.join("; ")}`);
+      }
+      return {
+        ...verdict("ACCEPTED", "configuration staged", command.kind, context.correlationId),
+        details: { version: result.staged?.version ?? null, pending: result.pending ?? null },
+      };
+    }
+    case "MANUAL_ORDER": {
+      if (state.mode !== "MANUAL") return reject("switch to MANUAL mode before placing an order");
+      const { placeManualOrder } = await import("../execution/manual.server");
+      const result = await placeManualOrder({
+        horizon: command.horizon,
+        direction: command.direction,
+        kind: command.orderKind,
+        size: command.size,
+      });
+      return {
+        ...verdict(
+          result.accepted ? "ACCEPTED" : "REJECTED",
+          result.message,
+          command.kind,
+          context.correlationId,
+        ),
+        details: { orderId: result.orderId ?? null, intentId: result.intentId ?? null },
+      };
+    }
     default:
       return reject("command not implemented");
   }
