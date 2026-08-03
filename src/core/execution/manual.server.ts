@@ -3,7 +3,7 @@ import { activeOperations } from "../config/operations.server";
 import { createLogger } from "../logging/logger";
 import { getMarketState } from "../market/state";
 import type { MarketHorizon } from "../market/types";
-import { id as newId } from "../shared/ids";
+import { correlationId as newId } from "../shared/ids";
 import { getRuntimeState } from "../state/store";
 import { strategySnapshot } from "../strategy/strategy.server";
 import type { Direction } from "../strategy/types";
@@ -112,7 +112,7 @@ export async function placeManualOrder(request: ManualOrderRequest): Promise<Man
     settlementTwap: strategySnapshot().twap.value,
     ptb: market.ptb,
     at: clock().iso(),
-    id: newId(),
+    id: newId("man"),
   });
 
   const order = await submitManualIntent(intent, {
