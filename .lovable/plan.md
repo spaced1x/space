@@ -1,6 +1,20 @@
 # STONE → SPACE: Architecture Report & Migration Plan
 
-Nothing has been changed, deleted, or refactored. This is analysis only. On approval, the full report is written to `docs/SPACE_MIGRATION_REPORT.md` before any implementation begins.
+Revision 2 — incorporates the approved revisions. Nothing has been changed, deleted, or refactored. This is documentation planning only.
+
+On approval, three documents are written and **no source file is touched**:
+
+1. `docs/SPACE_SPECIFICATION.md` — the authoritative product specification and single source of truth.
+2. `docs/SPACE_ARCHITECTURE.md` — module boundaries, ownership rules, runtime topology.
+3. `docs/SPACE_MIGRATION_REPORT.md` — the STONE analysis and migration matrix below, with a per-file appendix.
+
+Legacy STONE material is **moved to `docs/archive/`, never deleted**.
+
+### Governing philosophy
+
+> **Simple systems survive. Complex systems fail.**
+
+When a decision is uncertain, choose the option that is simpler, easier to maintain, easier to deploy, easier to recover, easier to understand, and more reliable. Reliability outranks new features, always.
 
 ## 0. The single most important finding
 
@@ -63,6 +77,26 @@ SPACE should keep **both**: event-sourced determinism replay for engineering, pe
 - STONE: 20 Supabase tables. Genuinely good design — `platform_events` and `ledger_records` are append-only *at the grant level* (no UPDATE/DELETE granted), `configuration_versions` is immutable by trigger, `operator_ownership` is a boolean-PK singleton, `authority_replay_guard` uses unique-violation-as-replay-signal, `authority_registry` rejects secret-shaped values by trigger. Idempotency relies on catching Postgres `23505`, which survives a move to plain Postgres unchanged.
 - P4: 4 SQLite tables, an async write queue that never blocks the tick loop, additive migrations, and a boot-time orphan sweep that refunds crash-orphaned OPEN trades.
 
+### Decision: SPACE uses SQLite in WAL mode
+
+SPACE is not locked to PostgreSQL just because STONE used Supabase. Re-evaluating against the stated objectives:
+
+| Objective | SQLite (WAL) | PostgreSQL (local) |
+|---|---|---|
+| One local database | A single file | A server, a daemon, a role, a socket |
+| No cloud dependency | Yes | Yes |
+| VPS deployment | Nothing to install; the app *is* the database | Install, tune, secure, upgrade across major versions |
+| Backup | `VACUUM INTO backup.db` — one atomic file, hot, no downtime | `pg_dump`, restore ordering, role/ownership fixes |
+| Migration to another VPS | Copy one file | Dump, install matching major version, restore, re-grant |
+| Reliability | WAL + `synchronous=NORMAL` is crash-safe; fewer moving parts to fail | Robust, but adds a second supervised process that can fail independently |
+| Concurrency | One writer at a time; unlimited concurrent readers | Full MVCC, many writers |
+
+SPACE is **a single Node process with exactly one writer** — the engine. There is no second service, no horizontal scale, no multi-tenant access. Trade volume is bounded by the market clock (a handful of orders per 5-minute slot, ~288 slots/day). SQLite's only real limitation, concurrent writers, does not exist in this design. PostgreSQL would add an entire supervised subsystem to solve a problem SPACE does not have — the exact complexity the philosophy above rejects.
+
+P4 already proved this in production: `better-sqlite3`, WAL, `synchronous=NORMAL`, `busy_timeout=5000`, with an async write queue that never blocks the tick loop. That is a working, audited pattern to carry forward rather than re-derive.
+
+**Recommendation: SQLite (WAL) via `better-sqlite3`, at a single `DB_PATH`, behind a typed repository layer.** The repository boundary keeps a future PostgreSQL swap a contained change, but SPACE ships on SQLite and no code outside the repository layer knows which engine is underneath. Note that `better-sqlite3` is a native module — it runs on the VPS, not in the Lovable preview, which is consistent with "Lovable is the authoring environment, the VPS is production."
+
 ## 7. Configuration system
 
 Two competing environment systems coexist in STONE: a declarative catalog (`core/configuration/env-validator.ts`, used by the startup validator) and a Zod loader (`core/configuration/environment.ts`, used by `bootstrapConfig`). They overlap and disagree on key names (`EXECUTION_PROFILE_ID` vs `ARC_EXECUTION_PROFILE_ID`) and on what is required. Three `.env` templates exist in STONE, two more in P4. Execution profiles add a hand-rolled DSL (`15s@0.002|size=2|retry=1|timeout=10000`).
@@ -109,7 +143,7 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, 9 Radix primi
 | `core/infrastructure/*` (fsm, health, logging, scheduler, metrics, watchdogs, secret-scanner) | **KEEP** | Solid, generic, portable | Rename watchdog subsystem `"supabase"` → `"database"`; wire metrics to a real `/metrics` route |
 | `core/configuration/env-validator` vs `environment` | **REFACTOR** | Two sources of truth with conflicting key names | One Zod schema, one `.env.example` |
 | Execution-profile DSL parser | **REFACTOR** | Non-trivial parser hidden inside config loading | JSON profiles in Postgres, validated by Zod |
-| Supabase (client, RLS, Auth, PostgREST, `config.toml`, 12 migrations) | **REMOVE** | SPACE is local Postgres | `pg`/Drizzle repositories; port the 20-table schema, drop RLS for app-layer authz, replace Supabase Auth with local sessions |
+| Supabase (client, RLS, Auth, PostgREST, `config.toml`, 12 migrations) | **REMOVE** | SPACE has no cloud dependency | Local SQLite (WAL) behind typed repositories; port the useful table designs, replace RLS with app-layer authz, replace Supabase Auth with a local session |
 | `src/lib/*.functions.ts` and `*.server.ts` (~4,000 LOC) | **REFACTOR** | Correct read/write surface, but `any`-cast Supabase calls throughout | Typed service layer over the local DB |
 | STONE UI shell, primitives, tokens, 18 routes | **KEEP** | Genuinely good operator UI: dark oklch, mono numerics | Keep the design system; merge the 7 telemetry re-slices; split `execution-profiles.tsx` |
 | `src/routes/index.tsx` | **REMOVE** | Hardcoded, stale "Session 0" checklist | Login redirect |
@@ -123,9 +157,10 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, 9 Radix primi
 | P4 `http-agent`, `proxy`, `telegram-console`, dual `/v1` `/v2` dashboards | **REMOVE** | Dead weight and duplication | — |
 | Both PM2 configs | **REFACTOR** | One is half-fictional, one is Next-specific | One `ecosystem.config.cjs`: one app, fork, 1 instance, graceful dispose |
 | P4 nginx conf | **KEEP** | Correct proxy, SSE, WS and quiet health handling | Adapt ports and paths |
-| Five `.env` templates | **REMOVE** | Five templates for one system | One `.env.example` |
+| Five `.env` templates | **REMOVE** | Five templates for one system | One small `.env.example` (secrets and boot-time-only values) |
 | `docs/knowledge/**` (P4 behavioural spec) | **KEEP** | The most valuable document set in the archive | Move to `docs/legacy/` as SPACE's behavioural reference |
-| ~60 milestone / phase / audit reports in `docs/` | **REMOVE** | Point-in-time status of a project that is ending | Archive outside the repository |
+| ~60 milestone / phase / audit reports in `docs/` | **ARCHIVE** | Historical value, no operational value | Moved to `docs/archive/`, never deleted |
+| P4 `db.ts` SQLite engine + write queue | **KEEP (port)** | Proven crash-safe pattern; matches the SPACE DB decision | `core/persistence` repository layer over `better-sqlite3` |
 
 ## Phase 5 — Technical debt
 
