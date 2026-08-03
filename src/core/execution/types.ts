@@ -187,6 +187,13 @@ export interface WalletStatus {
 /** Everything the Risk Engine is allowed to look at. Injected, never fetched. */
 export interface RiskContext {
   at: string;
+  /**
+   * Manual Trading path. Manual orders reuse this exact Risk Engine; only the
+   * strategy-specific checks (strategy mode, strategy enabled, per-market
+   * quota) are swapped for the manual equivalents.
+   */
+  manual?: boolean;
+  manualEnabled?: boolean;
   engineArmed: boolean;
   strategyMode: boolean;
   strategyEnabled: boolean;
