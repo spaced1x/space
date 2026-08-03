@@ -4,6 +4,7 @@ import type { MarketState } from "../../core/market/types";
 import type { RuntimeState } from "../../core/state/store";
 import type { StrategySnapshot } from "../../core/strategy/types";
 import { StatusDot, stateLabel } from "./status-dot";
+import { WorkspaceNav } from "./workspace-nav";
 
 // Permanent left-side panel. Read-only projection of one engine snapshot —
 // Mission Control never derives trading state of its own.
@@ -26,6 +27,8 @@ export function MissionControl({
         <p className="font-mono text-xs font-semibold tracking-[0.35em] text-primary">S P A C E</p>
         <p className="mt-1 text-xs text-muted-foreground">Mission Control</p>
       </div>
+
+      <WorkspaceNav />
 
       <Section title="Engine">
         <Row label="Status" value={runtime.engineStatus} accent />
