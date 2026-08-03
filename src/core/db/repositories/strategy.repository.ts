@@ -82,13 +82,14 @@ export const strategyRepository = {
     );
   },
 
-  async insertIntent(intent: ExecutionIntent): Promise<void> {
+  async insertIntent(intent: ExecutionIntent, configVersion: number | null = null): Promise<void> {
     const driver = await requireDriver();
     driver.run(
       `INSERT INTO execution_intents (
          id, created_at, condition_id, slug, horizon, window_seconds, direction,
-         opening_twap, settlement_twap, ptb, buffer, frozen_trigger, trigger_time, reason
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         opening_twap, settlement_twap, ptb, buffer, frozen_trigger, trigger_time, reason,
+         config_version
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         intent.id,
         intent.createdAt,
@@ -104,6 +105,7 @@ export const strategyRepository = {
         intent.frozenTrigger,
         intent.triggerTime,
         intent.reason,
+        configVersion,
       ],
     );
   },
