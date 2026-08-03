@@ -112,7 +112,24 @@ export const strategyRepository = {
 
   async recentIntents(limit = 20): Promise<ExecutionIntent[]> {
     const driver = await requireDriver();
-    const rows = driver.all<Record<string, string | number | null>>(
+    interface IntentRow {
+      id: string;
+      created_at: string;
+      condition_id: string;
+      slug: string;
+      horizon: string;
+      window_seconds: number;
+      direction: string;
+      opening_twap: number;
+      settlement_twap: number;
+      ptb: number;
+      buffer: number;
+      frozen_trigger: number;
+      trigger_time: string;
+      reason: string | null;
+      config_version: number | null;
+    }
+    const rows = driver.all<IntentRow>(
       `SELECT * FROM execution_intents ORDER BY created_at DESC LIMIT ?`,
       [limit],
     );
