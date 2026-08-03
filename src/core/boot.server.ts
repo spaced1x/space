@@ -158,6 +158,8 @@ async function runBoot(): Promise<void> {
 
   registerHealthCheck("telegram", telegramServiceHealth);
   registerHealthCheck("backup", backupServiceHealth);
+  registerHealthCheck("settlement", settlementHealth);
+  registerHealthCheck("environment_conformance", conformanceHealth);
   });
 
   // Run startup validation before any background work begins. This gate catches
