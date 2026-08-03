@@ -113,6 +113,8 @@ Then UI: missing runtime bindings, placeholder loading text, empty cards, cards 
 
 `bunx tsgo --noEmit`, `bunx vitest run`, `bun run build` (production), plus a Playwright and runtime walkthrough covering: cold boot, warm restart, V1 START, V1 STOP, V2 START, V2 STOP, ten restart cycles, every Mission Control tab, environment isolation, RTDS, Chainlink standby, CLOB authentication, the validation gate, provider persistence, connection timeline and market timeline. Pass conditions: no duplicate timers, no duplicate WebSocket connections, no increasing memory across the restart cycles, no console errors, all tests green. After every START/STOP cycle confirm all WebSockets close cleanly, all scheduler jobs are released, all database locks are released, no duplicate runtime tasks appear, and memory returns to the expected steady-state.
 
+Production resilience validation: after 24 hours of continuous runtime confirm no memory growth beyond expected steady-state, no duplicate scheduler jobs, no duplicate WebSocket connections, no stale runtime snapshots, no missed heartbeat recovery, no increasing reconnect loops, no SQLite lock contention, no unbounded log growth and no runtime drift between Mission Control, Diagnostics and the underlying runtime snapshot.
+
 ## Final deliverable
 
 A written implementation report listing every file changed, every migration added, every runtime component added, every new environment variable, every new command bus command, every remaining limitation and every known blocker, ending with an explicit confirmation that no placeholder code, TODOs, mocked values or unfinished runtime paths remain.
