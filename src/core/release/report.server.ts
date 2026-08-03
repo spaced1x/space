@@ -79,7 +79,7 @@ export async function generateReleaseReport(version: string): Promise<ReleaseGat
       nodeEnv: env.NODE_ENV,
       nodeVersion: process.version,
       platform: process.platform,
-      dbPath: env.DB_PATH,
+      dbPath: resolveDbPath(env),
     },
     runtime,
     operations,
