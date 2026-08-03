@@ -15,13 +15,13 @@ STOPPED -> STARTING -> VALIDATING -> READY -> RUNNING -> STOPPING -> STOPPED
                     \-> FAILED
 ```
 
-READY means every mandatory dependency passed but the runtime is still waiting on its first real input — first market discovery, first TWAP sample or first discovery cycle. RUNNING means the runtime has all of them and is operating. Each READY card names exactly what is still missing.
+READY means every mandatory subsystem has started successfully and the runtime is ready to trade. Waiting for a market, waiting for a TWAP sample, or waiting for the next discovery cycle are operational states surfaced by Mission Control and do not prevent the runtime from entering READY. RUNNING means the runtime has entered its normal operating loop and is actively processing live runtime events. A missing market or no current trading opportunity never downgrades the runtime lifecycle by itself.
 
 One enum replaces every visible engine state. OBSERVE is removed from the UI entirely; ARM/DISARM leave the operator workflow. The internal safety latch survives as an implementation detail that the validation gate releases — no operator ever sees or presses it. Mission Control, Diagnostics, connection cards and status badges all read this single lifecycle; no duplicated enums.
 
 ## 3. START / STOP
 
-START does not immediately enable trading. It persists the selected runtime target, gracefully shuts down any active runtime (persist state, flush logs, close Scheduler, Binance, RTDS, Chainlink, Gamma, CLOB, Telegram, SQLite, release locks), then exits for supervisor restart and boots the selected runtime.
+START does not immediately enable trading. It persists the selected runtime target, gracefully shuts down any active runtime (persist state, flush logs, close Scheduler, Binance, RTDS, Chainlink, Gamma, CLOB, Telegram, SQLite, release locks), then exits for supervisor restart and boots the selected runtime. START only starts the runtime lifecycle. Strategy execution may begin only after the runtime reaches RUNNING, all mandatory runtime dependencies remain healthy, and the emergency stop is clear. Runtime startup never bypasses existing safety checks.
 
 Boot order: STARTING -> Database -> Runtime -> Scheduler -> Wallet -> Polygon RPC -> Gamma -> Binance -> TWAP Provider -> CLOB -> Telegram -> Market Discovery -> Runtime Validation -> READY -> RUNNING.
 
@@ -74,7 +74,7 @@ Always rendered. No position: strategy direction, PTB, settlement TWAP, buffer, 
 
 ## 10. TWAP provider
 
-Card shows active provider, standby provider, environment, endpoint, symbol, current TWAP, settlement price, samples, sequence, freshness, latency, last update, buffer, direction, PTB, confidence, trading impact, operator action, reason, plus last provider switch timestamp and switch reason. Active provider selection persists across restart in the environment's own database. If the previously selected provider is unavailable during boot it stays selected and the runtime reports FAILED; providers are never silently switched. Layering is preserved: engine talks only to the TWAP Service, which owns the Provider Registry; no other subsystem knows which provider is active.
+Card shows active provider, standby provider, environment, endpoint, symbol, current TWAP, settlement price, samples, sequence, freshness, latency, last update, buffer, direction, PTB, confidence, trading impact, operator action, reason, plus last provider switch timestamp and switch reason. Active provider selection persists across restart in the environment's own database. If the previously selected provider is unavailable during boot it remains selected and the runtime reports the provider as FAILED; the runtime itself continues to start provided all mandatory startup requirements are satisfied. Trading remains blocked until the active provider becomes healthy or the operator explicitly selects another provider. Providers are never switched automatically.
 
 ## 11. Runtime connections
 
