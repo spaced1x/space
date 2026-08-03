@@ -44,6 +44,8 @@ interface PaperOrder {
   filledSize: number;
   status: VenueOrderStatusCode;
   createdAtMs: number;
+  /** Book timestamp already evaluated for maker fills. */
+  lastBookAtMs: number;
   trades: VenueTrade[];
 }
 
@@ -117,6 +119,13 @@ function progress(order: PaperOrder): void {
     order.status = "MATCHED";
     return;
   }
+  const current = getTokenBook(order.tokenId);
+  if (!current) return;
+  // A resting order is maker liquidity: it only fills when the market trades
+  // into it, which is observable as a *newer* book that crosses its price. The
+  // same book snapshot can never fill the same order twice.
+  if (current.updatedAtMs <= order.lastBookAtMs) return;
+  order.lastBookAtMs = current.updatedAtMs;
   const levels = bookSide(order.tokenId, order.side);
   if (!levels.length) return;
   const result = match(levels, order.side, remaining, order.price);
@@ -185,6 +194,7 @@ export const paperAdapter: VenueAdapter = {
       filledSize: 0,
       status: "OPEN",
       createdAtMs: clock().now(),
+      lastBookAtMs: book.updatedAtMs,
       trades: [],
     };
 
