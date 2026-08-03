@@ -110,6 +110,8 @@ function Diagnostics() {
             </div>
           </Panel>
 
+          <ProductionPanel />
+
           <Panel title="Warnings and errors" hint={`${data.errors.length} recent`}>
             <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
               {data.errors.map((event) => (
