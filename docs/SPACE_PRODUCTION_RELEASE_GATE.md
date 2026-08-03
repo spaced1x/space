@@ -6,8 +6,7 @@ This checklist must be completed before SPACE is considered production-ready and
 
 - [ ] `.env.example` is current and every required secret is documented.
 - [ ] VPS `.env` contains no operational settings (only secrets and immutable runtime facts).
-- [ ] `OPERATOR_PASSWORD_HASH` is an Argon2id hash, not a plain password.
-- [ ] `SESSION_SECRET` is at least 32 bytes of cryptographically random data.
+- [ ] SPACE v1.0 has no internal authentication: confirm Nginx and the operator network are the only access control, and the app port is not publicly exposed.
 - [ ] `WALLET_PRIVATE_KEY` is for a dedicated trading wallet with limited funds.
 - [ ] `POLYMARKET_API_KEY`, `API_SECRET`, and `API_PASSPHRASE` are mainnet credentials when `SPACE_ENVIRONMENT=V2_MAINNET`.
 
@@ -15,9 +14,9 @@ This checklist must be completed before SPACE is considered production-ready and
 
 - [ ] `git clone` succeeds on a clean Ubuntu 22.04/24.04 LTS host.
 - [ ] `bun install` completes with no audit failures that affect runtime.
-- [ ] `bun run build` produces `dist/` with exit code 0.
-- [ ] `bun run pm2:start` starts the process and PM2 reports `online`.
-- [ ] `bun run pm2:logs` shows the BOOT → OBSERVE sequence without errors.
+- [ ] `NITRO_PRESET=node-server bun run build` produces `dist/server/index.mjs` with exit code 0.
+- [ ] `pm2 start ecosystem.config.cjs` starts the process and PM2 reports `online`.
+- [ ] `pm2 logs space` shows the BOOT → OBSERVE sequence without errors.
 - [ ] Nginx reverse proxy forwards `/` to `localhost:8080` and serves static assets.
 
 ## 3. Database & Persistence
