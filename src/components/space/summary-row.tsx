@@ -42,19 +42,20 @@ export function SummaryRow({
   const cells: Array<{ label: string; value: string; tone?: "accent" | "ok" | "warn" }> = [
     { label: "Environment", value: environment.label, tone: environment.live ? "warn" : "accent" },
     { label: "Engine", value: environment.live ? "LIVE" : "PAPER" },
+    { label: "Lifecycle", value: runtime.lifecycle },
     { label: "TWAP", value: twap ? stateWord(twap.state) : "WAITING" },
     { label: "Market", value: market ? stateWord(market.state) : "WAITING" },
     { label: "Strategy", value: readiness(component("strategy")) },
     { label: "Risk", value: readiness(component("risk")) },
     { label: "Execution", value: clob ? stateWord(clob.state) : readiness(component("execution")) },
     { label: "Health", value: healthPercent },
-    { label: "Trading", value: trading },
+    { label: "Trading", value: trading, tone: runtime.lifecycle === "RUNNING" ? "ok" : "warn" },
   ];
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
-        <span className="font-mono text-heading font-semibold tracking-[0.3em] text-primary">
+        <span className="font-mono text-section-title font-semibold tracking-[0.3em] text-primary">
           SPACE
         </span>
         {cells.map((cell) => (
@@ -64,9 +65,11 @@ export function SummaryRow({
               className={`font-mono text-value font-semibold ${
                 cell.tone === "accent"
                   ? "text-primary"
-                  : cell.tone === "warn"
-                    ? "text-warn"
-                    : "text-foreground"
+                  : cell.tone === "ok"
+                    ? "text-ok"
+                    : cell.tone === "warn"
+                      ? "text-warn"
+                      : "text-foreground"
               }`}
             >
               {cell.value}
