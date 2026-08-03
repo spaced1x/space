@@ -74,7 +74,7 @@ Always rendered. No position: strategy direction, PTB, settlement TWAP, buffer, 
 
 ## 10. TWAP provider
 
-Card shows active provider, standby provider, environment, endpoint, symbol, current TWAP, settlement price, samples, sequence, freshness, latency, last update, buffer, direction, PTB, confidence, trading impact, operator action, reason, plus last provider switch timestamp and switch reason. Active provider selection persists across restart in the environment's own database. If the previously selected provider is unavailable during boot it stays selected and the runtime reports FAILED; providers are never silently switched. Layering is preserved: engine talks only to the TWAP Service, which owns the Provider Registry; no other subsystem knows which provider is active.
+Card shows active provider, standby provider, environment, endpoint, symbol, current TWAP, settlement price, samples, sequence, freshness, latency, last update, buffer, direction, PTB, confidence, trading impact, operator action, reason, plus last provider switch timestamp and switch reason. Active provider selection persists across restart in the environment's own database. If the previously selected provider is unavailable during boot it remains selected and the runtime reports the provider as FAILED; the runtime itself continues to start provided all mandatory startup requirements are satisfied. Trading remains blocked until the active provider becomes healthy or the operator explicitly selects another provider. Providers are never switched automatically.
 
 ## 11. Runtime connections
 
