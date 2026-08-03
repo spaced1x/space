@@ -81,4 +81,35 @@ Diagnostics are environment-aware: viewing V1 shows only V1 history, viewing V2 
 
 ## Verification
 
-Both panels permanently visible; identical layouts; isolated databases, histories, provider selections and diagnostics; START/STOP for V1 and V2; switch survives a restart; no duplicated timers or WebSockets (asserted by counting active handles after three switch cycles); no stale snapshots; no placeholder values; `tsc` clean; tests green; production build passes.
+PASS only if ALL are true:
+
+- Both runtime panels always visible
+- V1 and V2 show identical information
+- START/STOP works independently
+- Runtime switch works repeatedly
+- Both databases remain isolated
+- No duplicated timers
+- No duplicated schedulers
+- No duplicated WebSockets
+- No duplicated event listeners
+- No leaked SQLite handles
+- No stale runtime snapshot
+- No placeholder values
+- No mocked runtime values
+- No React warnings
+- No hydration warnings
+- No console errors
+- TypeScript clean
+- Tests green
+- Production build succeeds
+
+Provide a final implementation report listing:
+
+- every changed file
+- every new file
+- every deleted file
+- every migration
+- every new environment variable
+- every runtime command
+- every known limitation
+- every remaining blocker
