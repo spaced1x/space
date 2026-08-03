@@ -13,9 +13,38 @@ Architecture stays frozen. No strategy, risk, replay, statistics or trading-logi
 ## 1. One runtime snapshot, one API surface
 
 - Add `src/lib/use-runtime-snapshot.ts`: a single hook wrapping `getSystemSnapshot` with one query key, one interval, and shared `status`/`error` values.
-- Every operator page (Mission Control, Operations, Replay, Manual, Statistics, Diagnostics, Settings) consumes that hook for runtime state. Page-specific server functions remain only for data the snapshot does not carry (operations document, statistics series, replay reconstruction, manual desk, failure harness), each with a single query key and no duplicate polling.
+- **Exactly one poller exists for the runtime snapshot, process-wide.** It lives in the root provider; every page, panel and card subscribes to that shared cache. No page, route loader or component may start its own runtime polling, and no second interval, `refetchInterval` or `setInterval` against the snapshot is permitted. Page-specific server functions remain only for data the snapshot does not carry (operations document, statistics series, replay reconstruction, manual desk, failure harness), each with a single query key.
 - Remove the duplicated snapshot queries in `console-shell.tsx`, `index.tsx` and `operations.tsx`; the shell owns the snapshot and passes it down.
 - Extend `getSystemSnapshot` so it already carries everything Diagnostics needs (execution snapshot, boot trace with stage status, resource audit history, connections, timeline) — Diagnostics stops maintaining a second runtime store.
+
+### Snapshot lifecycle (never a permanent failure screen)
+
+The dashboard's connection to the runtime is a first-class lifecycle:
+
+```text
+CONNECTING -> WAITING_FOR_RUNTIME -> FIRST_SNAPSHOT -> LIVE
+                     ^                                   |
+                     +--------- RECOVERING <---- STALE <-+
+```
+
+Rules:
+
+- The first successful snapshot is cached immediately and kept.
+- A temporary polling failure never discards a valid snapshot. The screen keeps rendering the last valid values and shows a `STALE` badge with last successful update, age and reconnect attempts.
+- The dashboard retries on its own and recovers automatically the moment the runtime answers again — no browser refresh, no manual action.
+- `Runtime snapshot unavailable` is shown **only** when no snapshot has ever been received **and** the configured retry budget is exhausted. `Reading runtime snapshot…` and `Mission Control is waiting for the first runtime snapshot` are transitional states only, never terminal ones.
+
+### Snapshot versioning
+
+Every snapshot carries `snapshotVersion`, `runtimeVersion`, `schemaVersion`, `environment`, `timestamp` and a monotonic `sequence`. The dashboard rejects any snapshot with a lower `sequence` than the one it already holds, discards the cache outright when `environment` or `runtimeVersion` changes, and never renders a snapshot it has classified as stale-by-version.
+
+### Snapshot watchdog
+
+If no snapshot has been received for 30 seconds the dashboard enters `STALE` (not `LOADING`), keeps the last known values on screen, and surfaces last successful update, time since last heartbeat and reconnect attempts.
+
+### Runtime recovery
+
+If the runtime process crashes or is restarted (PM2 restart, environment switch, manual STOP/START), the dashboard walks `LIVE -> STALE -> WAITING_FOR_RUNTIME -> RECOVERING -> LIVE` on its own, restoring the snapshot without a browser refresh.
 
 ## 2. Never a blank page, never an infinite spinner
 
@@ -31,6 +60,15 @@ success  -> content
 - `EmptyState` (already in `src/components/space/empty-state.tsx`) becomes the single failure/empty renderer; its fields map exactly onto Reason, Recovery, Action and Trading impact.
 - Operations Desk gets four explicit outcomes: live configuration, loading, runtime error, configuration unavailable.
 - Server functions return typed failure objects where the page must stay renderable, and the query error path always produces a visible card.
+- **Every operator page enforces a 10-second loading timeout.** Any panel still pending after 10 seconds automatically renders `<Subject> unavailable` with Reason, Action and Recovery. No page may remain in an indefinite loading state under any condition.
+
+## 2b. Environment parity — Preview, Local, Production build, VPS
+
+- All four environments render from the exact same runtime snapshot contract. There is one contract, one server function, one hook.
+- No page may depend on preview-only state, mocked data, seeded values or development-only providers. Nothing renders differently because `NODE_ENV` differs.
+- A production build must show the identical cards, runtime information, diagnostics and operator state that Lovable Preview shows.
+- When data does differ between environments, Diagnostics names exactly which runtime endpoint or snapshot field is absent, with its reason and recovery — the value is never silently blank.
+- Running behind PM2 or Nginx must not remove any runtime information. Diagnostics reports the serving topology it observes.
 
 ## 3. Complete runtime wiring
 
@@ -50,6 +88,14 @@ Every card exposes Status, Latency, Health, Environment, Endpoint, Reconnects, L
 
 The connection state vocabulary aligns to `CONNECTED, WAITING, RECONNECTING, STALE, FAILED, DISABLED` (plus the existing `NOT_STARTED` for never-observed), each carrying heartbeat, latency, last message, retry count, reason and recovery.
 
+### Ownership rule for connection sync
+
+Every runtime component owns and reports its own status. `connection-sync.server.ts` becomes a pure aggregator: it collects what components have reported and nothing else. It may not infer a connection state, re-derive health, or duplicate health logic that lives in the owning module. Repeated per-service logic currently in that file moves into the owning adapters.
+
+## 3b. Runtime health endpoint
+
+Add a public server route `GET /api/runtime/health` returning boot stage, snapshot age, runtime lifecycle, resource audit, connection summary, environment, database, scheduler, engine and version. It is the single machine-readable runtime probe used by the dashboard, PM2, Nginx and VPS diagnostics. It exposes no secrets, no keys and no wallet material.
+
 ## 4. Deterministic boot order
 
 Reorder `boot.server.ts` stages to exactly:
@@ -61,7 +107,11 @@ Configuration -> Environment -> SQLite -> Runtime Target -> Scheduler -> Wallet
 -> Strategy -> Risk -> Runtime Validation -> READY
 ```
 
-`BootStageTrace` gains `status`, `reason` and `recovery` alongside the existing start/finish/duration. Diagnostics renders the full timeline, including skipped stages and why they were skipped.
+`BootStageTrace` gains a `status` of `WAITING | RUNNING | PASSED | FAILED | SKIPPED | RETRYING`, plus `duration`, `reason`, `recovery` and `retryCount`. Diagnostics renders the full timeline, including stages that were skipped and why.
+
+### Boot failure recovery
+
+When a boot stage fails, Diagnostics exposes the failed stage, the captured stack, the blocking dependency, the recovery path, the retry count and the operator action. Boot never dies silently and never leaves the dashboard with an empty timeline.
 
 ## 5. Runtime validation
 
@@ -76,24 +126,44 @@ The validator itself reports as a runtime card carrying its verdict and blockers
 
 Extend `resources.server.ts` to assert exactly one of: Scheduler, Engine, SQLite, database lock, Binance socket, RTDS socket, Gamma poller, TWAP service, Provider registry, Venue, CLOB socket, Telegram — with no duplicate timers, listeners, intervals, pollers or in-flight loops. The audit runs on START, STOP and SWITCH; a failure transitions the runtime to FAILED and the audit is surfaced on Diagnostics with the failing counts.
 
+## 6b. Diagnostics additions
+
+Diagnostics gains a snapshot-health block: snapshot age, snapshot latency, snapshot payload size, last successful snapshot, polling interval, observed polling jitter, boot duration and runtime uptime.
+
+It also gains a **Runtime Events** monitor fed by the existing event bus, filterable by kind: `START, STOP, SWITCH, BOOT, READY, VALIDATION, SNAPSHOT, RESOURCE_AUDIT, CONNECTION_CHANGE, ORDER, POSITION, TWAP, MARKET`.
+
 ## 7. Refresh and consistency
 
 - One polling cadence for the runtime snapshot; an environment switch invalidates every runtime query so no card survives the switch.
 - The shared typography, spacing, card, badge and colour tokens already in `styles.css` are applied uniformly; no page defines local variants.
 - No component unmounts because its data is missing — it renders the explicit empty state instead.
+- SSR hydration, CSR hydration, PM2 restart and runtime restart all preserve the same UI tree — zero hydration mismatch warnings. Anything time- or runtime-dependent renders through the shared snapshot, never from a client-only value read during the first render.
 
 ## 8. Bug sweep and verification
 
 Sweep and fix hydration warnings, React warnings, console errors, undefined access, duplicate polling, stale snapshots, layout overflow at narrow viewports, and any loading loop.
 
-Verification before this phase is called done:
+Verification before this phase is called done. `tsgo` clean, `vitest run` green, production build passes, plus a Playwright pass over all seven pages for each scenario below:
 
-- `tsgo` clean, `vitest run` green, production build passes.
-- Playwright pass over all seven pages: no blank page, no infinite loading, no placeholder value, every runtime card populated or explicitly "No data observed yet", zero console errors, zero React/hydration warnings.
-- Boot timeline complete on Diagnostics; resource audit passes on START, STOP and SWITCH.
+| Scenario | Must hold |
+| --- | --- |
+| Cold boot | Timeline complete, reaches LIVE |
+| Warm restart | Snapshot restored without refresh |
+| PM2 restart | Dashboard recovers on its own |
+| Browser refresh | Same UI tree, no hydration warning |
+| Runtime restart | STALE -> RECOVERING -> LIVE |
+| Environment switch | Snapshot cache invalidated, no card survives |
+| Network disconnect | STALE badge, last values retained |
+| Runtime unavailable | Explicit card only after retry budget |
+| Snapshot recovery | Automatic, no manual action |
+| Duplicate polling | Exactly one snapshot request in flight |
+| Duplicate websocket / timers | Resource audit passes on START, STOP, SWITCH |
+| Blank pages / infinite loading | None; 10s timeout always resolves |
+| Stale snapshot rendering | Older `sequence` never rendered |
+| Preview vs production build vs VPS | Identical runtime state rendered |
 
 ## Technical notes
 
-- New files: `src/lib/use-runtime-snapshot.ts`, `src/components/space/async-panel.tsx`.
+- New files: `src/lib/use-runtime-snapshot.ts` (single poller, lifecycle, watchdog, version guard), `src/components/space/async-panel.tsx` (pending / timeout / error / empty), `src/routes/api/runtime.health.ts`, `src/components/space/runtime-events.tsx`.
 - Edited: `connections.server.ts`, `connection-sync.server.ts`, `boot.server.ts`, `resources.server.ts`, `validation.server.ts`, `system.functions.ts`, `operations.functions.ts`, all seven route files, `console-shell.tsx`, `mission-control.tsx`, `connection-card.tsx`, `runtime-diagnostics.tsx`.
 - Untouched: strategy, risk, replay, statistics and execution decision logic.
