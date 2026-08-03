@@ -114,19 +114,21 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("backup", backupServiceHealth);
 
   // Run startup validation before any background work begins. This gate catches
-  // missing secrets, an unhealthy database, or an invalid wallet before the
-  // operator has a chance to ARM.
+  // missing secrets, an unhealthy database, or an invalid wallet. Boot always
+  // completes so the operator can see the dashboard and the validation report;
+  // only the ARM command is blocked when validation fails.
   const startupValidation = await runStartupValidation();
   if (!startupValidation.valid) {
-    log.error("startup validation failed", { blockers: startupValidation.blockers });
+    log.warn("startup validation has blockers; engine limited to OBSERVE", {
+      blockers: startupValidation.blockers,
+    });
     eventBus.publish({
-      type: "process.startup_validation_failed",
-      severity: "ERROR",
+      type: "process.startup_validation_blockers",
+      severity: "WARNING",
       correlationId: cid,
       source: "boot",
       payload: { blockers: startupValidation.blockers },
     });
-    throw new Error(`Startup validation failed: ${startupValidation.blockers.join(", ")}`);
   }
 
   // Timers exist only after the scheduler is up, and the engine loop registers
