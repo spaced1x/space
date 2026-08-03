@@ -259,19 +259,19 @@ function syncTwap(): void {
 
   reportConnection("twap_provider", {
     state:
-      twap.state === "READY"
+      twap.state === "OK"
         ? "CONNECTED"
-        : twap.state === "COLLECTING"
+        : twap.state === "WARMING"
           ? "CONNECTING"
-          : twap.samples > 0
+          : twap.state === "STALE"
             ? "DEGRADED"
             : "WAITING",
     reason: twap.message,
     endpoint: "Binance settlement TWAP",
     lastSuccessAt: twap.lastUpdateAt,
-    blocksTrading: twap.state !== "READY",
+    blocksTrading: twap.state !== "OK",
     recovery: "automatic — rebuilt for every settlement window",
-    action: twap.state === "READY" ? null : "None — samples accumulate automatically",
+    action: twap.state === "OK" ? null : "None — samples accumulate automatically",
     details: {
       value: twap.value,
       samples: twap.samples,
