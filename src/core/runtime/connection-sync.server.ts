@@ -1,15 +1,21 @@
-import { loadEnv, resolveDbPath } from "../config/env.server";
+import { describeEnvReadiness, loadEnv, resolveDbPath } from "../config/env.server";
+import { conformanceHealth } from "../config/environment.server";
 import { databaseHealth } from "../db/database.server";
+import { instanceLockHeld, lockPath } from "../db/lock.server";
 import { chainCheck, walletStatus } from "../execution/wallet.server";
-import { venueAdapter } from "../execution/adapter.server";
+import { activeVenue, venueAdapter } from "../execution/adapter.server";
 import { rateLimitStatus } from "../execution/rate-limit.server";
 import { feeds } from "../engine/loop.server";
 import { discoveryStats } from "../market/discovery.server";
+import { clobMarketFeedStatus } from "../market/clob-ws.server";
 import { getMarketState } from "../market/state";
 import { schedulerStatus } from "../scheduler/scheduler.server";
 import { strategySnapshot } from "../strategy/strategy.server";
 import { telegramHealth } from "../telegram/telegram.service";
 import { twapServiceSnapshot } from "../twap/service.server";
+import { rtdsSocketStats } from "../twap/rtds-socket.server";
+import { lastValidationReport } from "../startup/validation.server";
+import { readRuntimeTarget, targetMatchesEnvironment } from "./target.server";
 import { reportConnection } from "./connections.server";
 
 // Adapters already track their own statistics. This module is the single place
@@ -25,16 +31,68 @@ export function signerLabel(signatureType: number): string {
 export async function syncConnections(): Promise<void> {
   const env = loadEnv();
 
+  syncConfiguration();
+  syncEnvironment();
   await syncDatabase();
+  syncDatabaseLock();
+  syncRuntimeTarget();
   syncScheduler();
   syncWallet();
   syncRpc();
   syncGamma(env.POLYMARKET_GAMMA_URL);
   syncDiscovery();
   syncBinance(env.BINANCE_WS_URL, env.BINANCE_SYMBOL);
+  syncRtds();
+  syncChainlinkStreams();
+  syncTwapService();
+  syncProviderRegistry();
   syncTwap();
+  syncClobMarketFeed();
   syncClob();
+  syncVenues();
   syncTelegram();
+  syncValidator();
+}
+
+function syncConfiguration(): void {
+  const readiness = describeEnvReadiness();
+  reportConnection("configuration", {
+    state: !readiness.valid ? "FAILED" : readiness.missingForArmed.length ? "DEGRADED" : "CONNECTED",
+    reason: readiness.message,
+    endpoint: ".env + operations document",
+    lastError: readiness.valid ? null : readiness.message,
+    blocksTrading: !readiness.valid,
+    recovery: readiness.valid ? "n/a" : "manual — correct .env and restart SPACE",
+    action: readiness.missingForArmed.length
+      ? `Set ${readiness.missingForArmed.join(", ")} in .env to allow ARM`
+      : null,
+    details: {
+      environment: readiness.environment,
+      missingForArmed: readiness.missingForArmed.join(", ") || "none",
+    },
+  });
+}
+
+function syncEnvironment(): void {
+  const health = conformanceHealth();
+  const details = (health.details ?? {}) as Record<string, unknown>;
+  reportConnection("environment", {
+    state:
+      health.state === "OK"
+        ? "CONNECTED"
+        : health.state === "FAILED"
+          ? "FAILED"
+          : health.state === "NOT_INITIALIZED"
+            ? "NOT_STARTED"
+            : "DEGRADED",
+    reason: health.message,
+    endpoint: String(details["environment"] ?? loadEnv().SPACE_ENVIRONMENT),
+    lastError: health.state === "FAILED" ? health.message : null,
+    blocksTrading: health.state === "FAILED",
+    recovery: "automatic — re-evaluated on every boot and before every ARM",
+    action: health.state === "FAILED" ? "Align .env with the selected environment and restart" : null,
+    details: { evaluatedAt: String(details["at"] ?? "never") },
+  });
 }
 
 async function syncDatabase(): Promise<void> {
@@ -60,6 +118,71 @@ async function syncDatabase(): Promise<void> {
 }
 
 function syncScheduler(): void {
+  const status = schedulerStatus();
+  const failing = status.tasks.filter((task) => task.lastError);
+  reportConnection("scheduler", {
+    state: !status.running ? "DISCONNECTED" : failing.length ? "DEGRADED" : "CONNECTED",
+    reason: !status.running
+      ? "scheduler is not running"
+      : failing.length
+        ? `${failing.length} task(s) reported an error`
+        : `${status.tasks.length} tasks on a ${status.tickMs}ms heartbeat`,
+    endpoint: `in-process · ${status.tickMs}ms tick`,
+    latencyMs: status.maxTickDriftMs,
+    lastError: failing[0]?.lastError ?? null,
+    blocksTrading: !status.running,
+    recovery: status.running ? "n/a" : "manual — restart SPACE",
+    action: status.running ? null : "Restart SPACE to bring the scheduler back",
+    details: {
+      running: status.running,
+      ticks: status.ticks,
+      tasks: status.tasks.length,
+      maxTickDriftMs: status.maxTickDriftMs,
+      startedAt: status.startedAt,
+    },
+  });
+}
+
+function syncDatabaseLock(): void {
+  const held = instanceLockHeld();
+  reportConnection("database_lock", {
+    state: held ? "CONNECTED" : "FAILED",
+    reason: held
+      ? "single-instance lock held by this process"
+      : "single-instance lock is not held",
+    endpoint: lockPath(),
+    lastError: held ? null : "lock not acquired",
+    blocksTrading: !held,
+    recovery: held ? "n/a" : "manual — stop any other SPACE process and restart",
+    action: held ? null : "Verify no second SPACE process is running, then restart",
+    details: { held },
+  });
+}
+
+function syncRuntimeTarget(): void {
+  const target = readRuntimeTarget();
+  const matches = targetMatchesEnvironment();
+  reportConnection("runtime_target", {
+    state: matches ? "CONNECTED" : "DEGRADED",
+    reason: matches
+      ? `runtime target agrees with the active environment (${target.environment})`
+      : `target requests ${target.environment} but this process runs ${loadEnv().SPACE_ENVIRONMENT}`,
+    endpoint: `runtime-target v${target.version}`,
+    lastError: matches ? null : "runtime target mismatch",
+    blocksTrading: false,
+    recovery: matches ? "n/a" : "manual — restart the process to adopt the requested environment",
+    action: matches ? null : "Restart SPACE so the requested environment takes effect",
+    details: {
+      targetEnvironment: target.environment,
+      activeEnvironment: loadEnv().SPACE_ENVIRONMENT,
+      version: target.version,
+      requestedBy: target.requestedBy ?? null,
+      requestedAt: target.requestedAt ?? null,
+    },
+  });
+}
+
+function legacyScheduler(): void {
   const status = schedulerStatus();
   const failing = status.tasks.filter((task) => task.lastError);
   reportConnection("scheduler", {
