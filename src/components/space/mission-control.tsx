@@ -15,6 +15,7 @@ export function MissionControl({
   strategy,
   execution,
   environment,
+  snapshot,
 }: {
   runtime: RuntimeState;
   health: HealthReport;
@@ -22,6 +23,8 @@ export function MissionControl({
   strategy: StrategySnapshot;
   execution: ExecutionSnapshot;
   environment: { code: string; label: string; live: boolean };
+  /** Freshness of the runtime snapshot feeding this panel. */
+  snapshot?: { lifecycle: string; reason: string };
 }) {
   return (
     <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:sticky lg:top-0 lg:h-screen lg:w-80 lg:overflow-y-auto">
@@ -36,6 +39,15 @@ export function MissionControl({
           <EnvironmentBadge environment={environment} />
           <LifecycleBadge lifecycle={runtime.lifecycle} emergencyStop={runtime.emergencyStop} />
         </div>
+        {snapshot && snapshot.lifecycle !== "LIVE" ? (
+          <p
+            className={`mt-2 font-mono text-caption ${
+              snapshot.lifecycle === "RECOVERING" ? "text-fail" : "text-warn"
+            }`}
+          >
+            {snapshot.lifecycle} — {snapshot.reason}
+          </p>
+        ) : null}
       </div>
 
       <WorkspaceNav />
