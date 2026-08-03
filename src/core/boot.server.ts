@@ -7,6 +7,9 @@ import { eventBus } from "./bus/events";
 import { getRuntimeState, updateRuntimeState } from "./state/store";
 import { correlationId } from "./shared/ids";
 import { registerClockService } from "./clock/clock.service";
+import { loadOperations, operationsHealth } from "./config/operations.server";
+import { replayHealth } from "./replay/replay.server";
+import { statisticsHealth } from "./stats/statistics.server";
 import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
 import { discoveryHealth } from "./market/discovery.server";
 import { schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
@@ -39,6 +42,10 @@ async function runBoot(): Promise<void> {
   log.info("SPACE starting", { environment: env.SPACE_ENVIRONMENT, nodeEnv: env.NODE_ENV });
 
   await initDatabase();
+
+  // Operational settings live in SQLite, never in .env. Restore the operator's
+  // configuration document before anything reads it.
+  await loadOperations();
 
   // Clock is a first-class service: registered before anything schedules work.
   registerClockService();
@@ -74,6 +81,9 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("polymarket", () => polymarketAdapter.health());
   registerHealthCheck("risk", riskHealth);
   registerHealthCheck("execution", executionHealth);
+  registerHealthCheck("operations", operationsHealth);
+  registerHealthCheck("replay", replayHealth);
+  registerHealthCheck("statistics", statisticsHealth);
   registerHealthCheck("binance", () => feedHealth("binance"));
   registerHealthCheck("chainlink", () => feedHealth("chainlink"));
 
