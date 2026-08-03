@@ -69,7 +69,8 @@ Work is ordered by risk, not by convenience:
 3. **Telegram operator interface**.
 4. **Backup / restore / export**.
 5. **Production validation and documentation**.
-6. **Paper / chaos testing harness** (if time permits, strictly as validation tooling).
+6. **Internal validation and failure simulation** (if time permits, strictly as internal tooling).
+
 
 ---
 
