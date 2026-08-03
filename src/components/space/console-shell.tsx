@@ -30,6 +30,7 @@ export function ConsoleShell({
           strategy={snapshot.data.engine.strategy}
           execution={snapshot.data.engine.execution}
           environment={snapshot.data.environment}
+          snapshot={{ lifecycle: snapshot.lifecycle, reason: snapshot.reason }}
         />
       ) : (
         <aside className="w-full shrink-0 border-r border-sidebar-border bg-sidebar p-5 lg:w-72">
