@@ -5,6 +5,7 @@ const TONE: Record<HealthState, string> = {
   OK: "bg-ok",
   DEGRADED: "bg-warn",
   FAILED: "bg-fail",
+  DISABLED: "bg-off",
   NOT_INITIALIZED: "bg-idle",
 };
 
@@ -18,5 +19,5 @@ export function StatusDot({ state, className }: { state: HealthState; className?
 }
 
 export function stateLabel(state: HealthState): string {
-  return state.replace("_", " ").toLowerCase();
+  return state.replace(/_/g, " ").toLowerCase();
 }

@@ -63,8 +63,8 @@
   --color-warn: var(--warn);
   --color-fail: var(--fail);
   --color-idle: var(--idle);
-  --font-mono:
-    ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
+  --color-off: var(--off);
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
 }
 
 :root {
@@ -93,6 +93,7 @@
   --warn: oklch(0.82 0.15 85);
   --fail: oklch(0.65 0.2 25);
   --idle: oklch(0.6 0.015 250);
+  --off: oklch(0.42 0.02 250);
   --chart-1: oklch(0.78 0.14 178);
   --chart-2: oklch(0.78 0.15 160);
   --chart-3: oklch(0.82 0.15 85);

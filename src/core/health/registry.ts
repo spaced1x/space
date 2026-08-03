@@ -1,5 +1,11 @@
 import { systemClock } from "../shared/clock";
-import type { HealthComponent, HealthEntry, HealthReport, HealthResult, HealthState } from "./types";
+import type {
+  HealthComponent,
+  HealthEntry,
+  HealthReport,
+  HealthResult,
+  HealthState,
+} from "./types";
 import { HEALTH_COMPONENTS } from "./types";
 
 export type HealthCheck = () => HealthResult | Promise<HealthResult>;
@@ -14,7 +20,13 @@ export function clearHealthChecks(): void {
   checks.clear();
 }
 
-const RANK: Record<HealthState, number> = { OK: 0, NOT_INITIALIZED: 1, DEGRADED: 2, FAILED: 3 };
+const RANK: Record<HealthState, number> = {
+  OK: 0,
+  DISABLED: 0,
+  NOT_INITIALIZED: 1,
+  DEGRADED: 2,
+  FAILED: 3,
+};
 
 // A component that has no check yet is NOT_INITIALIZED, never silently OK.
 export async function collectHealth(): Promise<HealthReport> {
@@ -45,10 +57,11 @@ export async function collectHealth(): Promise<HealthReport> {
     }
   }
 
-  // Overall state ignores NOT_INITIALIZED modules that are simply not built yet;
-  // it is FAILED/DEGRADED only when an implemented dependency is unhealthy.
+  // Overall state ignores NOT_INITIALIZED modules that are simply not built yet
+  // and DISABLED modules the operator switched off; it is FAILED/DEGRADED only
+  // when an implemented, enabled dependency is unhealthy.
   const worst = components
-    .filter((entry) => entry.state !== "NOT_INITIALIZED")
+    .filter((entry) => entry.state !== "NOT_INITIALIZED" && entry.state !== "DISABLED")
     .reduce<HealthState>((acc, entry) => (RANK[entry.state] > RANK[acc] ? entry.state : acc), "OK");
 
   return { state: worst, checkedAt, components };

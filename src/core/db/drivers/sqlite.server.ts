@@ -30,6 +30,19 @@ export async function createSqliteDriver(dbPath: string): Promise<SqlDriver> {
     get: (sql, params = []) => db.prepare(sql).get(...params) as never,
     run: (sql, params = []) => db.prepare(sql).run(...params),
     transaction: (fn) => db.transaction(fn)(),
+    stats: () => {
+      const journal = db.pragma("journal_mode");
+      const mode = Array.isArray(journal)
+        ? String((journal[0] as { journal_mode?: string } | undefined)?.journal_mode ?? "unknown")
+        : "unknown";
+      let sizeBytes: number | null = null;
+      try {
+        sizeBytes = fs.statSync(path.resolve(dbPath)).size;
+      } catch {
+        sizeBytes = null;
+      }
+      return { journalMode: mode, sizeBytes };
+    },
     close: () => db.close(),
   };
 }

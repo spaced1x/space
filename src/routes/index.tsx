@@ -7,7 +7,19 @@ import { CommandDeck } from "../components/space/command-deck";
 import { MissionControl } from "../components/space/mission-control";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
 import type { Command } from "../core/bus/commands";
+import type { EventSeverity } from "../core/bus/events";
 import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
+
+const SEVERITY_TONE: Record<EventSeverity, string> = {
+  INFO: "text-muted-foreground",
+  SUCCESS: "text-ok",
+  WARNING: "text-warn",
+  ERROR: "text-fail",
+};
+
+function severityTone(severity: EventSeverity): string {
+  return SEVERITY_TONE[severity] ?? "text-muted-foreground";
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -67,12 +79,23 @@ function OperatorConsole() {
 
       <main className="flex-1 space-y-8 p-6 lg:p-10">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Foundation Console
-          </h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Foundation Console
+            </h1>
+            <span className="rounded border border-warn/40 bg-warn/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-warn">
+              temporary — milestone 1
+            </span>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Milestone 1: configuration, SQLite, logging, health, command bus, event bus and state
-            store. Trading modules report NOT_INITIALIZED until their milestone lands.
+            Milestone 1: configuration, clock, SQLite, logging, health, command bus, event bus and
+            state store. Trading modules report NOT_INITIALIZED until their milestone lands. This
+            layout is scaffolding only and is replaced by the approved Mission Control layout in a
+            later milestone.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Engine boots into OBSERVE. ARMED is only ever reached by an explicit operator ARM
+            command.
           </p>
         </header>
 
@@ -124,6 +147,9 @@ function OperatorConsole() {
               >
                 <span className="text-muted-foreground">
                   {new Date(event.occurredAt).toLocaleTimeString()}
+                </span>
+                <span className={`w-16 shrink-0 uppercase ${severityTone(event.severity)}`}>
+                  {event.severity}
                 </span>
                 <span className="text-primary">{event.type}</span>
                 <span className="text-muted-foreground">{event.source}</span>

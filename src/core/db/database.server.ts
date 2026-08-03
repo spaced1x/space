@@ -2,7 +2,7 @@ import { loadEnv } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import { DatabaseUnavailableError } from "../shared/errors";
-import type { HealthResult } from "../health/types";
+import type { DatabaseDiagnostics, HealthResult } from "../health/types";
 import type { SqlDriver } from "./driver";
 import { createSqliteDriver } from "./drivers/sqlite.server";
 import { migrations } from "./migrations";
@@ -83,28 +83,50 @@ export async function requireDriver(): Promise<SqlDriver> {
 
 export async function databaseHealth(): Promise<HealthResult> {
   const current = await initDatabase();
+  const base: DatabaseDiagnostics = {
+    engine: "sqlite",
+    journalMode: "WAL",
+    walEnabled: null,
+    schemaVersion: current.appliedMigrations.at(-1) ?? null,
+    migrationVersion: current.appliedMigrations.at(-1) ?? null,
+    appliedMigrations: current.appliedMigrations,
+    latencyMs: null,
+    sizeBytes: null,
+  };
   if (!current.driver) {
     return {
       state: "DEGRADED" as const,
       message: `SQLite not attached: ${current.error ?? "unknown reason"}`,
-      details: { runtime: "no native sqlite; VPS deployment attaches better-sqlite3" },
+      details: {
+        ...base,
+        walEnabled: false,
+        runtime: "no native sqlite; VPS deployment attaches better-sqlite3",
+      },
     };
   }
   try {
+    const startedAt = Date.now();
     const row = current.driver.get<{ ok: number }>("SELECT 1 AS ok");
+    const latencyMs = Date.now() - startedAt;
+    const stats = current.driver.stats?.() ?? {};
     return {
       state: row?.ok === 1 ? ("OK" as const) : ("FAILED" as const),
       message: row?.ok === 1 ? "sqlite (WAL) responding" : "unexpected probe result",
       details: {
+        ...base,
         path: current.driver.location,
         openedAt: current.openedAt ?? "unknown",
-        migrations: current.appliedMigrations,
+        journalMode: stats.journalMode ?? "WAL",
+        walEnabled: (stats.journalMode ?? "wal").toLowerCase() === "wal",
+        sizeBytes: stats.sizeBytes ?? null,
+        latencyMs,
       },
     };
   } catch (error) {
     return {
       state: "FAILED" as const,
       message: error instanceof Error ? error.message : "probe failed",
+      details: base,
     };
   }
 }

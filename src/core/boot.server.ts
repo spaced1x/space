@@ -6,6 +6,7 @@ import { configureLogging, createLogger } from "./logging/logger";
 import { eventBus } from "./bus/events";
 import { getRuntimeState, updateRuntimeState } from "./state/store";
 import { correlationId } from "./shared/ids";
+import { registerClockService } from "./clock/clock.service";
 
 // Startup sequence (specification §13), foundation slice:
 // Boot -> Env -> Logging -> DB -> Health -> OBSERVE.
@@ -31,6 +32,9 @@ async function runBoot(): Promise<void> {
 
   await initDatabase();
 
+  // Clock is a first-class service: registered before anything schedules work.
+  registerClockService();
+
   registerHealthCheck("configuration", () => {
     const readiness = describeEnvReadiness();
     return {
@@ -53,6 +57,11 @@ async function runBoot(): Promise<void> {
     message: "serving mission control",
   }));
 
+  // Windows are implemented switches, so they report DISABLED (not
+  // NOT_INITIALIZED) whenever the operator turns them off.
+  registerHealthCheck("window_5m", () => windowHealth("fiveMinute", "BTC 5 minute"));
+  registerHealthCheck("window_15m", () => windowHealth("fifteenMinute", "BTC 15 minute"));
+
   if (getRuntimeState().engineStatus === "BOOTING") {
     // Never auto-arm. OBSERVE is the only safe post-boot state.
     updateRuntimeState({ engineStatus: "OBSERVE" }, "boot complete", cid);
@@ -60,9 +69,20 @@ async function runBoot(): Promise<void> {
 
   eventBus.publish({
     type: "process.booted",
+    severity: "SUCCESS",
     correlationId: cid,
     source: "boot",
     payload: { environment: env.SPACE_ENVIRONMENT },
   });
   log.info("SPACE ready in OBSERVE");
+}
+
+function windowHealth(key: "fiveMinute" | "fifteenMinute", label: string) {
+  const state = getRuntimeState();
+  const enabled = state.windows[key];
+  return {
+    state: enabled ? ("OK" as const) : ("DISABLED" as const),
+    message: enabled ? `${label} window enabled` : `${label} window switched off by operator`,
+    details: { window: label, enabled, engineStatus: state.engineStatus },
+  };
 }

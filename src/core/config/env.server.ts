@@ -9,7 +9,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   if (cached) return cached;
   const parsed = envSchema.safeParse(source);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`);
+    const issues = parsed.error.issues.map(
+      (i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`,
+    );
     throw new ConfigError(
       `SPACE cannot start: invalid environment.\n${issues.join("\n")}\nSee .env.example for the full contract.`,
       { issues: parsed.error.issues },

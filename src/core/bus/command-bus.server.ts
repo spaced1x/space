@@ -2,7 +2,7 @@ import { auditRepository } from "../db/repositories/audit.repository";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import { correlationId as newCorrelationId } from "../shared/ids";
-import { getRuntimeState, updateRuntimeState, type RuntimeState } from "../state/store";
+import { ARM_REASON, getRuntimeState, updateRuntimeState, type RuntimeState } from "../state/store";
 import { eventBus } from "./events";
 import { commandSchema, type Command, type CommandContext, type Verdict } from "./commands";
 
@@ -18,7 +18,10 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return result;
 }
 
-export type CommandHandler = (command: Command, context: CommandContext) => Verdict | Promise<Verdict>;
+export type CommandHandler = (
+  command: Command,
+  context: CommandContext,
+) => Verdict | Promise<Verdict>;
 
 const handlers = new Map<Command["kind"], CommandHandler>();
 
@@ -38,7 +41,8 @@ function verdict(
 
 function defaultHandler(command: Command, context: CommandContext): Verdict {
   const state = getRuntimeState();
-  const reject = (reason: string) => verdict("REJECTED", reason, command.kind, context.correlationId);
+  const reject = (reason: string) =>
+    verdict("REJECTED", reason, command.kind, context.correlationId);
   const accept = (reason: string, patch: Partial<RuntimeState>) => {
     updateRuntimeState(patch, reason, context.correlationId);
     return verdict("ACCEPTED", reason, command.kind, context.correlationId);
@@ -48,7 +52,8 @@ function defaultHandler(command: Command, context: CommandContext): Verdict {
     case "ARM":
       if (state.engineStatus === "ARMED") return reject("engine is already ARMED");
       if (state.engineStatus === "PAUSED") return reject("resume before arming");
-      return accept("engine armed", { engineStatus: "ARMED" });
+      if (state.engineStatus !== "OBSERVE") return reject("engine must be in OBSERVE to arm");
+      return accept(ARM_REASON, { engineStatus: "ARMED" });
     case "DISARM":
       if (state.engineStatus === "OBSERVE") return reject("engine is already in OBSERVE");
       return accept("engine disarmed to OBSERVE", { engineStatus: "OBSERVE" });
@@ -87,6 +92,7 @@ export async function dispatchCommand(
 
     eventBus.publish({
       type: `command.${result.status.toLowerCase()}`,
+      severity: result.status === "ACCEPTED" ? "SUCCESS" : "WARNING",
       correlationId: cid,
       source: fullContext.source,
       payload: { command: command.kind, reason: result.reason, actor: fullContext.actor },
