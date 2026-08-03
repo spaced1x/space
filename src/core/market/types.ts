@@ -25,6 +25,21 @@ export interface DiscoveredMarket {
   upTokenId: string | null;
   downTokenId: string | null;
   discoveredAt: string;
+  /**
+   * Read-only venue metadata carried through from the Gamma payload for the
+   * operator terminal. None of it participates in market selection.
+   */
+  liquidity: number | null;
+  volume: number | null;
+  /** Venue-reported probability of the UP outcome (0-1). */
+  probability: number | null;
+  bestBid: number | null;
+  bestAsk: number | null;
+  /** Midpoint of the venue book; null until both sides are known. */
+  midPrice: number | null;
+  spread: number | null;
+  minOrderSize: number | null;
+  resolutionSource: string | null;
 }
 
 export interface DiscoveryStats {

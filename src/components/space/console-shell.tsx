@@ -36,23 +36,27 @@ export function ConsoleShell({
           market={snapshot.data.engine.market}
           strategy={snapshot.data.engine.strategy}
           execution={snapshot.data.engine.execution}
+          environment={snapshot.data.environment}
         />
       ) : (
         <aside className="w-full shrink-0 border-r border-sidebar-border bg-sidebar p-5 lg:w-72">
-          <p className="font-mono text-xs font-semibold tracking-[0.35em] text-primary">S P A C E</p>
+          <p className="font-mono text-heading font-semibold tracking-[0.35em] text-primary">
+            S P A C E
+          </p>
           <div className="mt-6">
             <WorkspaceNav />
           </div>
-          <p className="mt-6 font-mono text-xs text-muted-foreground">
-            connecting to SPACE runtime…
+          <p className="mt-6 font-mono text-status leading-relaxed text-muted-foreground">
+            Reading the runtime snapshot — the terminal only renders values the engine has
+            actually reported.
           </p>
         </aside>
       )}
 
       <main className="flex-1 space-y-8 p-6 lg:p-10">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <h1 className="text-page-title font-semibold tracking-tight text-foreground">{title}</h1>
+          <p className="text-label text-muted-foreground">{subtitle}</p>
         </header>
         {children}
       </main>
@@ -72,10 +76,10 @@ export function Panel({
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-baseline gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        <h2 className="text-status font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           {title}
         </h2>
-        {hint && <span className="font-mono text-[11px] text-muted-foreground">{hint}</span>}
+        {hint && <span className="font-mono text-status text-muted-foreground">{hint}</span>}
       </div>
       {children}
     </section>

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import nodePath from "node:path";
 import { loadEnv } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
@@ -35,6 +36,8 @@ export function acquireInstanceLock(): LockHandle {
   const pid = process.pid;
 
   try {
+    // The lock lives beside the database, which may not exist on a fresh host.
+    fs.mkdirSync(nodePath.dirname(path), { recursive: true });
     // writeSync with EXCL is atomic on POSIX and Windows for this purpose.
     const fd = fs.openSync(path, "wx");
     fs.writeSync(fd, `${pid}\n${systemClock.iso()}\n`);

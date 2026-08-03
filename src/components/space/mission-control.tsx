@@ -14,21 +14,39 @@ export function MissionControl({
   market,
   strategy,
   execution,
+  environment,
 }: {
   runtime: RuntimeState;
   health: HealthReport;
   market: MarketState;
   strategy: StrategySnapshot;
   execution: ExecutionSnapshot;
+  environment: { code: string; label: string; live: boolean };
 }) {
   return (
     <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:overflow-y-auto">
       <div>
-        <p className="font-mono text-xs font-semibold tracking-[0.35em] text-primary">S P A C E</p>
-        <p className="mt-1 text-xs text-muted-foreground">Mission Control</p>
+        <p className="font-mono text-heading font-semibold tracking-[0.35em] text-primary">
+          S P A C E
+        </p>
+        <p className="mt-1 text-label text-muted-foreground">Mission Control</p>
+        {/* The active environment is never implied — it is always stated. */}
+        <p
+          className={`mt-2 inline-flex rounded-md px-2 py-1 font-mono text-status font-semibold uppercase ${
+            environment.live ? "bg-warn/15 text-warn" : "bg-primary/10 text-primary"
+          }`}
+        >
+          {environment.label}
+        </p>
       </div>
 
       <WorkspaceNav />
+
+      <Section title="Operating mode">
+        <Row label="Environment" value={environment.code} accent />
+        <Row label="Engine" value={environment.live ? "LIVE" : "PAPER"} />
+        <Row label="Trading mode" value={runtime.mode === "MANUAL" ? "MANUAL" : "STRATEGY"} />
+      </Section>
 
       <Section title="Engine">
         <Row label="Status" value={runtime.engineStatus} accent />
@@ -87,7 +105,7 @@ export function MissionControl({
       <Section title="Dependencies">
         <ul className="space-y-1.5">
           {health.components.map((entry) => (
-            <li key={entry.component} className="flex items-center gap-2 text-xs">
+            <li key={entry.component} className="flex items-center gap-2 text-status">
               <StatusDot state={entry.state} />
               <span className="flex-1 font-mono text-foreground">{entry.component}</span>
               <span className="text-muted-foreground">{stateLabel(entry.state)}</span>
@@ -96,7 +114,7 @@ export function MissionControl({
         </ul>
       </Section>
 
-      <p className="mt-auto text-[11px] leading-relaxed text-muted-foreground">
+      <p className="mt-auto text-label leading-relaxed text-muted-foreground">
         Operational status only. PnL and statistics attach here in a later milestone;
         configuration always lives in the Operations Desk, never in this panel. Nothing here is
         simulated.
@@ -108,7 +126,7 @@ export function MissionControl({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
-      <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      <h2 className="text-status font-semibold uppercase tracking-[0.2em] text-muted-foreground">
         {title}
       </h2>
       {children}
@@ -118,7 +136,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Row({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 text-xs">
+    <div className="flex items-baseline justify-between gap-3 text-label">
       <span className="text-muted-foreground">{label}</span>
       <span className={`font-mono ${accent ? "text-primary" : "text-foreground"} text-right`}>
         {value}
