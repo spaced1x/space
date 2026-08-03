@@ -56,26 +56,26 @@ No architectural change, no new subsystems.
    or correlation-stamped. Add `UPDATE_OPERATIONS` and `MANUAL_ORDER` commands and route
    both server functions through `dispatchCommand`.
 
-7. **Statistics has no configuration-version linkage.** `config_snapshots` exist but no
+8. **Statistics has no configuration-version linkage.** `config_snapshots` exist but no
    statistic is attributed to a snapshot, so a PnL number cannot be tied to the config
    that produced it. Stamp each intent with the active config version and group daily PnL
    by it.
 
-8. **Release artifacts are not produced.** `docs/releases/v1.0.0/` does not exist: no
+9. **Release artifacts are not produced.** `docs/releases/v1.0.0/` does not exist: no
    production report, no test report, no signed release-gate record. The generator exists
    in `src/core/release/report.server.ts`; wire it to write the artifact set.
 
 ## Implementation bugs
 
-9. Startup validation treats a `DEGRADED` required item as a blocker, but the wallet
-   health function returns `DEGRADED` for both "no key configured" and "key invalid".
-   Split those so an invalid key reports `FAILED` and reads correctly in the gate.
+10. Startup validation treats a `DEGRADED` required item as a blocker, but the wallet
+    health function returns `DEGRADED` for both "no key configured" and "key invalid".
+    Split those so an invalid key reports `FAILED` and reads correctly in the gate.
 
-10. `toExecutionConfig` takes `config.windows[0].size` as the order size, so the per-window
+11. `toExecutionConfig` takes `config.windows[0].size` as the order size, so the per-window
     size configured in the Operations Desk is ignored except for the largest window.
     `sizeForWindow` already exists — the execution path must use it.
 
-11. `src/core/validation/failure-simulation.server.ts` is referenced only by its test. Wire
+12. `src/core/validation/failure-simulation.server.ts` is referenced only by its test. Wire
     it to the Diagnostics workspace behind a non-production guard, or archive it.
 
 ## Future enhancements (v1.1+, not blocking)
@@ -89,6 +89,6 @@ No architectural change, no new subsystems.
 
 - Fresh-clone simulation in a temp directory: clone → `bun install` → `.env` → build →
   PM2 start → health endpoint green → dashboard renders with zero console errors.
-- Unit tests extended for chain-id mismatch, Telegram permission matrix, per-window sizing
-  and settlement ingestion.
+- Unit tests extended for all six environment-conformance items, the Telegram permission
+  matrix, per-window sizing and settlement ingestion.
 - Boot trace re-checked so no stage regresses in duration or ordering.
