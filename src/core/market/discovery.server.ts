@@ -23,6 +23,17 @@ interface GammaMarket {
   gameStartTime?: string;
   clobTokenIds?: string | string[];
   outcomes?: string | string[];
+  liquidity?: string | number;
+  liquidityNum?: number;
+  volume?: string | number;
+  volumeNum?: number;
+  bestBid?: string | number;
+  bestAsk?: string | number;
+  lastTradePrice?: string | number;
+  spread?: string | number;
+  orderMinSize?: string | number;
+  resolutionSource?: string;
+  umaResolutionStatus?: string;
 }
 
 function asArray(value: string | string[] | undefined): string[] {
@@ -34,6 +45,13 @@ function asArray(value: string | string[] | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+/** Venue metadata is optional and often stringified; never invent a number. */
+function asNumber(value: string | number | undefined): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 // Horizon is derived from the market's own start/end metadata, never guessed
@@ -120,6 +138,8 @@ export async function refreshMarkets(): Promise<void> {
       if (!horizon || picked[horizon]) continue;
       const endMs = Date.parse(candidate.endDate ?? "");
       const tokens = asArray(candidate.clobTokenIds);
+      const bestBid = asNumber(candidate.bestBid);
+      const bestAsk = asNumber(candidate.bestAsk);
       picked[horizon] = {
         horizon,
         conditionId: candidate.conditionId,
@@ -133,6 +153,15 @@ export async function refreshMarkets(): Promise<void> {
         upTokenId: tokens[0] ?? null,
         downTokenId: tokens[1] ?? null,
         discoveredAt: new Date(nowMs).toISOString(),
+        liquidity: asNumber(candidate.liquidityNum ?? candidate.liquidity),
+        volume: asNumber(candidate.volumeNum ?? candidate.volume),
+        probability: asNumber(candidate.lastTradePrice),
+        bestBid,
+        bestAsk,
+        midPrice: bestBid !== null && bestAsk !== null ? (bestBid + bestAsk) / 2 : null,
+        spread: asNumber(candidate.spread) ?? (bestBid !== null && bestAsk !== null ? bestAsk - bestBid : null),
+        minOrderSize: asNumber(candidate.orderMinSize),
+        resolutionSource: candidate.resolutionSource ?? candidate.umaResolutionStatus ?? null,
       };
     }
 
