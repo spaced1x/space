@@ -71,7 +71,7 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("settlement_twap", settlementTwapHealth);
   registerHealthCheck("strategy", strategyHealth);
   registerHealthCheck("wallet", walletHealth);
-  registerHealthCheck("polymarket_clob", () => polymarketAdapter.health());
+  registerHealthCheck("polymarket", () => polymarketAdapter.health());
   registerHealthCheck("risk", riskHealth);
   registerHealthCheck("execution", executionHealth);
   registerHealthCheck("binance", () => feedHealth("binance"));
