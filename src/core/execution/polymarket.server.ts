@@ -189,17 +189,17 @@ export const polymarketAdapter: VenueAdapter = {
 
     current.submissions += 1;
     const payload = (response ?? {}) as Record<string, unknown>;
-    const venueOrderId = String(payload.orderID ?? payload.orderId ?? payload.id ?? "");
+    const venueOrderId = String(payload["orderID"] ?? payload["orderId"] ?? payload["id"] ?? "");
     if (!venueOrderId) {
       throw new Error(`venue accepted no order id: ${JSON.stringify(payload).slice(0, 200)}`);
     }
-    if (payload.success === false) {
-      throw new Error(String(payload.errorMsg ?? "venue rejected the order"));
+    if (payload["success"] === false) {
+      throw new Error(String(payload["errorMsg"] ?? "venue rejected the order"));
     }
     return {
       venueOrderId,
-      status: mapStatus(String(payload.status ?? "")),
-      filledSize: num(payload.makingAmount ?? payload.size_matched, 0),
+      status: mapStatus(String(payload["status"] ?? "")),
+      filledSize: num(payload["makingAmount"] ?? payload["size_matched"], 0),
       raw: payload,
     };
   },
