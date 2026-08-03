@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import nodePath from "node:path";
-import { loadEnv } from "../config/env.server";
+import { loadEnv, resolveDbPath } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 
