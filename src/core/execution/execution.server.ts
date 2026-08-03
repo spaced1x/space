@@ -78,7 +78,11 @@ function createEngine(): ExecutionEngine {
         severity: event.severity,
         correlationId: event.intentId,
         source: "execution",
-        payload: { orderId: event.orderId, state: event.state, reason: event.reason },
+        payload: {
+          orderId: event.orderId,
+          state: event.state ?? null,
+          reason: event.reason,
+        },
       });
     },
   });
