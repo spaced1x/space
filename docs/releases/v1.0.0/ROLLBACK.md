@@ -26,14 +26,14 @@ version predates a migration, restore the matching database backup as well.
 git fetch --tags
 git checkout v0.9.x            # the last known-good tag
 bun install
-NITRO_PRESET=node_server bun run build
+NITRO_PRESET=node-server bun run build
 ```
 
 ## 4. Restart and verify
 
 ```bash
 pm2 start ecosystem.config.cjs
-curl -fsS http://127.0.0.1:3000/api/public/health
+curl -fsS http://127.0.0.1:8080/api/public/health
 ```
 
 Verify in this order: health endpoint green → dashboard renders → environment
