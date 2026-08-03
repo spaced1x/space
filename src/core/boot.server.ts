@@ -13,11 +13,15 @@ import { replayHealth } from "./replay/replay.server";
 import { statisticsHealth } from "./stats/statistics.server";
 import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
 import { discoveryHealth } from "./market/discovery.server";
-import { schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
+import { registerTask, schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
 import { settlementTwapHealth, strategyHealth } from "./strategy/strategy.server";
 import { executionHealth, riskHealth } from "./execution/execution.server";
 import { polymarketAdapter } from "./execution/polymarket.server";
 import { walletHealth } from "./execution/wallet.server";
+import { registerTelegramEventForwarding } from "./telegram/telegram.service";
+import { telegramServiceHealth } from "./telegram/telegram.health";
+import { backupServiceHealth } from "./backup/backup.health";
+import { performBackup } from "./backup/backup.service";
 
 // Startup sequence (specification §13), milestone 2 slice:
 // Boot -> Env -> Logging -> DB -> Clock -> Health -> Scheduler -> Engine loop
