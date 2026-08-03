@@ -11,9 +11,11 @@ Each panel: START, STOP, Runtime Status, Active TWAP Provider, Current Market, C
 ## 2. Unified runtime lifecycle
 
 ```text
-STOPPED -> STARTING -> VALIDATING -> RUNNING -> STOPPING -> STOPPED
+STOPPED -> STARTING -> VALIDATING -> READY -> RUNNING -> STOPPING -> STOPPED
                     \-> FAILED
 ```
+
+READY means every mandatory dependency passed but the runtime is still waiting on its first real input — first market discovery, first TWAP sample or first discovery cycle. RUNNING means the runtime has all of them and is operating. Each READY card names exactly what is still missing.
 
 One enum replaces every visible engine state. OBSERVE is removed from the UI entirely; ARM/DISARM leave the operator workflow. The internal safety latch survives as an implementation detail that the validation gate releases — no operator ever sees or presses it. Mission Control, Diagnostics, connection cards and status badges all read this single lifecycle; no duplicated enums.
 
@@ -21,13 +23,25 @@ One enum replaces every visible engine state. OBSERVE is removed from the UI ent
 
 START does not immediately enable trading. It persists the selected runtime target, gracefully shuts down any active runtime (persist state, flush logs, close Scheduler, Binance, RTDS, Chainlink, Gamma, CLOB, Telegram, SQLite, release locks), then exits for supervisor restart and boots the selected runtime.
 
-Boot order: STARTING -> Database -> Runtime -> Scheduler -> Wallet -> Polygon RPC -> Gamma -> Binance -> TWAP Provider -> CLOB -> Telegram -> Market Discovery -> Runtime Validation -> RUNNING.
+Boot order: STARTING -> Database -> Runtime -> Scheduler -> Wallet -> Polygon RPC -> Gamma -> Binance -> TWAP Provider -> CLOB -> Telegram -> Market Discovery -> Runtime Validation -> READY -> RUNNING.
+
+The persisted runtime target is versioned so future upgrades stay compatible:
+
+```text
+{ version, environment, updatedAt, requestedBy }
+```
 
 STOP runs the reverse sequence. Afterwards every connection reads STOPPED or OFFLINE with the real reason — never a stale CONNECTED.
 
 ## 4. Runtime validation gate
 
-Between VALIDATING and RUNNING, one gate checks SQLite, Runtime Database, Database Version, Runtime Target, Wallet, Polygon RPC, Chain ID, Gamma, Binance, RTDS, Chainlink (if enabled), TWAP Provider, CLOB Authentication, Telegram, Scheduler and Market Discovery. Only an all-mandatory pass reaches RUNNING; otherwise the runtime stays in FAILED or STARTING with the exact blocking dependency, missing variable and recovery. No generic errors. This extends the existing pre-ARM validation rather than adding a second gate.
+One gate, run between VALIDATING and READY, split into two classes.
+
+Mandatory — must pass: SQLite, Runtime Database (and version), Runtime Target, Wallet, Polygon RPC, Chain ID, Gamma, Binance, CLOB, Scheduler, TWAP Provider.
+
+Optional — never block: Telegram, Chainlink (only when enabled), Market Discovery telemetry. Optional services report DEGRADED or DISABLED with their reason and never prevent READY or RUNNING.
+
+A mandatory failure leaves the runtime in FAILED with the exact blocking dependency, missing variable and recovery. No generic errors. This extends the existing pre-ARM validation rather than adding a second gate.
 
 ## 5. Per-environment isolation
 
