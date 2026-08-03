@@ -123,7 +123,7 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       });
     case "SET_MODE": {
       if (state.mode === command.mode) return reject(`engine is already in ${command.mode} mode`);
-      if (state.engineStatus === "ARMED") {
+      if (state.lifecycle === "RUNNING") {
         return reject("disarm before switching operating mode");
       }
       const result = accept(`operating mode set to ${command.mode}`, { mode: command.mode });
