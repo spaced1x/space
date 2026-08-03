@@ -144,3 +144,42 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
     </div>
   );
 }
+
+function EnvironmentBadge({
+  environment,
+}: {
+  environment: { code: string; label: string; live: boolean };
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-md border px-2 py-1 font-mono text-status font-semibold uppercase ${
+        environment.live
+          ? "border-env-v2 bg-env-v2-surface text-env-v2"
+          : "border-env-v1 bg-env-v1-surface text-env-v1"
+      }`}
+    >
+      {environment.label}
+    </span>
+  );
+}
+
+function LifecycleBadge({
+  lifecycle,
+  emergencyStop,
+}: {
+  lifecycle: string;
+  emergencyStop: boolean;
+}) {
+  const tone = emergencyStop
+    ? "border-fail bg-fail/10 text-fail"
+    : lifecycle === "RUNNING"
+      ? "border-ok bg-ok/10 text-ok"
+      : lifecycle === "FAILED" || lifecycle === "STOPPED"
+        ? "border-warn bg-warn/10 text-warn"
+        : "border-primary bg-primary/10 text-primary";
+  return (
+    <span className={`inline-flex rounded-md border px-2 py-1 font-mono text-status font-semibold uppercase ${tone}`}>
+      {emergencyStop ? "E-STOP" : lifecycle}
+    </span>
+  );
+}
