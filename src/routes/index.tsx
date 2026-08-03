@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { ConnectionCard } from "../components/space/connection-card";
+import { ConnectionHistory } from "../components/space/connection-history";
 import { RuntimeBanner } from "../components/space/runtime-banner";
 import { SummaryRow } from "../components/space/summary-row";
 import { TradingTargetCard } from "../components/space/trading-target-card";
