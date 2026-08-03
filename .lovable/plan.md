@@ -1,6 +1,20 @@
 # STONE → SPACE: Architecture Report & Migration Plan
 
-Nothing has been changed, deleted, or refactored. This is analysis only. On approval, the full report is written to `docs/SPACE_MIGRATION_REPORT.md` before any implementation begins.
+Revision 2 — incorporates the approved revisions. Nothing has been changed, deleted, or refactored. This is documentation planning only.
+
+On approval, three documents are written and **no source file is touched**:
+
+1. `docs/SPACE_SPECIFICATION.md` — the authoritative product specification and single source of truth.
+2. `docs/SPACE_ARCHITECTURE.md` — module boundaries, ownership rules, runtime topology.
+3. `docs/SPACE_MIGRATION_REPORT.md` — the STONE analysis and migration matrix below, with a per-file appendix.
+
+Legacy STONE material is **moved to `docs/archive/`, never deleted**.
+
+### Governing philosophy
+
+> **Simple systems survive. Complex systems fail.**
+
+When a decision is uncertain, choose the option that is simpler, easier to maintain, easier to deploy, easier to recover, easier to understand, and more reliable. Reliability outranks new features, always.
 
 ## 0. The single most important finding
 
@@ -63,6 +77,26 @@ SPACE should keep **both**: event-sourced determinism replay for engineering, pe
 - STONE: 20 Supabase tables. Genuinely good design — `platform_events` and `ledger_records` are append-only *at the grant level* (no UPDATE/DELETE granted), `configuration_versions` is immutable by trigger, `operator_ownership` is a boolean-PK singleton, `authority_replay_guard` uses unique-violation-as-replay-signal, `authority_registry` rejects secret-shaped values by trigger. Idempotency relies on catching Postgres `23505`, which survives a move to plain Postgres unchanged.
 - P4: 4 SQLite tables, an async write queue that never blocks the tick loop, additive migrations, and a boot-time orphan sweep that refunds crash-orphaned OPEN trades.
 
+### Decision: SPACE uses SQLite in WAL mode
+
+SPACE is not locked to PostgreSQL just because STONE used Supabase. Re-evaluating against the stated objectives:
+
+| Objective | SQLite (WAL) | PostgreSQL (local) |
+|---|---|---|
+| One local database | A single file | A server, a daemon, a role, a socket |
+| No cloud dependency | Yes | Yes |
+| VPS deployment | Nothing to install; the app *is* the database | Install, tune, secure, upgrade across major versions |
+| Backup | `VACUUM INTO backup.db` — one atomic file, hot, no downtime | `pg_dump`, restore ordering, role/ownership fixes |
+| Migration to another VPS | Copy one file | Dump, install matching major version, restore, re-grant |
+| Reliability | WAL + `synchronous=NORMAL` is crash-safe; fewer moving parts to fail | Robust, but adds a second supervised process that can fail independently |
+| Concurrency | One writer at a time; unlimited concurrent readers | Full MVCC, many writers |
+
+SPACE is **a single Node process with exactly one writer** — the engine. There is no second service, no horizontal scale, no multi-tenant access. Trade volume is bounded by the market clock (a handful of orders per 5-minute slot, ~288 slots/day). SQLite's only real limitation, concurrent writers, does not exist in this design. PostgreSQL would add an entire supervised subsystem to solve a problem SPACE does not have — the exact complexity the philosophy above rejects.
+
+P4 already proved this in production: `better-sqlite3`, WAL, `synchronous=NORMAL`, `busy_timeout=5000`, with an async write queue that never blocks the tick loop. That is a working, audited pattern to carry forward rather than re-derive.
+
+**Recommendation: SQLite (WAL) via `better-sqlite3`, at a single `DB_PATH`, behind a typed repository layer.** The repository boundary keeps a future PostgreSQL swap a contained change, but SPACE ships on SQLite and no code outside the repository layer knows which engine is underneath. Note that `better-sqlite3` is a native module — it runs on the VPS, not in the Lovable preview, which is consistent with "Lovable is the authoring environment, the VPS is production."
+
 ## 7. Configuration system
 
 Two competing environment systems coexist in STONE: a declarative catalog (`core/configuration/env-validator.ts`, used by the startup validator) and a Zod loader (`core/configuration/environment.ts`, used by `bootstrapConfig`). They overlap and disagree on key names (`EXECUTION_PROFILE_ID` vs `ARC_EXECUTION_PROFILE_ID`) and on what is required. Three `.env` templates exist in STONE, two more in P4. Execution profiles add a hand-rolled DSL (`15s@0.002|size=2|retry=1|timeout=10000`).
@@ -108,8 +142,8 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, 9 Radix primi
 | `core/qualification/scenario.ts` | **KEEP** | The only place the engine is fully assembled — it is the integration test | Promote to SPACE's integration suite |
 | `core/infrastructure/*` (fsm, health, logging, scheduler, metrics, watchdogs, secret-scanner) | **KEEP** | Solid, generic, portable | Rename watchdog subsystem `"supabase"` → `"database"`; wire metrics to a real `/metrics` route |
 | `core/configuration/env-validator` vs `environment` | **REFACTOR** | Two sources of truth with conflicting key names | One Zod schema, one `.env.example` |
-| Execution-profile DSL parser | **REFACTOR** | Non-trivial parser hidden inside config loading | JSON profiles in Postgres, validated by Zod |
-| Supabase (client, RLS, Auth, PostgREST, `config.toml`, 12 migrations) | **REMOVE** | SPACE is local Postgres | `pg`/Drizzle repositories; port the 20-table schema, drop RLS for app-layer authz, replace Supabase Auth with local sessions |
+| Execution-profile DSL parser | **REFACTOR** | Non-trivial parser hidden inside config loading | Structured profiles stored in the local DB, validated by Zod, edited in the Operations Desk |
+| Supabase (client, RLS, Auth, PostgREST, `config.toml`, 12 migrations) | **REMOVE** | SPACE has no cloud dependency | Local SQLite (WAL) behind typed repositories; port the useful table designs, replace RLS with app-layer authz, replace Supabase Auth with a local session |
 | `src/lib/*.functions.ts` and `*.server.ts` (~4,000 LOC) | **REFACTOR** | Correct read/write surface, but `any`-cast Supabase calls throughout | Typed service layer over the local DB |
 | STONE UI shell, primitives, tokens, 18 routes | **KEEP** | Genuinely good operator UI: dark oklch, mono numerics | Keep the design system; merge the 7 telemetry re-slices; split `execution-profiles.tsx` |
 | `src/routes/index.tsx` | **REMOVE** | Hardcoded, stale "Session 0" checklist | Login redirect |
@@ -119,13 +153,14 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, 9 Radix primi
 | P4 `settlement-*`, `accounting-verifier`, `bankroll`, dust compounding | **KEEP (port)** | Money-correctness logic earned through real production bugs | `core/settlement` and `core/accounting` |
 | P4 `reconciler`, `watchdog`, `orphan-cleaner`, `preflight` | **KEEP (port)** | Live-drift detection has no STONE equivalent | SPACE infrastructure layer |
 | P4 `trade-replay.ts` and `trade-replay-view.tsx` | **KEEP (port)** | Forensic per-trade evidence, complements event replay | Second tab on the SPACE replay page |
-| P4 SQLite `db.ts` and write queue | **REFACTOR** | The queue pattern is right, the engine is not | Same non-blocking queue over local Postgres |
+| P4 `trade-replay.ts` evidence model | **KEEP (port)** | Already captures the exact fields SPACE's replay must show | Extended with frozen trigger and buffer |
 | P4 `http-agent`, `proxy`, `telegram-console`, dual `/v1` `/v2` dashboards | **REMOVE** | Dead weight and duplication | — |
 | Both PM2 configs | **REFACTOR** | One is half-fictional, one is Next-specific | One `ecosystem.config.cjs`: one app, fork, 1 instance, graceful dispose |
 | P4 nginx conf | **KEEP** | Correct proxy, SSE, WS and quiet health handling | Adapt ports and paths |
-| Five `.env` templates | **REMOVE** | Five templates for one system | One `.env.example` |
-| `docs/knowledge/**` (P4 behavioural spec) | **KEEP** | The most valuable document set in the archive | Move to `docs/legacy/` as SPACE's behavioural reference |
-| ~60 milestone / phase / audit reports in `docs/` | **REMOVE** | Point-in-time status of a project that is ending | Archive outside the repository |
+| Five `.env` templates | **REMOVE** | Five templates for one system | One small `.env.example` (secrets and boot-time-only values) |
+| `docs/knowledge/**` (P4 behavioural spec) | **KEEP** | The most valuable document set in the archive | Moved to `docs/archive/knowledge/` as SPACE's behavioural reference |
+| ~60 milestone / phase / audit reports in `docs/` | **ARCHIVE** | Historical value, no operational value | Moved to `docs/archive/`, never deleted |
+| P4 `db.ts` SQLite engine + write queue | **KEEP (port)** | Proven crash-safe pattern; matches the SPACE DB decision | `core/persistence` repository layer over `better-sqlite3` |
 
 ## Phase 5 — Technical debt
 
@@ -165,15 +200,212 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, 9 Radix primi
 
 **Already compatible:** layered core with executable enforcement; pure decision, risk, replay and recovery functions; injectable Clock; append-only event model; window FSM and quota; standing-order engine; health endpoints; operator UI shell and design system; the `docs/knowledge` behavioural spec.
 
-**Needs refactor:** feed providers to real clients; venue gateway to a real CLOB adapter; data layer to local Postgres; configuration to one schema and one template; qualification to one evaluator; UI to fewer, non-duplicated pages; engine loop to a serialised Frozen Window Engine.
+**Needs refactor:** feed providers to real clients; venue gateway to a real CLOB adapter; data layer to local SQLite behind typed repositories; configuration to one schema and one template; qualification to one evaluator; UI to fewer, non-duplicated pages; engine loop to a serialised Frozen Window Engine.
 
 **Must be removed:** Supabase in all forms; Cloudflare/Workers assumptions; the entire authority handshake, registration and signature protocol; the two-process PM2 split; the milestone document corpus; the static index page; duplicated env, audit, event and telemetry surfaces.
 
-**Must be added:** a single Node process entrypoint that actually runs the engine; local Postgres schema, migrations and typed repositories; local auth and app-layer authorization; trigger latching at window open (the "frozen" in Frozen Window); 15-minute market support alongside the 5-minute default; ported settlement, accounting, bankroll, reconciler, watchdog, orphan-cleaner, preflight and Telegram alerting; per-trade forensic replay; one PM2 config, one Nginx config, one `.env.example`.
+**Must be added:** a single Node process entrypoint that actually runs the engine; local SQLite schema, migrations and typed repositories; local auth and app-layer authorization; trigger latching at window open (the "frozen" in Frozen Window); 15-minute market support alongside the 5-minute default; Manual Trading mode; the Mission Control panel; the Operations Desk; Statistics; Backup and Restore; the Telegram operator interface; ported settlement, accounting, bankroll, reconciler, watchdog, orphan-cleaner and preflight; per-trade forensic replay; one PM2 config, one Nginx config, one `.env.example`.
+
+---
+
+# Part II — SPACE specification content to be documented
+
+Everything below is the content that will be written into `docs/SPACE_SPECIFICATION.md` and `docs/SPACE_ARCHITECTURE.md`. It is presented here for approval before those files are created.
+
+## A. Engine ownership (binding)
+
+The **Trading Engine is the sole owner** of, and the only component permitted to mutate:
+
+- timers and the scheduler tick
+- market lifecycle (discovery, arm, active, rollover, resolve)
+- execution windows and their FSM
+- frozen triggers
+- TWAP (opening capture and live settlement TWAP)
+- PTB resolution
+- trade quota
+- risk evaluation
+- order execution and the order FSM
+- settlement and accounting
+
+The dashboard **never owns trading logic**. It has exactly two rights:
+
+1. **Read** — display state the engine publishes.
+2. **Command** — send a named, validated, audited command to the in-process engine and await its verdict.
+
+No page, component, loader, hook, or route may compute a price, a direction, a trigger, a position size, a PnL figure, or a risk verdict. If a number appears in the UI, the engine produced it. This is enforceable the same way STONE enforces layering today: an executable architecture test that fails the build if UI modules import engine internals rather than the command/query surface.
+
+```text
+  Dashboard ──command──▶ Engine Command Bus ──▶ Engine (sole owner of state)
+  Dashboard ◀──state──── Engine Snapshot / Event Stream
+```
+
+## B. Manual Trading mode
+
+A first-class mode, completely isolated from the automatic strategy.
+
+- **Mutual exclusion.** Engine mode is one of `STRATEGY` or `MANUAL` (each still subject to `OBSERVE` / `ARMED`). Turning Manual Mode ON **disables automatic strategy execution**: windows stop producing intents, quota is untouched, no frozen triggers fire. Switching modes is a single audited engine command; the engine drains and closes any in-flight strategy session before the switch completes.
+- **Live decision surface.** While in Manual Mode the dashboard shows, from the engine: live TWAP (opening and current settlement), PTB, the per-window buffer, and the **bot prediction** — the direction the strategy *would* take right now, clearly labelled as advisory and never acted upon automatically.
+- **Manual actions.** BUY UP / BUY DOWN, with **Limit** or **Market** order type, explicit size, and an optional limit-to-market fallback.
+- **Same execution engine.** Manual orders travel the identical path: risk gate → exposure ledger → standing-order engine → venue gateway → settlement. Manual orders are tagged `origin: MANUAL` in the ledger, order log and replay, but receive no special treatment and no risk exemption.
+- **Non-interference.** Manual sessions never consume strategy quota, never mutate window state, and never persist strategy configuration. Returning to Strategy Mode resumes from a clean window slate at the next market boundary.
+
+## C. Operations Desk
+
+The single configuration surface. Everything here is stored in the local database, versioned, audited, and applied by the engine — never read from `.env`.
+
+**Per execution window** (15s, 10s, 7s, 5s, 3s, and any future offset):
+
+- enable / disable the window independently
+- buffer value and mode (absolute or percent)
+- trade amount for that window
+
+**Per market:**
+
+- market enable / disable
+- BTC 5m enable (default market)
+- BTC 15m enable (optional, independent)
+- trades per market (quota)
+- max concurrent positions
+
+**Execution settings:**
+
+- order type: limit, market
+- limit → market fallback (on/off, with deadline)
+- retry settings: attempt budget, delay, cancel/replace ceiling
+
+Changes are staged, validated by Zod, diffed against the running configuration, then activated by an explicit operator action. The engine confirms activation; the desk shows `PENDING → ACTIVE` and any drift. STONE's immutable configuration-version model carries over — it is one of the best things in the codebase.
+
+## D. Mission Control (permanent left panel)
+
+A permanent operator panel on every page, rendered from one engine snapshot subscription, showing:
+
+| Group | Items |
+|---|---|
+| Engine | Engine status · Observe / Armed · Manual Mode · Strategy Mode |
+| Markets | BTC 5m · BTC 15m |
+| Money | Wallet balance · Today's PnL · Active trades |
+| Dependencies | Binance status · Polymarket status · TWAP status · Database status · Telegram status |
+
+Each dependency renders as a health tone (healthy / degraded / unavailable) with last-seen age. It replaces STONE's `StatusBar` and absorbs the seven duplicated telemetry pages into one always-visible surface.
+
+## E. Statistics
+
+A dedicated section computed by the engine from the ledger and order log — never derived in the browser:
+
+- today's trades
+- win rate
+- PnL (realised, and open mark-to-market)
+- best execution window (by win rate and by PnL)
+- best buffer
+- fill percentage
+- average execution latency (submit → ack)
+- average trigger-to-fill latency (frozen trigger hit → fill)
+- daily summaries
+- session summaries (per process run, so a restart is visible)
+
+## F. Replay — every trade explained
+
+Two surfaces, one page.
+
+**Per-trade forensic replay** must display, for every trade:
+
+- Opening TWAP (value and capture time)
+- Frozen Trigger (the latched value, and the buffer that produced it)
+- PTB (value and metadata source)
+- Buffer (value and mode)
+- Direction (UP / DOWN) and the evidence that produced it
+- Trigger Time (when the live settlement TWAP crossed the frozen trigger)
+- Execution Window (which offset, and its configuration at that moment)
+- Risk decision (all checks, in order, with the verdict for each)
+- Order lifecycle (submit, ack, reprice, cancel/replace, partial fills, terminal)
+- Fill evidence (venue fill ids, prices, sizes, latencies, feed freshness at the time)
+- Settlement result (WIN / LOSS / SCRATCH, payout, PnL, balance after)
+
+Everything is read from stored evidence. Replay never recomputes from live data and never re-executes.
+
+**Event-sourced determinism replay** stays as STONE built it: reconstruct projections from the event log, verify the six invariants, compare digests, flag divergence.
+
+## G. Backup and Restore
+
+Objective: **clone repository → restore backup → run SPACE.**
+
+- **Full backup** — one command producing a single timestamped archive containing: the hot SQLite snapshot (`VACUUM INTO`, no downtime, no torn WAL), the exported configuration (windows, profiles, risk limits, market toggles), and a manifest with schema version, app version and checksum.
+- **Restore** — one command that verifies the manifest and checksum, refuses a schema-version mismatch it cannot migrate, restores the database file and re-imports configuration.
+- **Database portability** — a single file; copying it *is* the migration.
+- **Configuration portability** — configuration is exportable as JSON independently of the database, so settings can move between environments without moving trade history.
+- **VPS migration** — clone the repository, install, drop in `.env`, restore the archive, `pm2 start`. The engine resumes from persisted state using the ported auto-resume and orphan-sweep logic.
+- Scheduled local backups with retention, plus a documented off-box copy step. Backups never contain secrets.
+
+## H. Telegram as an operator interface
+
+Telegram is a **control surface**, not just an alert channel. It is authenticated by chat id allow-list and routes through the same command bus and the same audit trail as the dashboard.
+
+| Command | Effect |
+|---|---|
+| `/status` | engine mode, market, active window, open orders |
+| `/pause` | pause automatic execution (does not kill the process) |
+| `/resume` | resume automatic execution |
+| `/pnl` | today's PnL and win rate |
+| `/balance` | wallet balance and bankroll |
+| `/positions` | open positions and resting orders |
+| `/logs` | recent audit and error lines |
+| `/health` | dependency health, same data as Mission Control |
+| `/mode` | show mode; with an argument, switch Observe/Armed/Manual/Strategy |
+
+Write commands are confirmed, rate-limited and audited. Alerts (risk breach, kill switch, reconciler drift, feed staleness, settlement divergence) continue to push to the same chat.
+
+## I. Environment rule
+
+> **Only values that cannot be configured through the dashboard belong in `.env.example`. Every operational setting lives inside SPACE.**
+
+`.env.example` is therefore limited to: node/runtime basics (`NODE_ENV`, `PORT`, `HOST`), `DB_PATH`, wallet and CLOB credentials, RPC/host endpoints, dashboard login and session secret, and Telegram bot token plus chat id. Windows, buffers, sizes, quotas, retries, order types, market toggles, risk limits and mode all live in the database and are edited in the Operations Desk. One template, no environment-specific variants.
+
+## J. Documentation policy
+
+Nothing is deleted. `docs/archive/` receives the STONE charter, all ADRs, the ~60 milestone and audit reports, the qualification reports, and `docs/reference/p4/` including its knowledge docs. The active `docs/` root holds only the three SPACE documents plus operational runbooks.
+
+## K. Implementation principles (binding)
+
+- Every commit leaves the repository buildable.
+- Every phase preserves existing working behaviour.
+- No unnecessary rewrites.
+- No unnecessary abstractions.
+- No cloud dependencies.
+- No Supabase.
+- No Cloudflare runtime assumptions.
+- One repository.
+- One Node.js application.
+- One local database.
+- One PM2 deployment.
+- One Nginx configuration.
+- One `.env.example`.
+- The VPS is the production environment.
+- Lovable is the authoring environment.
+
+## L. `docs/SPACE_SPECIFICATION.md` — table of contents
+
+1. Product vision
+2. Architecture (single process, module boundaries, engine ownership)
+3. Frozen Window Strategy
+4. TWAP Strategy (opening capture, live settlement TWAP, PTB, buffer)
+5. Dashboard (Mission Control, pages, design system)
+6. Operations Desk
+7. Manual Trading
+8. Replay
+9. Statistics
+10. Backup and Restore
+11. Telegram operator interface
+12. Deployment (PM2, Nginx, `.env.example`)
+13. V1 — Testnet / paper qualification
+14. V2 — Mainnet activation
+15. Recovery
+16. Engineering principles
 
 ## Deliverables on approval
 
-1. `docs/SPACE_MIGRATION_REPORT.md` — this report in full, plus a per-file classification appendix.
-2. `docs/SPACE_ARCHITECTURE.md` — the locked SPACE architecture and module boundaries, stating that the UI never owns trading logic and only issues commands to the in-process engine.
+1. `docs/SPACE_SPECIFICATION.md` — authoritative product specification, per the table of contents above.
+2. `docs/SPACE_ARCHITECTURE.md` — module boundaries, engine ownership, runtime topology, database decision, command bus contract.
+3. `docs/SPACE_MIGRATION_REPORT.md` — Part I of this plan in full, plus a per-file classification appendix.
+4. `docs/archive/` — legacy STONE and P4 material moved, not deleted.
 
-No source file is touched until you approve the implementation plan that follows these two documents.
+No source file is touched. Implementation begins only after these documents are reviewed and approved.
