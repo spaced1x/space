@@ -41,6 +41,90 @@ const SEVERITY_TONE: Record<EventSeverity, string> = {
   ERROR: "text-fail",
 };
 
+// Failure simulation harness. Available on non-production hosts only; the
+// server refuses every mutation when NODE_ENV is production.
+function FailureHarnessPanel() {
+  const fetchHarness = useServerFn(getFailureHarness);
+  const mutateHarness = useServerFn(setFailureScenario);
+  const query = useQuery({
+    queryKey: ["failure-harness"],
+    queryFn: () => fetchHarness(),
+    refetchInterval: 10_000,
+  });
+  const harness = query.data;
+
+  async function send(action: "register" | "clear" | "clear-all", name?: string) {
+    await mutateHarness({
+      data: {
+        action,
+        ...(name ? { name } : {}),
+        kind: "throw" as const,
+        errorMessage: `simulated failure: ${name ?? "all"}`,
+      },
+    });
+    await query.refetch();
+  }
+
+  return (
+    <Panel
+      title="Failure simulation"
+      hint={harness?.enabled === false ? "disabled on production hosts" : "recovery-path harness"}
+    >
+      {!harness ? (
+        <p className="font-mono text-xs text-muted-foreground">loading…</p>
+      ) : !harness.enabled ? (
+        <p className="font-mono text-xs text-muted-foreground">
+          The harness is refused on production hosts. Exercise recovery paths on a staging host.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {["venue-submit", "chain-read", "gamma-discovery"].map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => void send("register", name)}
+                className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-[11px] text-card-foreground hover:border-primary"
+              >
+                inject {name}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => void send("clear-all")}
+              className="rounded-md border border-border bg-muted px-3 py-1.5 font-mono text-[11px] text-muted-foreground hover:border-primary"
+            >
+              clear all
+            </button>
+          </div>
+          <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
+            {harness.scenarios.map((scenario) => (
+              <li
+                key={scenario.name}
+                className="flex flex-wrap items-baseline gap-x-3 p-3 font-mono text-xs"
+              >
+                <span className="text-warn uppercase">{scenario.kind}</span>
+                <span className="text-primary">{scenario.name}</span>
+                <span className="text-muted-foreground">{scenario.errorMessage}</span>
+                <button
+                  type="button"
+                  onClick={() => void send("clear", scenario.name)}
+                  className="ml-auto text-[11px] text-muted-foreground underline hover:text-foreground"
+                >
+                  clear
+                </button>
+              </li>
+            ))}
+            {harness.scenarios.length === 0 && (
+              <li className="p-3 font-mono text-xs text-ok">no scenarios injected</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function Diagnostics() {
   const fetchDiagnostics = useServerFn(getDiagnostics);
   const query = useQuery({
