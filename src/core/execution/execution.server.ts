@@ -1,5 +1,10 @@
 import { eventBus } from "../bus/events";
 import { clock } from "../clock/clock.service";
+import {
+  activeOperations,
+  subscribeOperations,
+} from "../config/operations.server";
+import { sizeForWindow, toExecutionConfig, windowEnabled as windowIsEnabled } from "../config/operations";
 import { executionRepository } from "../db/repositories/execution.repository";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
@@ -10,7 +15,7 @@ import type { ExecutionIntent } from "../strategy/types";
 import { DEFAULT_EXECUTION_CONFIG } from "./config";
 import { createExecutionEngine, type ExecutionEngine } from "./engine";
 import { polymarketAdapter } from "./polymarket.server";
-import type { ExecutionConfig, ExecutionSnapshot, RiskContext } from "./types";
+import type { ExecutionConfig, ExecutionSnapshot, OrderMode, OrderRecord, RiskContext } from "./types";
 import { walletStatus } from "./wallet.server";
 
 // Runtime host for the Execution Engine.
@@ -30,14 +35,30 @@ let lastTickAt: string | null = null;
 let lastError: string | null = null;
 let recovered = false;
 
+/** Manual submissions in flight, keyed by intent id: size + chosen order mode. */
+const manualIntents = new Map<string, { size: number; mode: OrderMode }>();
+
+// The Operations Desk owns operational settings. Execution simply consumes the
+// active (promoted) document; it never reads the staged one.
+subscribeOperations((ops) => {
+  config = toExecutionConfig(ops, config);
+});
+
 function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext {
   const runtime = getRuntimeState();
   const strategy = strategySnapshot();
   const market = getMarketState().markets[intent.horizon];
   const wallet = walletStatus();
   const positions = engine ? engine.positions().filter((p) => p.status === "ACTIVE").length : 0;
-  const windowEnabled =
-    intent.horizon === "FIVE_MINUTE" ? runtime.windows.fiveMinute : runtime.windows.fifteenMinute;
+  const ops = activeOperations();
+  const manual = manualIntents.get(intent.id) ?? null;
+  const marketEnabled =
+    config.marketEnabled &&
+    (intent.horizon === "FIVE_MINUTE"
+      ? runtime.windows.fiveMinute && ops.markets.fiveMinute
+      : runtime.windows.fifteenMinute && ops.markets.fifteenMinute);
+  // Manual orders are not bound to a strategy execution window.
+  const windowEnabled = manual ? true : windowIsEnabled(ops, intent.windowSeconds);
   const tokenId = market
     ? intent.direction === "UP"
       ? market.upTokenId
@@ -47,10 +68,12 @@ function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext
   void attempt;
   return {
     at: clock().iso(),
+    manual: Boolean(manual),
+    manualEnabled: ops.manualEnabled,
     engineArmed: runtime.engineStatus === "ARMED",
     strategyMode: runtime.mode === "STRATEGY",
     strategyEnabled: config.strategyEnabled,
-    marketEnabled: config.marketEnabled,
+    marketEnabled,
     windowEnabled,
     quotaRemaining: strategy.quota.remaining,
     openPositions: positions,
@@ -61,7 +84,7 @@ function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext
     activeConditionId: market?.conditionId ?? null,
     tokenId,
     alreadyExecuted: false,
-    size: config.size,
+    size: manual ? manual.size : sizeForWindow(ops, intent.windowSeconds),
   };
 }
 
@@ -232,4 +255,22 @@ export function setExecutionConfig(patch: Partial<ExecutionConfig>): ExecutionCo
 
 export function getExecutionConfig(): ExecutionConfig {
   return config;
+}
+
+/**
+ * Manual Trading entry point. Manual orders reuse the same Risk Engine and the
+ * same Execution Engine as strategy orders — the only difference is who built
+ * the intent. There is no second execution path in SPACE.
+ */
+export async function submitManualIntent(
+  intent: ExecutionIntent,
+  options: { size: number; mode: OrderMode },
+): Promise<OrderRecord | null> {
+  if (!started || !engine) throw new Error("execution engine is not running");
+  manualIntents.set(intent.id, options);
+  return engine.processIntent(intent, { mode: options.mode });
+}
+
+export function lastRiskDecision() {
+  return engine?.lastRisk() ?? null;
 }
