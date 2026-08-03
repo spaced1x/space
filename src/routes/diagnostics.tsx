@@ -11,7 +11,7 @@ import { ExecutionPanel } from "../components/space/execution-panel";
 import { BotPredictionPanel, StrategyPanel } from "../components/space/strategy-panel";
 import { IntentList, WindowTimeline } from "../components/space/window-timeline";
 import type { EventSeverity } from "../core/bus/events";
-import { getDiagnostics } from "../lib/diagnostics.functions";
+import { getDiagnostics, getFailureHarness, setFailureScenario } from "../lib/diagnostics.functions";
 
 export const Route = createFileRoute("/diagnostics")({
   head: () => ({
@@ -111,6 +111,8 @@ function Diagnostics() {
           </Panel>
 
           <ProductionPanel />
+
+          <FailureHarnessPanel />
 
           <Panel title="Warnings and errors" hint={`${data.errors.length} recent`}>
             <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
