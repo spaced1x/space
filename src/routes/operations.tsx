@@ -10,7 +10,9 @@ import { Button } from "../components/ui/button";
 import type { OperationsConfig } from "../core/config/operations";
 import type { Command } from "../core/bus/commands";
 import { getOperations, updateOperations } from "../lib/operations.functions";
-import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
+import { sendCommand } from "../lib/system.functions";
+import { useRuntimeSnapshot } from "../lib/use-runtime-snapshot";
+import { AsyncPanel } from "../components/space/async-panel";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -39,15 +41,10 @@ function OperationsDesk() {
   const queryClient = useQueryClient();
   const fetchOperations = useServerFn(getOperations);
   const stage = useServerFn(updateOperations);
-  const fetchSnapshot = useServerFn(getSystemSnapshot);
   const dispatch = useServerFn(sendCommand);
   const [draft, setDraft] = useState<OperationsConfig | null>(null);
 
-  const snapshot = useQuery({
-    queryKey: ["system-snapshot"],
-    queryFn: () => fetchSnapshot(),
-    refetchInterval: 5000,
-  });
+  const snapshot = useRuntimeSnapshot();
 
   const command = useMutation({
     mutationFn: (input: Command) => dispatch({ data: input }),
