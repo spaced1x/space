@@ -2,6 +2,8 @@ import { describeEnvReadiness, loadEnv } from "./config/env.server";
 import { databaseHealth, initDatabase } from "./db/database.server";
 import { registerAutoDisarmTask } from "./health/auto-disarm.server";
 import { registerHealthCheck } from "./health/registry";
+import { conformanceHealth, evaluateEnvironmentConformance } from "./config/environment.server";
+import { settlementHealth } from "./settlement/settlement.server";
 import { installFileSink } from "./logging/file-sink.server";
 import { configureLogging, createLogger } from "./logging/logger";
 import { eventBus } from "./bus/events";
@@ -158,12 +160,17 @@ async function runBoot(): Promise<void> {
 
   registerHealthCheck("telegram", telegramServiceHealth);
   registerHealthCheck("backup", backupServiceHealth);
+  registerHealthCheck("settlement", settlementHealth);
+  registerHealthCheck("environment_conformance", conformanceHealth);
   });
 
   // Run startup validation before any background work begins. This gate catches
   // missing secrets, an unhealthy database, or an invalid wallet. Boot always
   // completes so the operator can see the dashboard and the validation report;
   // only the ARM command is blocked when validation fails.
+  // Boot-time evaluation of the composite environment gate; pre-ARM re-runs it.
+  await stage("environment-conformance", () => evaluateEnvironmentConformance());
+
   const startupValidation = await stage("startup-validation", () => runStartupValidation());
   if (!startupValidation.valid) {
     log.warn("startup validation has blockers; engine limited to OBSERVE", {

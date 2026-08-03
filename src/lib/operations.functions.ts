@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { boot } from "../core/boot.server";
+import { dispatchCommand } from "../core/bus/command-bus.server";
 import {
   activeOperations,
   operationsPending,
   stagedOperations,
-  stageOperations,
 } from "../core/config/operations.server";
 
 // Operations Desk read + stage surface. Configuration never reaches a market
@@ -24,5 +24,16 @@ export const updateOperations = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => data)
   .handler(async ({ data }) => {
     await boot();
-    return stageOperations(data);
+    // Configuration edits are audited commands, not direct writes.
+    const verdict = await dispatchCommand(
+      { kind: "STAGE_OPERATIONS", document: data },
+      { actor: "operator", source: "dashboard" },
+    );
+    return {
+      status: verdict.status,
+      reason: verdict.reason,
+      staged: stagedOperations(),
+      active: activeOperations(),
+      pending: operationsPending(),
+    };
   });

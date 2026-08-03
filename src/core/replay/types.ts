@@ -103,5 +103,12 @@ export interface ReplayMarket {
     cost: number;
     avgPrice: number | null;
     note: string;
+    /** Venue-resolved outcome, once settlement has been ingested. */
+    resolvedOutcome: "UP" | "DOWN" | "UNRESOLVED" | null;
+    /** Whether the strategy's direction matched the resolved outcome. */
+    directionCorrect: boolean | null;
+    /** Settled value of the reconstructed fills: 1 per winning share. */
+    settledValue: number | null;
+    realizedPnl: number | null;
   };
 }

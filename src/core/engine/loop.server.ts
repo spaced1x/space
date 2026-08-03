@@ -15,6 +15,7 @@ import {
   stopExecutionEngine,
 } from "../execution/execution.server";
 import { correlationId } from "../shared/ids";
+import { ingestSettlements } from "../settlement/settlement.server";
 import {
   evaluateStrategy,
   startStrategyEngine,
@@ -38,6 +39,9 @@ const STRATEGY_MS = 200;
 // Execution polls slightly slower than strategy: fills, timeouts and retries
 // are venue-bound, not tick-bound.
 const EXECUTION_MS = 500;
+// Venue resolutions arrive minutes after a window closes; polling slowly is
+// enough and keeps Gamma requests far below the rate limit.
+const SETTLEMENT_MS = 30_000;
 
 let binance: PriceFeed | undefined;
 let chainlink: PriceFeed | undefined;
@@ -100,6 +104,12 @@ export async function startEngineLoop(): Promise<void> {
     runOnStart: true,
     run: () => runExecution(),
   });
+  registerTask({
+    name: "settlement.ingest",
+    intervalMs: SETTLEMENT_MS,
+    runOnStart: true,
+    run: () => ingestSettlements(),
+  });
 
   eventBus.publish({
     type: "engine.loop.started",
@@ -138,6 +148,7 @@ export async function stopEngineLoop(): Promise<void> {
     "market.discovery",
     "strategy.evaluate",
     "execution.run",
+    "settlement.ingest",
   ]) {
     unregisterTask(name);
   }

@@ -42,12 +42,39 @@ function normalize(text: string): string {
   return text.trim().toLowerCase().replace(/^\/+/, "");
 }
 
-function allowed(kind: string, mode: TelegramPermissionMode): boolean {
-  if (mode === "FULL_OPERATOR") return true;
-  if (mode === "SAFE_CONTROLS") {
-    return ["status", "disarm", "pause", "emergency_stop", "backup"].includes(kind);
+// One permission map for every inbound command. No command may reach the
+// command bus without passing through it — a risk-increasing action such as ARM,
+// RESUME or RESET_EMERGENCY_STOP is never reachable below FULL_OPERATOR.
+const SAFE_COMMANDS = new Set(["status", "disarm", "pause", "emergency_stop", "backup"]);
+const READ_ONLY_COMMANDS = new Set(["status"]);
+
+/** Canonical command name for a raw Telegram verb. */
+export function canonicalCommand(command: string): string | null {
+  switch (command) {
+    case "status":
+    case "arm":
+    case "disarm":
+    case "pause":
+    case "resume":
+    case "backup":
+    case "reset_stop":
+    case "broadcast":
+      return command;
+    case "mode":
+      return "set_mode";
+    case "stop":
+    case "kill":
+    case "emergency_stop":
+      return "emergency_stop";
+    default:
+      return null;
   }
-  return ["status"].includes(kind);
+}
+
+export function allowed(kind: string, mode: TelegramPermissionMode): boolean {
+  if (mode === "FULL_OPERATOR") return true;
+  if (mode === "SAFE_CONTROLS") return SAFE_COMMANDS.has(kind);
+  return READ_ONLY_COMMANDS.has(kind);
 }
 
 async function handleMessage(text: string, username: string): Promise<void> {
@@ -56,16 +83,26 @@ async function handleMessage(text: string, username: string): Promise<void> {
 
   const parts = text.split(/\s+/);
   const command = normalize(parts[0] ?? "");
+  const canonical = canonicalCommand(command);
+  if (!canonical) {
+    log.info("unknown telegram command ignored", { command, username });
+    return;
+  }
+  // Single gate: every command is checked here, before any dispatch.
+  if (!allowed(canonical, mode)) {
+    log.warn("telegram command refused", { command: canonical, mode, username });
+    await sendTelegramMessage(
+      `${canonical.toUpperCase()} is not allowed in Telegram permission mode ${mode}.`,
+      "operator",
+    );
+    return;
+  }
 
   switch (command) {
     case "status":
       await sendTelegramMessage(`SPACE status: ${JSON.stringify({ mode })}`, "operator");
       return;
     case "arm": {
-      if (!allowed("arm", mode)) {
-        await sendTelegramMessage("ARM is not allowed in the current Telegram permission mode.", "operator");
-        return;
-      }
       await dispatchCommand({ kind: "ARM" }, { actor: username, source: "telegram", correlationId: cid });
       return;
     }
@@ -76,18 +113,10 @@ async function handleMessage(text: string, username: string): Promise<void> {
       await dispatchCommand({ kind: "PAUSE" }, { actor: username, source: "telegram", correlationId: cid });
       return;
     case "resume": {
-      if (!allowed("resume", mode)) {
-        await sendTelegramMessage("RESUME is not allowed in the current Telegram permission mode.", "operator");
-        return;
-      }
       await dispatchCommand({ kind: "RESUME" }, { actor: username, source: "telegram", correlationId: cid });
       return;
     }
     case "mode": {
-      if (!allowed("set_mode", mode)) {
-        await sendTelegramMessage("SET_MODE is not allowed in the current Telegram permission mode.", "operator");
-        return;
-      }
       const target = normalize(parts[1] ?? "");
       if (target !== "strategy" && target !== "manual") {
         await sendTelegramMessage("Usage: /mode strategy|manual", "operator");
@@ -116,10 +145,6 @@ async function handleMessage(text: string, username: string): Promise<void> {
       );
       return;
     case "backup": {
-      if (!allowed("backup", mode)) {
-        await sendTelegramMessage("BACKUP is not allowed in the current Telegram permission mode.", "operator");
-        return;
-      }
       await dispatchCommand({ kind: "BACKUP" }, { actor: username, source: "telegram", correlationId: cid });
       return;
     }

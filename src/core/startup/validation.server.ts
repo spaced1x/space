@@ -1,5 +1,6 @@
 import { describeEnvReadiness, loadEnv } from "../config/env.server";
 import { activeOperations, operationsHealth } from "../config/operations.server";
+import { evaluateEnvironmentConformance } from "../config/environment.server";
 import { databaseHealth } from "../db/database.server";
 import { instanceLockHeld } from "../db/lock.server";
 import { executionRecoveryStatus } from "../execution/execution.server";
@@ -39,6 +40,9 @@ export async function runStartupValidation(): Promise<ValidationReport> {
   const ops = operationsHealth();
   const runtime = getRuntimeState();
   const recovery = executionRecoveryStatus();
+  // Re-evaluated on every gate run: RPC, wallet, chain id and database stamp
+  // must still agree with SPACE_ENVIRONMENT at the moment of ARM.
+  const conformance = await evaluateEnvironmentConformance();
 
   const items: ValidationItem[] = [
     {
@@ -54,6 +58,21 @@ export async function runStartupValidation(): Promise<ValidationReport> {
       required: true,
       state: readiness.valid ? (readiness.missingForArmed.length ? "DEGRADED" : "OK") : "FAILED",
       message: readiness.message,
+    },
+    {
+      name: "environment_conformance",
+      required: true,
+      state: conformance.conformant
+        ? conformance.checks.some((check) => check.state === "DEGRADED")
+          ? "DEGRADED"
+          : "OK"
+        : "FAILED",
+      message: conformance.conformant
+        ? conformance.checks
+            .filter((check) => check.state === "DEGRADED")
+            .map((check) => `${check.name}: ${check.message}`)
+            .join("; ") || `all seven environment facts agree (${conformance.environment})`
+        : conformance.failures.join("; "),
     },
     {
       name: "database",

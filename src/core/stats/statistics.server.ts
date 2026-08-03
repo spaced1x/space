@@ -1,12 +1,14 @@
 import { clock } from "../clock/clock.service";
 import { executionRepository } from "../db/repositories/execution.repository";
 import { replayRepository } from "../db/repositories/replay.repository";
+import { settlementRepository } from "../db/repositories/settlement.repository";
 import { strategyRepository } from "../db/repositories/strategy.repository";
 import { executionSnapshot } from "../execution/execution.server";
 import type { RiskDecision } from "../execution/types";
 import { buildPositions } from "../execution/engine";
 import type { HealthResult } from "../health/types";
 import { getRuntimeState } from "../state/store";
+import { applySettlements } from "../settlement/apply";
 import type { ExecutionIntent } from "../strategy/types";
 import { computeStatistics, type StatisticsSnapshot } from "./statistics";
 
@@ -20,11 +22,12 @@ export async function statistics(): Promise<StatisticsSnapshot> {
   const runtime = getRuntimeState();
   const live = executionSnapshot();
   try {
-    const [orders, fills, intentRows, riskRows] = await Promise.all([
+    const [orders, fills, intentRows, riskRows, settlements] = await Promise.all([
       executionRepository.loadOrders(1000),
       executionRepository.loadFills(2000),
       strategyRepository.recentIntents(1000),
       replayRepository.allRisk(2000),
+      settlementRepository.recent(1000),
     ]);
     lastError = null;
     const risk: RiskDecision[] = riskRows.map((row) => ({
@@ -39,7 +42,12 @@ export async function statistics(): Promise<StatisticsSnapshot> {
       sessionStartedAt: runtime.sessionStartedAt,
       orders: orders.length ? orders : live.orders,
       fills: fills.length ? fills : live.fills,
-      positions: orders.length ? buildPositions(orders, fills) : live.positions,
+      // Settled positions carry their venue-resolved value, so realized PnL is
+      // ground truth rather than a mark against cost.
+      positions: applySettlements(
+        orders.length ? buildPositions(orders, fills) : live.positions,
+        settlements,
+      ),
       intents: intentRows as ExecutionIntent[],
       risk: risk.length ? risk : live.riskRejections,
     });

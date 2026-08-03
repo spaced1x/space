@@ -31,6 +31,16 @@ describe("startup validation", () => {
       databaseHealth: async () => ({ state: "OK", message: "db ok" }),
     }));
 
+    vi.doMock("../../src/core/config/environment.server", () => ({
+      evaluateEnvironmentConformance: async () => ({
+        environment: "V1_TESTNET",
+        conformant: true,
+        at: new Date().toISOString(),
+        checks: [],
+        failures: [],
+      }),
+    }));
+
     vi.doMock("../../src/core/config/operations.server", () => ({
       activeOperations: () => ({ version: 1 }),
       operationsHealth: () => ({ state: "OK", message: "ops ok" }),
@@ -87,6 +97,16 @@ describe("startup validation", () => {
 
     vi.doMock("../../src/core/db/database.server", () => ({
       databaseHealth: async () => ({ state: "OK", message: "db ok" }),
+    }));
+
+    vi.doMock("../../src/core/config/environment.server", () => ({
+      evaluateEnvironmentConformance: async () => ({
+        environment: "V1_TESTNET",
+        conformant: true,
+        at: new Date().toISOString(),
+        checks: [],
+        failures: [],
+      }),
     }));
 
     vi.doMock("../../src/core/config/operations.server", () => ({

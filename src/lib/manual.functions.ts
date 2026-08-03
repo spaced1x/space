@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { boot } from "../core/boot.server";
-import { manualDesk, placeManualOrder } from "../core/execution/manual.server";
+import { manualDesk } from "../core/execution/manual.server";
+import { dispatchCommand } from "../core/bus/command-bus.server";
 
 const requestSchema = z.object({
   horizon: z.enum(["FIVE_MINUTE", "FIFTEEN_MINUTE"]),
@@ -22,11 +23,20 @@ export const getManualDesk = createServerFn({ method: "GET" })
     return manualDesk(data.horizon);
   });
 
-// Manual orders reuse the Risk Engine and the Execution Engine; this function
-// only builds the request.
+// Manual orders reuse the Risk Engine and the Execution Engine, and travel the
+// same audited, serialised Command Bus path as every other operator action.
 export const submitManualOrder = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => requestSchema.parse(data))
   .handler(async ({ data }) => {
     await boot();
-    return placeManualOrder(data);
+    return dispatchCommand(
+      {
+        kind: "MANUAL_ORDER",
+        horizon: data.horizon,
+        direction: data.direction,
+        orderKind: data.kind,
+        size: data.size,
+      },
+      { actor: "operator", source: "dashboard" },
+    );
   });
