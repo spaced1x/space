@@ -24,7 +24,7 @@ export function MissionControl({
   environment: { code: string; label: string; live: boolean };
 }) {
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:overflow-y-auto">
+    <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:sticky lg:top-0 lg:h-screen lg:w-80 lg:overflow-y-auto">
       <div>
         <p className="font-mono text-heading font-semibold tracking-[0.35em] text-primary">
           S P A C E
@@ -32,30 +32,19 @@ export function MissionControl({
         <p className="mt-1 text-label text-muted-foreground">Mission Control</p>
         {/* The active environment is never implied — it is always stated, and
             carries the environment identity colour: V1 blue, V2 red. */}
-        <p
-          className={`mt-2 inline-flex rounded-md border px-2 py-1 font-mono text-status font-semibold uppercase ${
-            environment.live
-              ? "border-env-v2 bg-env-v2-surface text-env-v2"
-              : "border-env-v1 bg-env-v1-surface text-env-v1"
-          }`}
-        >
-          {environment.label}
-        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <EnvironmentBadge environment={environment} />
+          <LifecycleBadge lifecycle={runtime.lifecycle} emergencyStop={runtime.emergencyStop} />
+        </div>
       </div>
 
       <WorkspaceNav />
 
-      <Section title="Operating mode">
-        <Row label="Environment" value={environment.code} accent />
+      <Section title="Operating cockpit">
+        <Row label="Trading mode" value={runtime.mode === "MANUAL" ? "MANUAL" : "STRATEGY"} accent />
         <Row label="Engine" value={environment.live ? "LIVE" : "PAPER"} />
-        <Row label="Trading mode" value={runtime.mode === "MANUAL" ? "MANUAL" : "STRATEGY"} />
-      </Section>
-
-      <Section title="Engine">
-        <Row label="Lifecycle" value={runtime.lifecycle} accent />
-        <Row label="Mode" value={runtime.mode} />
-        <Row label="5m window" value={runtime.windows.fiveMinute ? "enabled" : "disabled"} />
-        <Row label="15m window" value={runtime.windows.fifteenMinute ? "enabled" : "disabled"} />
+        <Row label="Environment" value={environment.code} />
+        <Row label="Lifecycle" value={runtime.lifecycle} />
       </Section>
 
       <Section title="Market">
