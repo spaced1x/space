@@ -22,11 +22,17 @@ export const Route = createFileRoute("/api/runtime/health")({
           const runtime = getRuntimeState();
           const connections = listConnections();
           const times = bootTimes();
-          const blocking = connections.filter(
+          // Runtime health answers "is the process serving correctly", not "is
+          // trading allowed". Trading blockers are reported separately.
+          const blockers = connections.filter(
             (connection) => connection.blocksTrading && connection.health === "FAILED",
           );
           const body = {
-            status: blocking.length === 0 ? health.state : "FAILED",
+            status: health.state,
+            tradingBlockedBy: blockers.map((connection) => ({
+              id: connection.id,
+              reason: connection.reason,
+            })),
             environment: activeEnvironment(),
             lifecycle: runtime.lifecycle,
             mode: runtime.mode,
@@ -46,7 +52,7 @@ export const Route = createFileRoute("/api/runtime/health")({
             bootTrace: getBootTrace(),
           };
           return Response.json(body, {
-            status: body.status === "FAILED" ? 503 : 200,
+            status: body.status === "FAILED" || body.status === "NOT_INITIALIZED" ? 503 : 200,
             headers: { "cache-control": "no-store" },
           });
         } catch (error) {
