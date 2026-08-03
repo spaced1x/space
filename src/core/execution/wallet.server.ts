@@ -122,7 +122,15 @@ export function walletHealth(): HealthResult {
     funderAddress: status.funderAddress,
     hasPrivateKey: status.hasPrivateKey,
     hasApiCredentials: status.hasApiCredentials,
-    chain: lastChainCheck ? { ...lastChainCheck } : null,
+    chain: lastChainCheck
+      ? {
+          expectedChainId: lastChainCheck.expectedChainId,
+          actualChainId: lastChainCheck.actualChainId,
+          matches: lastChainCheck.matches,
+          reason: lastChainCheck.reason,
+          checkedAt: lastChainCheck.checkedAt,
+        }
+      : null,
   };
   // A key that exists but cannot be parsed is a hard configuration failure, not
   // a degraded convenience: nothing can ever be signed with it.
