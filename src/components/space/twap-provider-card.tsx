@@ -78,9 +78,9 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
         <Field label="Errors" value={String(active?.errors ?? 0)} />
         <Field label="Published" value={String(twap.published)} />
         <Field label="Last publish" value={ago(twap.lastPublishedAt)} />
-        <Field label="Endpoint" value={active?.endpoint ?? "—"} mono />
-        <Field label="Symbol" value={active?.symbol ?? "—"} />
-        <Field label="Transport" value={active?.transport ?? "—"} />
+        <Field label="Endpoint" value={active && active.endpoint ? active.endpoint : "—"} mono />
+        <Field label="Symbol" value={active && active.symbol ? active.symbol : "—"} />
+        <Field label="Transport" value={active && active.transport ? active.transport : "—"} />
         <Field label="Standby providers" value={twap.providers.length <= 1 ? "none" : String(twap.providers.length - 1)} />
       </dl>
 
