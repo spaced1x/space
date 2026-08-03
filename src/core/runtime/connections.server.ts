@@ -10,31 +10,57 @@ import { systemClock } from "../shared/clock";
 // NOT_STARTED until a real observation arrives.
 
 export const CONNECTION_IDS = [
+  "configuration",
+  "environment",
   "sqlite",
+  "database_lock",
+  "runtime_target",
   "scheduler",
   "wallet",
   "polygon_rpc",
   "gamma",
   "market_discovery",
   "binance",
+  "rtds",
+  "chainlink_streams",
+  "twap_service",
+  "twap_provider_registry",
   "twap_provider",
-  "clob",
+  "clob_market_ws",
+  "clob_trading",
+  "venue_selector",
+  "paper_venue",
+  "live_venue",
   "telegram",
+  "runtime_validator",
 ] as const;
 
 export type ConnectionId = (typeof CONNECTION_IDS)[number];
 
 export const CONNECTION_LABELS: Record<ConnectionId, string> = {
+  configuration: "Configuration",
+  environment: "Environment",
   sqlite: "Database (SQLite)",
+  database_lock: "Database Lock",
+  runtime_target: "Runtime Target",
   scheduler: "Scheduler",
   wallet: "Wallet",
   polygon_rpc: "Polygon RPC",
   gamma: "Gamma API",
   market_discovery: "Market Discovery",
   binance: "Binance",
+  rtds: "Polymarket RTDS",
+  chainlink_streams: "Chainlink Streams",
+  twap_service: "TWAP Service",
+  twap_provider_registry: "TWAP Provider Registry",
   twap_provider: "TWAP Provider",
-  clob: "Polymarket CLOB",
+  clob_market_ws: "CLOB Market Websocket",
+  clob_trading: "Polymarket CLOB (Trading)",
+  venue_selector: "Venue Selector",
+  paper_venue: "Paper Venue",
+  live_venue: "Live Venue",
   telegram: "Telegram",
+  runtime_validator: "Runtime Validator",
 };
 
 export type ConnectionState =
@@ -42,20 +68,26 @@ export type ConnectionState =
   | "CONNECTING"
   | "CONNECTED"
   | "WAITING"
+  | "RECONNECTING"
+  | "STALE"
   | "DEGRADED"
   | "DISCONNECTED"
   | "FAILED"
-  | "NOT_CONFIGURED";
+  | "NOT_CONFIGURED"
+  | "DISABLED";
 
 /** Projection onto the frozen HealthState enum. The enum itself never changes. */
 const HEALTH_PROJECTION: Record<ConnectionState, HealthState> = {
   CONNECTED: "OK",
   CONNECTING: "DEGRADED",
   WAITING: "DEGRADED",
+  RECONNECTING: "DEGRADED",
+  STALE: "DEGRADED",
   DEGRADED: "DEGRADED",
   DISCONNECTED: "DEGRADED",
   FAILED: "FAILED",
   NOT_CONFIGURED: "DISABLED",
+  DISABLED: "DISABLED",
   NOT_STARTED: "NOT_INITIALIZED",
 };
 
@@ -129,10 +161,10 @@ function seed(id: ConnectionId): ConnectionRecord {
     label: CONNECTION_LABELS[id],
     state: "NOT_STARTED",
     health: "NOT_INITIALIZED",
-    reason: "not started yet",
+    reason: "No data observed yet",
     action: null,
     blocksTrading: true,
-    recovery: "starts during boot",
+    recovery: "reports as soon as the boot sequence reaches this stage",
     endpoint: null,
     environment: environmentName(),
     latencyMs: null,
@@ -192,6 +224,7 @@ export function reportConnection(id: ConnectionId, report: ConnectionReport): Co
       next.disconnectedCount += 1;
       next.lastFailureAt = at;
     }
+    if (report.state === "RECONNECTING") next.reconnects += 1;
     timeline.push({
       at,
       id,
