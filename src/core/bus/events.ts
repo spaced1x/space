@@ -3,7 +3,9 @@ import { systemClock } from "../shared/clock";
 
 // Envelope shape is fixed now so trading events added later are replayable
 // without another format change.
-export interface EventEnvelope<T = Record<string, unknown>> {
+import type { JsonObject } from "../shared/json";
+
+export interface EventEnvelope<T extends JsonObject = JsonObject> {
   type: string;
   occurredAt: string;
   correlationId: string;

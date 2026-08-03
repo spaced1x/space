@@ -15,10 +15,12 @@ export const HEALTH_COMPONENTS = [
 ] as const;
 export type HealthComponent = (typeof HEALTH_COMPONENTS)[number];
 
+import type { JsonObject } from "../shared/json";
+
 export interface HealthResult {
   state: HealthState;
   message: string;
-  details?: Record<string, unknown>;
+  details?: JsonObject;
 }
 
 export interface HealthEntry extends HealthResult {
