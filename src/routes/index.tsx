@@ -8,6 +8,7 @@ import { ConnectionHistory } from "../components/space/connection-history";
 import { RuntimeBanner } from "../components/space/runtime-banner";
 import { SummaryRow } from "../components/space/summary-row";
 import { TradingTargetCard } from "../components/space/trading-target-card";
+import { TwapProviderCard } from "../components/space/twap-provider-card";
 import { ExecutionPanel, OrderTable, PositionTable } from "../components/space/execution-panel";
 import { MarketPanel } from "../components/space/market-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
