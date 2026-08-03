@@ -43,9 +43,12 @@ Make SPACE production-ready: resilient to crashes, power loss, restarts, feed ou
    - VPS deployment verification.
    - Performance validation.
    - Final documentation update.
-6. **Paper / chaos testing (validation tools only)**
-   - Optional internal testing mode for recovery verification and failure simulation.
-   - Must not become a new trading mode or complicate the production engine.
+6. **Internal validation and failure simulation (optional)**
+   - Internal tooling for development and production verification only.
+   - Failure simulation is used to validate recovery, health auto-disarm and scheduler robustness.
+   - Must not become a runtime trading mode, operator mode or execution path.
+   - Must not complicate the production engine.
+
 
 ### Out of scope
 
