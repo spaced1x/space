@@ -28,7 +28,7 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
   if (!market) {
     return (
       <EmptyState
-        subject="Current trading target"
+        subject="BTC up/down market"
         status="Waiting for market"
         reason="No official BTC up/down market is open right now"
         action="None — SPACE discovers the next BTC market automatically"
@@ -39,7 +39,7 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
   }
 
   return (
-    <article className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-card-title font-semibold text-card-foreground">
           {market.question || market.slug}
@@ -47,7 +47,7 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
         <span className="font-mono text-status uppercase text-primary">{market.horizon}</span>
       </div>
 
-      <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
+      <dl className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
         <Field label="Market status" value={market.status} />
         <Field label="Settlement" value={market.settlementAt ? new Date(market.settlementAt).toLocaleTimeString() : "—"} />
         <Field label="Countdown" value={countdown(market.settlementAt)} accent />
@@ -69,7 +69,7 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
       </dl>
 
       {market.bestBid === null && market.bestAsk === null && (
-        <p className="mt-3 text-label text-muted-foreground">
+        <p className="mt-4 text-body text-muted-foreground">
           Waiting for book — the venue has not published bid/ask for this market yet.
         </p>
       )}

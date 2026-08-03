@@ -1,4 +1,4 @@
-import { loadEnv } from "../config/env.server";
+import { loadEnv, resolveDbPath } from "../config/env.server";
 import { databaseHealth } from "../db/database.server";
 import { chainCheck, walletStatus } from "../execution/wallet.server";
 import { polymarketAdapter } from "../execution/polymarket.server";
@@ -44,7 +44,7 @@ async function syncDatabase(): Promise<void> {
   reportConnection("sqlite", {
     state: health.state === "OK" ? "CONNECTED" : health.state === "FAILED" ? "FAILED" : "DEGRADED",
     reason: health.message,
-    endpoint: env.DB_PATH,
+    endpoint: resolveDbPath(env),
     latencyMs: typeof details["latencyMs"] === "number" ? details["latencyMs"] : null,
     lastError: health.state === "OK" ? null : health.message,
     blocksTrading: health.state !== "OK",

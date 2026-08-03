@@ -74,9 +74,9 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
       <div className="flex flex-wrap items-baseline gap-3">
-        <h2 className="text-status font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        <h2 className="text-section-title font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           {title}
         </h2>
         {hint && <span className="font-mono text-status text-muted-foreground">{hint}</span>}

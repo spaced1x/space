@@ -1,4 +1,4 @@
-import { loadEnv } from "../config/env.server";
+import { loadEnv, resolveDbPath } from "../config/env.server";
 import { activeOperations } from "../config/operations.server";
 import { collectHealth } from "../health/registry";
 import { createLogger } from "../logging/logger";
@@ -61,7 +61,7 @@ export async function generateReleaseReport(version: string): Promise<ReleaseGat
     db_ok: health.components.find((c) => c.component === "database")?.state === "OK",
     scheduler_ok: health.components.find((c) => c.component === "scheduler")?.state === "OK",
     no_emergency_stop: !runtime.emergencyStop,
-    not_armed: runtime.engineStatus !== "ARMED",
+    not_armed: runtime.lifecycle !== "RUNNING",
     metrics_sampled: metrics !== null,
   };
 
@@ -79,7 +79,7 @@ export async function generateReleaseReport(version: string): Promise<ReleaseGat
       nodeEnv: env.NODE_ENV,
       nodeVersion: process.version,
       platform: process.platform,
-      dbPath: env.DB_PATH,
+      dbPath: resolveDbPath(env),
     },
     runtime,
     operations,

@@ -1,4 +1,4 @@
-import { loadEnv } from "../config/env.server";
+import { loadEnv, resolveDbPath } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import { DatabaseUnavailableError } from "../shared/errors";
@@ -28,7 +28,8 @@ export async function initDatabase(): Promise<DatabaseState> {
     initPromise = (async () => {
       const env = loadEnv();
       try {
-        const driver = await createSqliteDriver(env.DB_PATH);
+        const dbPath = resolveDbPath(env);
+        const driver = await createSqliteDriver(dbPath);
         applyMigrations(driver);
         stampEnvironment(driver, env.SPACE_ENVIRONMENT);
         if (state.stampMismatch) throw new Error(state.stampMismatch);

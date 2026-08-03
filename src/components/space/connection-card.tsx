@@ -37,7 +37,7 @@ export function ConnectionCard({ record }: { record: ConnectionRecord }) {
   const detailEntries = Object.entries(record.details);
 
   return (
-    <article className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <StatusDot state={record.health} />
         <h3 className="text-card-title font-semibold text-card-foreground">{record.label}</h3>
@@ -46,9 +46,9 @@ export function ConnectionCard({ record }: { record: ConnectionRecord }) {
         </span>
       </div>
 
-      <p className="mt-2 text-label leading-relaxed text-muted-foreground">{record.reason}</p>
+      <p className="mt-2 text-body leading-relaxed text-muted-foreground">{record.reason}</p>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
         <Field label="Environment" value={record.environment} />
         <Field label="Endpoint" value={record.endpoint ?? "—"} mono />
         <Field label="Latency" value={record.latencyMs === null ? "—" : `${record.latencyMs} ms`} />
@@ -61,7 +61,7 @@ export function ConnectionCard({ record }: { record: ConnectionRecord }) {
       </dl>
 
       {record.state !== "CONNECTED" && (
-        <div className="mt-3 space-y-1 rounded-md bg-muted/60 p-3">
+        <div className="mt-4 space-y-1 rounded-md bg-muted/60 p-3">
           <Line term="Action" detail={record.action ?? "None — monitor"} />
           <Line term="Trading" detail={record.blocksTrading ? "Blocked" : "Not blocked"} />
           <Line term="Recovery" detail={record.recovery} />

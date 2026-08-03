@@ -30,7 +30,7 @@ export function registerAutoDisarmTask(): void {
     intervalMs: AUTO_DISARM_INTERVAL_MS,
     run: async () => {
       const state = getRuntimeState();
-      if (state.engineStatus !== "ARMED") return;
+      if (state.lifecycle !== "RUNNING") return;
 
       const report = await collectHealth();
       const failed = report.components.filter(

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import nodePath from "node:path";
-import { loadEnv } from "../config/env.server";
+import { loadEnv, resolveDbPath } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 
@@ -22,7 +22,7 @@ let held: LockHandle | null = null;
 
 export function lockPath(): string {
   const env = loadEnv();
-  return `${env.DB_PATH}.lock`;
+  return `${resolveDbPath(env)}.lock`;
 }
 
 /**

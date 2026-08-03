@@ -30,6 +30,7 @@ import { sampleAndPersistMetrics } from "./metrics/metrics.server";
 import { startTelegramInbound } from "./telegram/inbound.server";
 import { noteTimeline, reportConnection } from "./runtime/connections.server";
 import { syncConnections } from "./runtime/connection-sync.server";
+import { readRuntimeTarget, targetMatchesEnvironment } from "./runtime/target.server";
 import { verifyChainId } from "./execution/wallet.server";
 import { refreshMarkets } from "./market/discovery.server";
 
@@ -108,6 +109,19 @@ async function runBoot(): Promise<void> {
   const log = createLogger("boot", cid);
   log.info("SPACE starting", { environment: env.SPACE_ENVIRONMENT, nodeEnv: env.NODE_ENV });
 
+  // Lifecycle begins in STARTING the moment the boot sequence runs.
+  updateRuntimeState({ lifecycle: "STARTING" }, "boot sequence started", cid);
+
+  // Verify the persisted runtime target agrees with the active environment. A
+  // mismatch means an operator requested a switch that has not been restarted.
+  const target = readRuntimeTarget();
+  if (!targetMatchesEnvironment()) {
+    log.warn("runtime target mismatch", {
+      targetEnvironment: target.environment,
+      activeEnvironment: env.SPACE_ENVIRONMENT,
+    });
+  }
+
   // Prevent two SPACE processes from running against the same database. This
   // is a single-instance safety guard: double execution would double-trade.
   await stage("instance-lock", () => acquireInstanceLock());
@@ -122,7 +136,7 @@ async function runBoot(): Promise<void> {
   await stage("operations-config", () => loadOperations());
 
   // Runtime state is authoritative in memory but persisted for graceful restart
-  // continuity. Never restore into ARMED; a reboot always demands an explicit ARM.
+  // continuity. Never restore into RUNNING; a reboot always demands an explicit ARM.
   await stage("runtime-state", () => loadRuntimeState());
 
   // Clock is a first-class service: registered before anything schedules work.
@@ -179,16 +193,15 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("environment_conformance", conformanceHealth);
   });
 
-  // Run startup validation before any background work begins. This gate catches
-  // missing secrets, an unhealthy database, or an invalid wallet. Boot always
-  // completes so the operator can see the dashboard and the validation report;
-  // only the ARM command is blocked when validation fails.
-  // Boot-time evaluation of the composite environment gate; pre-ARM re-runs it.
+  // Boot-time evaluation of the composite environment gate.
   await stage("environment-conformance", () => evaluateEnvironmentConformance());
 
+  // Move into the explicit validation stage so the dashboard shows why boot
+  // may be blocked before any background work begins.
+  updateRuntimeState({ lifecycle: "VALIDATING" }, "running startup validation gate", cid);
   const startupValidation = await stage("startup-validation", () => runStartupValidation());
   if (!startupValidation.valid) {
-    log.warn("startup validation has blockers; engine limited to OBSERVE", {
+    log.warn("startup validation has blockers; engine limited to READY", {
       blockers: startupValidation.blockers,
     });
     eventBus.publish({
@@ -248,22 +261,22 @@ async function runBoot(): Promise<void> {
   // it; boot never waits on the UI.
   await stage("dashboard-snapshot", () => syncConnections());
 
-  if (getRuntimeState().engineStatus === "BOOTING") {
-    // Never auto-arm. OBSERVE is the only safe post-boot state.
-    updateRuntimeState({ engineStatus: "OBSERVE" }, "boot complete", cid);
+  if (getRuntimeState().lifecycle === "VALIDATING") {
+    // Boot completes in READY. Trading only begins after the operator arms.
+    updateRuntimeState({ lifecycle: "READY" }, "boot complete", cid);
   }
 
   bootCompletedAt = new Date().toISOString();
-  noteTimeline("scheduler", "SPACE READY (OBSERVE)");
+  noteTimeline("scheduler", "SPACE READY");
 
   eventBus.publish({
     type: "process.booted",
     severity: "SUCCESS",
     correlationId: cid,
     source: "boot",
-    payload: { environment: env.SPACE_ENVIRONMENT },
+    payload: { environment: env.SPACE_ENVIRONMENT, targetVersion: target.version },
   });
-  log.info("SPACE ready in OBSERVE");
+  log.info("SPACE ready in READY");
 }
 
 function feedHealth(name: "binance" | "chainlink") {
@@ -283,6 +296,6 @@ function windowHealth(key: "fiveMinute" | "fifteenMinute", label: string) {
   return {
     state: enabled ? ("OK" as const) : ("DISABLED" as const),
     message: enabled ? `${label} window enabled` : `${label} window switched off by operator`,
-    details: { window: label, enabled, engineStatus: state.engineStatus },
+    details: { window: label, enabled, lifecycle: state.lifecycle },
   };
 }

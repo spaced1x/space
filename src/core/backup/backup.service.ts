@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { loadEnv } from "../config/env.server";
+import { loadEnv, resolveDbPath } from "../config/env.server";
 import { backupRepository } from "../db/repositories/backup.repository";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
@@ -17,7 +17,7 @@ export interface BackupResult {
 
 export async function performBackup(kind: "MANUAL" | "SCHEDULED", label?: string): Promise<BackupResult> {
   const env = loadEnv();
-  const sourcePath = path.resolve(env.DB_PATH);
+  const sourcePath = path.resolve(resolveDbPath(env));
   const backupDir = path.join(path.dirname(sourcePath), "backups");
   const timestamp = systemClock.iso().replace(/[:.]/g, "-");
   const suffix = label ? `-${label.replace(/[^a-zA-Z0-9_-]/g, "_")}` : "";
@@ -53,7 +53,7 @@ export async function restoreBackup(backupId: number): Promise<BackupResult> {
   if (!record) return { success: false, message: `backup ${backupId} not found` };
   if (record.state !== "SUCCESS") return { success: false, message: `backup ${backupId} is not verified` };
 
-  const targetPath = path.resolve(env.DB_PATH);
+  const targetPath = path.resolve(resolveDbPath(env));
   const sourcePath = record.target_path;
   try {
     await fs.promises.copyFile(sourcePath, targetPath);

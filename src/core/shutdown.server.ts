@@ -18,7 +18,7 @@ export async function shutdown(reason: string): Promise<void> {
   const cid = correlationId("shutdown");
   const log = createLogger("shutdown", cid);
   log.info("shutdown requested", { reason });
-  updateRuntimeState({ engineStatus: "STOPPED" }, `shutdown: ${reason}`, cid);
+  updateRuntimeState({ lifecycle: "STOPPED" }, `shutdown: ${reason}`, cid);
   stopTelegramInbound();
   await stopScheduler();
   await stopEngineLoop();

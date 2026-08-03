@@ -6,6 +6,8 @@ import type { JsonObject } from "../shared/json";
 // or Telegram. Validated at the edge, executed on the engine loop, answered
 // with an explicit verdict, written to the audit log.
 export const commandSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("START_RUNTIME") }),
+  z.object({ kind: z.literal("STOP_RUNTIME") }),
   z.object({ kind: z.literal("ARM") }),
   z.object({ kind: z.literal("DISARM") }),
   z.object({ kind: z.literal("PAUSE") }),
@@ -51,6 +53,8 @@ export type Command = z.infer<typeof commandSchema>;
 export type CommandKind = Command["kind"];
 
 export const COMMAND_KINDS: CommandKind[] = [
+  "START_RUNTIME",
+  "STOP_RUNTIME",
   "ARM",
   "DISARM",
   "PAUSE",

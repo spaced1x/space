@@ -4,9 +4,11 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { ConnectionCard } from "../components/space/connection-card";
+import { ConnectionHistory } from "../components/space/connection-history";
 import { RuntimeBanner } from "../components/space/runtime-banner";
 import { SummaryRow } from "../components/space/summary-row";
 import { TradingTargetCard } from "../components/space/trading-target-card";
+import { TwapProviderCard } from "../components/space/twap-provider-card";
 import { ExecutionPanel, OrderTable, PositionTable } from "../components/space/execution-panel";
 import { MarketPanel } from "../components/space/market-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
@@ -63,15 +65,34 @@ function OperatorConsole() {
       subtitle="What is happening right now. Operational only — configuration lives in the Operations Desk, analysis in Statistics and Replay."
     >
       {!snapshot.data ? (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <p className="text-card-title font-semibold text-card-foreground">
+        <div className="rounded-lg border border-border bg-card p-5">
+          <p className="text-section-title font-semibold text-card-foreground">
             {snapshot.isError ? "Runtime snapshot unavailable" : "Reading runtime snapshot"}
           </p>
-          <p className="mt-2 text-label leading-relaxed text-muted-foreground">
-            {snapshot.isError
-              ? "The dashboard could not reach the SPACE process. Trading is unaffected by this page, but you are flying blind — check the process with pm2 status and review the logs."
-              : "The engine boots before it answers. Nothing is displayed until the process reports real values."}
-          </p>
+          <dl className="mt-4 grid gap-2">
+            <EmptyLine term="What" detail="Mission Control is waiting for the first runtime snapshot" />
+            <EmptyLine
+              term="Why"
+              detail={
+                snapshot.isError
+                  ? "The dashboard could not reach the SPACE process"
+                  : "The engine boots before it answers; nothing is displayed until real values arrive"
+              }
+            />
+            <EmptyLine
+              term="Action"
+              detail={
+                snapshot.isError
+                  ? "Check the process with pm2 status and review the logs"
+                  : "Wait for the boot sequence to complete (STARTING → VALIDATING → READY)"
+              }
+            />
+            <EmptyLine term="Blocked" detail="Dashboard only — trading is unaffected by this page" />
+            <EmptyLine
+              term="Recovery"
+              detail="Automatic once the runtime reports; if it persists, inspect the boot trace in the logs"
+            />
+          </dl>
         </div>
       ) : (
         <>
@@ -98,12 +119,20 @@ function OperatorConsole() {
             />
           </Panel>
 
+          <Panel title="TWAP provider" hint="active settlement provider and standby peers">
+            <TwapProviderCard twap={snapshot.data.engine.twap} />
+          </Panel>
+
           <Panel title="Runtime connections" hint="every external dependency, as observed">
-            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {snapshot.data.connections.map((record) => (
                 <ConnectionCard key={record.id} record={record} />
               ))}
             </div>
+          </Panel>
+
+          <Panel title="Connection history" hint="last 300 state changes observed by the runtime">
+            <ConnectionHistory entries={snapshot.data.timeline} />
           </Panel>
 
           <Panel title="Strategy" hint="PTB · settlement TWAP · active window · direction">
@@ -126,7 +155,7 @@ function OperatorConsole() {
             <PositionTable execution={snapshot.data.engine.execution} />
           </Panel>
 
-          <Panel title="Feeds">
+          <Panel title="Feeds & scheduler" hint="live task and feed telemetry">
             <RuntimePanel
               scheduler={snapshot.data.engine.scheduler}
               feeds={snapshot.data.engine.feeds}
@@ -188,3 +217,13 @@ function OperatorConsole() {
     </ConsoleShell>
   );
 }
+
+function EmptyLine({ term, detail }: { term: string; detail: string }) {
+  return (
+    <div className="flex flex-wrap gap-x-3 text-body">
+      <dt className="w-24 shrink-0 text-muted-foreground">{term}</dt>
+      <dd className="flex-1 text-foreground">{detail}</dd>
+    </div>
+  );
+}
+
