@@ -64,8 +64,7 @@
   --color-fail: var(--fail);
   --color-idle: var(--idle);
   --color-off: var(--off);
-  --font-mono:
-    ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
 }
 
 :root {

@@ -20,42 +20,42 @@ When a decision is uncertain, choose the option that is simpler, easier to maint
 
 The uploaded archive is **not one system, it is two**.
 
-- **STONE (`src/`)** — "ARC Companion", a TanStack Start / React 19 / Supabase **control plane**. ~200 files. Its constitution (`docs/ARC_PROJECT_CHARTER.md`, ADR-0001) *forbids* trading logic from ever existing in it.
+- **STONE (`src/`)** — "ARC Companion", a TanStack Start / React 19 / Supabase **control plane**. ~200 files. Its constitution (`docs/ARC_PROJECT_CHARTER.md`, ADR-0001) _forbids_ trading logic from ever existing in it.
 - **P4 / "reze" (`docs/reference/p4/`)** — the **actual trading bot**. Next.js 14 + PM2 + `better-sqlite3` + Polymarket CLOB v2. ~28,000 LOC. Declared read-only reference, excluded from build, lint and tests.
 
 Consequence: STONE contains a large, high-quality, fully-tested **domain library** for trading (`core/market`, `core/decision`, `core/trade`) that is **never wired into a running process**. The only file that assembles those three domains is `src/core/qualification/scenario.ts`, a deterministic test harness on a `FixedClock`. There is no live tick loop, no real venue client (`VenueGateway` has exactly one implementation: `RecordingVenueGateway`), and no real feed decoder (`chainlink-datastreams` is a config label pointing at a generic HTTP-JSON fetcher).
 
-Meanwhile P4 *does* trade, for real, with EIP-712 signing, post-only maker orders, chaos-tested paper mode, settlement, dust compounding and forensic replay — but it is architecturally frozen out of the repository.
+Meanwhile P4 _does_ trade, for real, with EIP-712 signing, post-only maker orders, chaos-tested paper mode, settlement, dust compounding and forensic replay — but it is architecturally frozen out of the repository.
 
 **SPACE's value is exactly this: joining the two halves.** STONE's domain model plus P4's proven execution reality, in one Node process.
 
 ## 1. Repository overview
 
-| | STONE (`src/`) | P4 (`docs/reference/p4/`) |
-|---|---|---|
-| Framework | TanStack Start v1, React 19, Vite 8 | Next.js 14 App Router |
-| Runtime | Cloudflare Workers (serverless) | Long-lived Node, PM2 fork, 1 instance |
-| DB | Supabase Postgres, 20 tables, RLS | SQLite WAL: `trades`, `kv`, `order_log`, `audit_log` |
-| Auth | Supabase Auth + `user_roles` + RLS | Dashboard user/pass + optional bearer token |
-| Trading | none (charter-forbidden) | full engine, SLO, live + paper executors |
-| Tests | 31 files, 512 tests, core-only | 39 files, chaos/integration heavy |
-| Deploy | Lovable / Workers | PM2 + Nginx reverse proxy |
+|           | STONE (`src/`)                      | P4 (`docs/reference/p4/`)                            |
+| --------- | ----------------------------------- | ---------------------------------------------------- |
+| Framework | TanStack Start v1, React 19, Vite 8 | Next.js 14 App Router                                |
+| Runtime   | Cloudflare Workers (serverless)     | Long-lived Node, PM2 fork, 1 instance                |
+| DB        | Supabase Postgres, 20 tables, RLS   | SQLite WAL: `trades`, `kv`, `order_log`, `audit_log` |
+| Auth      | Supabase Auth + `user_roles` + RLS  | Dashboard user/pass + optional bearer token          |
+| Trading   | none (charter-forbidden)            | full engine, SLO, live + paper executors             |
+| Tests     | 31 files, 512 tests, core-only      | 39 files, chaos/integration heavy                    |
+| Deploy    | Lovable / Workers                   | PM2 + Nginx reverse proxy                            |
 
 ## 2. Runtime architecture (STONE)
 
 `src/core/runtime.ts` (104 LOC) is the composition root and wires **only** infrastructure: config, logger, metrics registry, health registry, scheduler, event-envelope factory. It imports nothing from `market/`, `decision/` or `trade/`. Two health checks are registered: configuration and scheduler. The only server-side runtime surface is `/api/public/health/*` and `/api/public/authority/*`.
 
-Layering is enforced *executably* by `tests/unit/architecture.test.ts`, which walks the import graph and fails the build on upward dependency: `shared → contracts → configuration → infrastructure → market → decision → trade → platform`. This is one of STONE's best assets and should survive into SPACE.
+Layering is enforced _executably_ by `tests/unit/architecture.test.ts`, which walks the import graph and fails the build on upward dependency: `shared → contracts → configuration → infrastructure → market → decision → trade → platform`. This is one of STONE's best assets and should survive into SPACE.
 
 ## 3. Trading engine architecture
 
 **STONE domain model (~7,650 LOC, unwired):**
 
-- `market/` — Discovery → Feed → TWAP → PTB → signal conditioning → versioned immutable `AuthoritativeMarketState`. TWAP is a correct time-weighted average with degenerate-basket fallback; PTB is validated *only* from official market metadata, never from the order book.
+- `market/` — Discovery → Feed → TWAP → PTB → signal conditioning → versioned immutable `AuthoritativeMarketState`. TWAP is a correct time-weighted average with degenerate-basket fallback; PTB is validated _only_ from official market metadata, never from the order book.
 - `decision/` — `decide()` is a **pure function** of (market state, window instance, config) → `BUY_UP | BUY_DOWN | NO_SIGNAL`, using a per-window `ABSOLUTE`/`PERCENT` buffer against PTB. `ExecutionWindowManager` drives a 6-state window FSM, one intent per window forever, plus a `TradeQuota`. Window priority is derived from offset, never configured separately.
-- `trade/` — risk engine (7 ordered checks, all always evaluated for a full audit trace), `ExposureLedger` with a fail-fast invariant, an 8-state order FSM, and `standing-order-engine.ts` (523 LOC, explicitly *harvested from P4*): passive maker resting, bounded cancel/replace, retry ladder, partial-fill accumulation, IOC fallback on deadline, exactly-once settlement.
+- `trade/` — risk engine (7 ordered checks, all always evaluated for a full audit trace), `ExposureLedger` with a fail-fast invariant, an 8-state order FSM, and `standing-order-engine.ts` (523 LOC, explicitly _harvested from P4_): passive maker resting, bounded cancel/replace, retry ladder, partial-fill accumulation, IOC fallback on deadline, exactly-once settlement.
 
-**This is already ~85% of the Frozen Window Engine you described.** Opening TWAP capture, PTB-derived direction, per-window buffer, continuous re-evaluation until expiry, risk gate, trades-per-market quota — all present, pure and unit-tested. What is missing: freezing the trigger *value* at window open (today `decide()` recomputes the comparison from live effective TWAP on each evaluation rather than latching a trigger at capture), a real venue, a real feed, and a process to run in.
+**This is already ~85% of the Frozen Window Engine you described.** Opening TWAP capture, PTB-derived direction, per-window buffer, continuous re-evaluation until expiry, risk gate, trades-per-market quota — all present, pure and unit-tested. What is missing: freezing the trigger _value_ at window open (today `decide()` recomputes the comparison from live effective TWAP on each evaluation rather than latching a trigger at capture), a real venue, a real feed, and a process to run in.
 
 **P4 engine (what actually works):** a 1,697-LOC tick loop with `PRIORITY_1` / `PRIORITY_2` / `STOPPING` phases, slot rollover, `settleSlot()`, and a 2,859-LOC independent Standing Limit Order manager on its own clock.
 
@@ -74,22 +74,22 @@ SPACE should keep **both**: event-sourced determinism replay for engineering, pe
 
 ## 6. Database layer
 
-- STONE: 20 Supabase tables. Genuinely good design — `platform_events` and `ledger_records` are append-only *at the grant level* (no UPDATE/DELETE granted), `configuration_versions` is immutable by trigger, `operator_ownership` is a boolean-PK singleton, `authority_replay_guard` uses unique-violation-as-replay-signal, `authority_registry` rejects secret-shaped values by trigger. Idempotency relies on catching Postgres `23505`, which survives a move to plain Postgres unchanged.
+- STONE: 20 Supabase tables. Genuinely good design — `platform_events` and `ledger_records` are append-only _at the grant level_ (no UPDATE/DELETE granted), `configuration_versions` is immutable by trigger, `operator_ownership` is a boolean-PK singleton, `authority_replay_guard` uses unique-violation-as-replay-signal, `authority_registry` rejects secret-shaped values by trigger. Idempotency relies on catching Postgres `23505`, which survives a move to plain Postgres unchanged.
 - P4: 4 SQLite tables, an async write queue that never blocks the tick loop, additive migrations, and a boot-time orphan sweep that refunds crash-orphaned OPEN trades.
 
 ### Decision: SPACE uses SQLite in WAL mode
 
 SPACE is not locked to PostgreSQL just because STONE used Supabase. Re-evaluating against the stated objectives:
 
-| Objective | SQLite (WAL) | PostgreSQL (local) |
-|---|---|---|
-| One local database | A single file | A server, a daemon, a role, a socket |
-| No cloud dependency | Yes | Yes |
-| VPS deployment | Nothing to install; the app *is* the database | Install, tune, secure, upgrade across major versions |
-| Backup | `VACUUM INTO backup.db` — one atomic file, hot, no downtime | `pg_dump`, restore ordering, role/ownership fixes |
-| Migration to another VPS | Copy one file | Dump, install matching major version, restore, re-grant |
-| Reliability | WAL + `synchronous=NORMAL` is crash-safe; fewer moving parts to fail | Robust, but adds a second supervised process that can fail independently |
-| Concurrency | One writer at a time; unlimited concurrent readers | Full MVCC, many writers |
+| Objective                | SQLite (WAL)                                                         | PostgreSQL (local)                                                       |
+| ------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| One local database       | A single file                                                        | A server, a daemon, a role, a socket                                     |
+| No cloud dependency      | Yes                                                                  | Yes                                                                      |
+| VPS deployment           | Nothing to install; the app _is_ the database                        | Install, tune, secure, upgrade across major versions                     |
+| Backup                   | `VACUUM INTO backup.db` — one atomic file, hot, no downtime          | `pg_dump`, restore ordering, role/ownership fixes                        |
+| Migration to another VPS | Copy one file                                                        | Dump, install matching major version, restore, re-grant                  |
+| Reliability              | WAL + `synchronous=NORMAL` is crash-safe; fewer moving parts to fail | Robust, but adds a second supervised process that can fail independently |
+| Concurrency              | One writer at a time; unlimited concurrent readers                   | Full MVCC, many writers                                                  |
 
 SPACE is **a single Node process with exactly one writer** — the engine. There is no second service, no horizontal scale, no multi-tenant access. Trade volume is bounded by the market clock (a handful of orders per 5-minute slot, ~288 slots/day). SQLite's only real limitation, concurrent writers, does not exist in this design. PostgreSQL would add an entire supervised subsystem to solve a problem SPACE does not have — the exact complexity the philosophy above rejects.
 
@@ -120,47 +120,47 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, 9 Radix primi
 
 ## Phases 3 and 4 — Classification and migration matrix
 
-| STONE / P4 component | Decision | Reason | SPACE replacement |
-|---|---|---|---|
-| `core/shared` (ids, Clock) | **KEEP** | Branded ids and an injectable clock enable deterministic replay | As-is; upgrade `digest128` (4×FNV-1a) to SHA-256 since digests gate event idempotency |
-| `core/contracts/event-envelope` | **KEEP** | Correlation, causation and idempotency done right | As-is, with a durable Postgres sink |
-| `core/contracts/reason-codes` (1,051 LOC) | **REFACTOR** | ~20 domains catalogued, only a handful have producers | Prune to codes with real emitters |
-| `core/contracts/versions` | **REMOVE** | All 24 entries pinned to `1.0.0`; compatibility machinery never invoked | Single build version string |
-| `core/market/*` (TWAP, PTB, conditioning, lifecycle) | **KEEP** | Correct, pure, tested; exactly SPACE's Opening-TWAP/PTB model | As-is |
-| `core/market/feed-provider` | **REFACTOR** | Vendor names with no vendor code behind them | Real Chainlink on-chain reader and CLOB WS client, ported from P4 `feeds/` |
-| `core/decision/*` (window FSM, pure `decide`, quota) | **KEEP** | The Frozen Window Engine's skeleton, already pure | Add trigger **latching** at window open; drop the unimplemented `SCHEDULED_TICK` mode |
-| `core/decision/execution-context` exposure placeholder | **REMOVE** | Inert duplicate of the real `ExposureLedger` | Trade-domain ledger only |
-| `core/trade/*` (risk, exposure, order FSM, coordinator) | **KEEP** | Fail-fast invariants, idempotent fills, exactly-once settlement | As-is |
-| `core/trade/standing-order-engine` | **KEEP** | Already the decoupled port of P4's proven SLO | Extend with P4's stuck-RESTING and duplicate-order guards |
-| `core/trade/venue-gateway` | **REFACTOR** | Interface is right, implementation is a recording stub | Port P4 `execution/live.ts` (CLOB v2, EIP-712, post-only) and `paper.ts` chaos executor behind the same port |
-| `core/platform/replay` + `recovery` | **KEEP** | Pure, digest-verified, PM2-restart dedupe | As-is |
-| `core/platform/ledger` | **KEEP** | Deterministic reconstruction from BUSINESS events | As-is |
-| `core/platform/audit.ts` | **REMOVE** | Superseded by `audit-record.ts`; two shapes into one table | Single audit writer |
-| `core/platform/notifications.ts` | **REFACTOR** | Framework has no channel and is disconnected from the table actually used | One notification service plus P4's Telegram transport |
-| `core/platform/authority-*` (handshake, registration, signature, gateway) | **REMOVE** | Exists solely to bridge the companion↔VPS split that SPACE deletes | In-process module calls |
-| `core/qualification/{gates,live-gates,activation,mainnet,deployment}` | **REFACTOR** | Four abstractions independently recompute the same evidence | One readiness evaluator |
-| `core/qualification/scenario.ts` | **KEEP** | The only place the engine is fully assembled — it is the integration test | Promote to SPACE's integration suite |
-| `core/infrastructure/*` (fsm, health, logging, scheduler, metrics, watchdogs, secret-scanner) | **KEEP** | Solid, generic, portable | Rename watchdog subsystem `"supabase"` → `"database"`; wire metrics to a real `/metrics` route |
-| `core/configuration/env-validator` vs `environment` | **REFACTOR** | Two sources of truth with conflicting key names | One Zod schema, one `.env.example` |
-| Execution-profile DSL parser | **REFACTOR** | Non-trivial parser hidden inside config loading | Structured profiles stored in the local DB, validated by Zod, edited in the Operations Desk |
-| Supabase (client, RLS, Auth, PostgREST, `config.toml`, 12 migrations) | **REMOVE** | SPACE has no cloud dependency | Local SQLite (WAL) behind typed repositories; port the useful table designs, replace RLS with app-layer authz, replace Supabase Auth with a local session |
-| `src/lib/*.functions.ts` and `*.server.ts` (~4,000 LOC) | **REFACTOR** | Correct read/write surface, but `any`-cast Supabase calls throughout | Typed service layer over the local DB |
-| STONE UI shell, primitives, tokens, 18 routes | **KEEP** | Genuinely good operator UI: dark oklch, mono numerics | Keep the design system; merge the 7 telemetry re-slices; split `execution-profiles.tsx` |
-| `src/routes/index.tsx` | **REMOVE** | Hardcoded, stale "Session 0" checklist | Login redirect |
-| `api/public/authority/*` | **REMOVE** | Cross-process protocol, obsolete in one process | — |
-| `api/public/health/*` | **KEEP** | Nginx and PM2 probes need exactly these | As-is |
-| P4 `engine.ts` phase loop | **REFACTOR** | Per your direction, not copied | Frozen Window Engine on STONE's window FSM |
-| P4 `settlement-*`, `accounting-verifier`, `bankroll`, dust compounding | **KEEP (port)** | Money-correctness logic earned through real production bugs | `core/settlement` and `core/accounting` |
-| P4 `reconciler`, `watchdog`, `orphan-cleaner`, `preflight` | **KEEP (port)** | Live-drift detection has no STONE equivalent | SPACE infrastructure layer |
-| P4 `trade-replay.ts` and `trade-replay-view.tsx` | **KEEP (port)** | Forensic per-trade evidence, complements event replay | Second tab on the SPACE replay page |
-| P4 `trade-replay.ts` evidence model | **KEEP (port)** | Already captures the exact fields SPACE's replay must show | Extended with frozen trigger and buffer |
-| P4 `http-agent`, `proxy`, `telegram-console`, dual `/v1` `/v2` dashboards | **REMOVE** | Dead weight and duplication | — |
-| Both PM2 configs | **REFACTOR** | One is half-fictional, one is Next-specific | One `ecosystem.config.cjs`: one app, fork, 1 instance, graceful dispose |
-| P4 nginx conf | **KEEP** | Correct proxy, SSE, WS and quiet health handling | Adapt ports and paths |
-| Five `.env` templates | **REMOVE** | Five templates for one system | One small `.env.example` (secrets and boot-time-only values) |
-| `docs/knowledge/**` (P4 behavioural spec) | **KEEP** | The most valuable document set in the archive | Moved to `docs/archive/knowledge/` as SPACE's behavioural reference |
-| ~60 milestone / phase / audit reports in `docs/` | **ARCHIVE** | Historical value, no operational value | Moved to `docs/archive/`, never deleted |
-| P4 `db.ts` SQLite engine + write queue | **KEEP (port)** | Proven crash-safe pattern; matches the SPACE DB decision | `core/persistence` repository layer over `better-sqlite3` |
+| STONE / P4 component                                                                          | Decision        | Reason                                                                    | SPACE replacement                                                                                                                                         |
+| --------------------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/shared` (ids, Clock)                                                                    | **KEEP**        | Branded ids and an injectable clock enable deterministic replay           | As-is; upgrade `digest128` (4×FNV-1a) to SHA-256 since digests gate event idempotency                                                                     |
+| `core/contracts/event-envelope`                                                               | **KEEP**        | Correlation, causation and idempotency done right                         | As-is, with a durable Postgres sink                                                                                                                       |
+| `core/contracts/reason-codes` (1,051 LOC)                                                     | **REFACTOR**    | ~20 domains catalogued, only a handful have producers                     | Prune to codes with real emitters                                                                                                                         |
+| `core/contracts/versions`                                                                     | **REMOVE**      | All 24 entries pinned to `1.0.0`; compatibility machinery never invoked   | Single build version string                                                                                                                               |
+| `core/market/*` (TWAP, PTB, conditioning, lifecycle)                                          | **KEEP**        | Correct, pure, tested; exactly SPACE's Opening-TWAP/PTB model             | As-is                                                                                                                                                     |
+| `core/market/feed-provider`                                                                   | **REFACTOR**    | Vendor names with no vendor code behind them                              | Real Chainlink on-chain reader and CLOB WS client, ported from P4 `feeds/`                                                                                |
+| `core/decision/*` (window FSM, pure `decide`, quota)                                          | **KEEP**        | The Frozen Window Engine's skeleton, already pure                         | Add trigger **latching** at window open; drop the unimplemented `SCHEDULED_TICK` mode                                                                     |
+| `core/decision/execution-context` exposure placeholder                                        | **REMOVE**      | Inert duplicate of the real `ExposureLedger`                              | Trade-domain ledger only                                                                                                                                  |
+| `core/trade/*` (risk, exposure, order FSM, coordinator)                                       | **KEEP**        | Fail-fast invariants, idempotent fills, exactly-once settlement           | As-is                                                                                                                                                     |
+| `core/trade/standing-order-engine`                                                            | **KEEP**        | Already the decoupled port of P4's proven SLO                             | Extend with P4's stuck-RESTING and duplicate-order guards                                                                                                 |
+| `core/trade/venue-gateway`                                                                    | **REFACTOR**    | Interface is right, implementation is a recording stub                    | Port P4 `execution/live.ts` (CLOB v2, EIP-712, post-only) and `paper.ts` chaos executor behind the same port                                              |
+| `core/platform/replay` + `recovery`                                                           | **KEEP**        | Pure, digest-verified, PM2-restart dedupe                                 | As-is                                                                                                                                                     |
+| `core/platform/ledger`                                                                        | **KEEP**        | Deterministic reconstruction from BUSINESS events                         | As-is                                                                                                                                                     |
+| `core/platform/audit.ts`                                                                      | **REMOVE**      | Superseded by `audit-record.ts`; two shapes into one table                | Single audit writer                                                                                                                                       |
+| `core/platform/notifications.ts`                                                              | **REFACTOR**    | Framework has no channel and is disconnected from the table actually used | One notification service plus P4's Telegram transport                                                                                                     |
+| `core/platform/authority-*` (handshake, registration, signature, gateway)                     | **REMOVE**      | Exists solely to bridge the companion↔VPS split that SPACE deletes        | In-process module calls                                                                                                                                   |
+| `core/qualification/{gates,live-gates,activation,mainnet,deployment}`                         | **REFACTOR**    | Four abstractions independently recompute the same evidence               | One readiness evaluator                                                                                                                                   |
+| `core/qualification/scenario.ts`                                                              | **KEEP**        | The only place the engine is fully assembled — it is the integration test | Promote to SPACE's integration suite                                                                                                                      |
+| `core/infrastructure/*` (fsm, health, logging, scheduler, metrics, watchdogs, secret-scanner) | **KEEP**        | Solid, generic, portable                                                  | Rename watchdog subsystem `"supabase"` → `"database"`; wire metrics to a real `/metrics` route                                                            |
+| `core/configuration/env-validator` vs `environment`                                           | **REFACTOR**    | Two sources of truth with conflicting key names                           | One Zod schema, one `.env.example`                                                                                                                        |
+| Execution-profile DSL parser                                                                  | **REFACTOR**    | Non-trivial parser hidden inside config loading                           | Structured profiles stored in the local DB, validated by Zod, edited in the Operations Desk                                                               |
+| Supabase (client, RLS, Auth, PostgREST, `config.toml`, 12 migrations)                         | **REMOVE**      | SPACE has no cloud dependency                                             | Local SQLite (WAL) behind typed repositories; port the useful table designs, replace RLS with app-layer authz, replace Supabase Auth with a local session |
+| `src/lib/*.functions.ts` and `*.server.ts` (~4,000 LOC)                                       | **REFACTOR**    | Correct read/write surface, but `any`-cast Supabase calls throughout      | Typed service layer over the local DB                                                                                                                     |
+| STONE UI shell, primitives, tokens, 18 routes                                                 | **KEEP**        | Genuinely good operator UI: dark oklch, mono numerics                     | Keep the design system; merge the 7 telemetry re-slices; split `execution-profiles.tsx`                                                                   |
+| `src/routes/index.tsx`                                                                        | **REMOVE**      | Hardcoded, stale "Session 0" checklist                                    | Login redirect                                                                                                                                            |
+| `api/public/authority/*`                                                                      | **REMOVE**      | Cross-process protocol, obsolete in one process                           | —                                                                                                                                                         |
+| `api/public/health/*`                                                                         | **KEEP**        | Nginx and PM2 probes need exactly these                                   | As-is                                                                                                                                                     |
+| P4 `engine.ts` phase loop                                                                     | **REFACTOR**    | Per your direction, not copied                                            | Frozen Window Engine on STONE's window FSM                                                                                                                |
+| P4 `settlement-*`, `accounting-verifier`, `bankroll`, dust compounding                        | **KEEP (port)** | Money-correctness logic earned through real production bugs               | `core/settlement` and `core/accounting`                                                                                                                   |
+| P4 `reconciler`, `watchdog`, `orphan-cleaner`, `preflight`                                    | **KEEP (port)** | Live-drift detection has no STONE equivalent                              | SPACE infrastructure layer                                                                                                                                |
+| P4 `trade-replay.ts` and `trade-replay-view.tsx`                                              | **KEEP (port)** | Forensic per-trade evidence, complements event replay                     | Second tab on the SPACE replay page                                                                                                                       |
+| P4 `trade-replay.ts` evidence model                                                           | **KEEP (port)** | Already captures the exact fields SPACE's replay must show                | Extended with frozen trigger and buffer                                                                                                                   |
+| P4 `http-agent`, `proxy`, `telegram-console`, dual `/v1` `/v2` dashboards                     | **REMOVE**      | Dead weight and duplication                                               | —                                                                                                                                                         |
+| Both PM2 configs                                                                              | **REFACTOR**    | One is half-fictional, one is Next-specific                               | One `ecosystem.config.cjs`: one app, fork, 1 instance, graceful dispose                                                                                   |
+| P4 nginx conf                                                                                 | **KEEP**        | Correct proxy, SSE, WS and quiet health handling                          | Adapt ports and paths                                                                                                                                     |
+| Five `.env` templates                                                                         | **REMOVE**      | Five templates for one system                                             | One small `.env.example` (secrets and boot-time-only values)                                                                                              |
+| `docs/knowledge/**` (P4 behavioural spec)                                                     | **KEEP**        | The most valuable document set in the archive                             | Moved to `docs/archive/knowledge/` as SPACE's behavioural reference                                                                                       |
+| ~60 milestone / phase / audit reports in `docs/`                                              | **ARCHIVE**     | Historical value, no operational value                                    | Moved to `docs/archive/`, never deleted                                                                                                                   |
+| P4 `db.ts` SQLite engine + write queue                                                        | **KEEP (port)** | Proven crash-safe pattern; matches the SPACE DB decision                  | `core/persistence` repository layer over `better-sqlite3`                                                                                                 |
 
 ## Phase 5 — Technical debt
 
@@ -192,7 +192,7 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, 9 Radix primi
 - **Order fidelity.** `Order.forceState()` hand-encodes replay paths that must stay manually in sync with the FSM table, with nothing enforcing it.
 - **Money.** `ExposureLedger.commit()` recomputes notional from fill price against a reservation seeded from intent size; per-record clamping hides rather than reconciles price-move divergence.
 - **Single point of failure.** One PM2 instance by necessity (in-memory engine state). Restart safety rests entirely on recovery-from-events plus P4's KV auto-resume and orphan sweep — both must be ported, not reinvented.
-- **Deployment.** Losing Supabase means losing Auth *and* RLS simultaneously. Authorization must move into the app layer in the same change or SPACE ships with no access control.
+- **Deployment.** Losing Supabase means losing Auth _and_ RLS simultaneously. Authorization must move into the app layer in the same change or SPACE ships with no access control.
 - **Trading.** The live executor has never run inside STONE. The first SPACE milestone able to place a real order must be gated behind paper mode, P4's preflight and a kill switch.
 - **Recovery.** STONE's `runtimeState` store silently falls back to in-memory while everything around it persists — state loss on every restart.
 
@@ -244,7 +244,7 @@ No page, component, loader, hook, or route may compute a price, a direction, a t
 A first-class mode, completely isolated from the automatic strategy.
 
 - **Mutual exclusion.** Engine mode is one of `STRATEGY` or `MANUAL` (each still subject to `OBSERVE` / `ARMED`). Turning Manual Mode ON **disables automatic strategy execution**: windows stop producing intents, quota is untouched, no frozen triggers fire. Switching modes is a single audited engine command; the engine drains and closes any in-flight strategy session before the switch completes.
-- **Live decision surface.** While in Manual Mode the dashboard shows, from the engine: live TWAP (opening and current settlement), PTB, the per-window buffer, and the **bot prediction** — the direction the strategy *would* take right now, clearly labelled as advisory and never acted upon automatically.
+- **Live decision surface.** While in Manual Mode the dashboard shows, from the engine: live TWAP (opening and current settlement), PTB, the per-window buffer, and the **bot prediction** — the direction the strategy _would_ take right now, clearly labelled as advisory and never acted upon automatically.
 - **Manual actions.** BUY UP / BUY DOWN, with **Limit** or **Market** order type, explicit size, and an optional limit-to-market fallback.
 - **Same execution engine.** Manual orders travel the identical path: risk gate → exposure ledger → standing-order engine → venue gateway → settlement. Manual orders are tagged `origin: MANUAL` in the ledger, order log and replay, but receive no special treatment and no risk exemption.
 - **Non-interference.** Manual sessions never consume strategy quota, never mutate window state, and never persist strategy configuration. Returning to Strategy Mode resumes from a clean window slate at the next market boundary.
@@ -279,13 +279,13 @@ Changes are staged, validated by Zod, diffed against the running configuration, 
 
 A permanent operator panel on every page, rendered from one engine snapshot subscription, showing:
 
-| Group | Items |
-|---|---|
-| Engine | Engine status · Observe / Armed · Manual Mode · Strategy Mode |
-| Engine (cont.) | Current Engine Mode · Current Session (id, start time, uptime) |
-| Markets | Active Market (auto-discovered id/slug) · Market Countdown to settlement · Current Execution Window · BTC 5m · BTC 15m |
-| Money | Wallet balance · Today's PnL · Active trades |
-| Dependencies | Binance status · Polymarket status · TWAP status · Database status · Telegram status |
+| Group          | Items                                                                                                                  |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Engine         | Engine status · Observe / Armed · Manual Mode · Strategy Mode                                                          |
+| Engine (cont.) | Current Engine Mode · Current Session (id, start time, uptime)                                                         |
+| Markets        | Active Market (auto-discovered id/slug) · Market Countdown to settlement · Current Execution Window · BTC 5m · BTC 15m |
+| Money          | Wallet balance · Today's PnL · Active trades                                                                           |
+| Dependencies   | Binance status · Polymarket status · TWAP status · Database status · Telegram status                                   |
 
 Each dependency renders as a health tone (healthy / degraded / unavailable) with last-seen age. It replaces STONE's `StatusBar` and absorbs the seven duplicated telemetry pages into one always-visible surface. This is the operator's primary status panel: every value comes from one engine snapshot subscription, so no two panels can disagree.
 
@@ -328,15 +328,15 @@ Everything is read from stored evidence. Replay never recomputes from live data 
 
 **Every completed window is explainable, including windows that never traded.** A window closes with exactly one terminal outcome code, persisted with its evidence:
 
-| Outcome | Meaning |
-|---|---|
-| `FILLED` | trigger hit, risk passed, order filled, settled |
-| `NO_TRIGGER` | window expired without the live settlement TWAP reaching the frozen trigger |
-| `QUOTA_EXHAUSTED` | trades-per-market budget already consumed by earlier windows |
-| `RISK_REJECTED` | trigger hit, risk engine vetoed — with the failing check named |
-| `LIMIT_TIMEOUT` | limit order not filled before deadline and fallback disabled or also unfilled |
-| `MARKET_DISABLED` | the market was disabled in the Operations Desk |
-| `WINDOW_DISABLED` | this execution window was disabled in the Operations Desk |
+| Outcome           | Meaning                                                                       |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `FILLED`          | trigger hit, risk passed, order filled, settled                               |
+| `NO_TRIGGER`      | window expired without the live settlement TWAP reaching the frozen trigger   |
+| `QUOTA_EXHAUSTED` | trades-per-market budget already consumed by earlier windows                  |
+| `RISK_REJECTED`   | trigger hit, risk engine vetoed — with the failing check named                |
+| `LIMIT_TIMEOUT`   | limit order not filled before deadline and fallback disabled or also unfilled |
+| `MARKET_DISABLED` | the market was disabled in the Operations Desk                                |
+| `WINDOW_DISABLED` | this execution window was disabled in the Operations Desk                     |
 
 Skipped windows still record Opening TWAP, PTB, direction, buffer and frozen trigger, so a no-trade decision is as auditable as a trade.
 
@@ -348,7 +348,7 @@ Objective: **clone repository → restore backup → run SPACE.**
 
 - **Full backup** — one command producing a single timestamped archive containing: the hot SQLite snapshot (`VACUUM INTO`, no downtime, no torn WAL), the exported configuration (windows, profiles, risk limits, market toggles), and a manifest with schema version, app version and checksum.
 - **Restore** — one command that verifies the manifest and checksum, refuses a schema-version mismatch it cannot migrate, restores the database file and re-imports configuration.
-- **Database portability** — a single file; copying it *is* the migration.
+- **Database portability** — a single file; copying it _is_ the migration.
 - **Configuration portability** — configuration is exportable as JSON independently of the database, so settings can move between environments without moving trade history.
 - **VPS migration** — clone the repository, install, drop in `.env`, restore the archive, `pm2 start`. The engine resumes from persisted state using the ported auto-resume and orphan-sweep logic.
 - Scheduled local backups with retention, plus a documented off-box copy step. Backups never contain secrets.
@@ -357,17 +357,17 @@ Objective: **clone repository → restore backup → run SPACE.**
 
 Telegram is a **control surface**, not just an alert channel. It is authenticated by chat id allow-list and routes through the same command bus and the same audit trail as the dashboard.
 
-| Command | Effect |
-|---|---|
-| `/status` | engine mode, market, active window, open orders |
-| `/pause` | pause automatic execution (does not kill the process) |
-| `/resume` | resume automatic execution |
-| `/pnl` | today's PnL and win rate |
-| `/balance` | wallet balance and bankroll |
-| `/positions` | open positions and resting orders |
-| `/logs` | recent audit and error lines |
-| `/health` | dependency health, same data as Mission Control |
-| `/mode` | show mode; with an argument, switch Observe/Armed/Manual/Strategy |
+| Command      | Effect                                                            |
+| ------------ | ----------------------------------------------------------------- |
+| `/status`    | engine mode, market, active window, open orders                   |
+| `/pause`     | pause automatic execution (does not kill the process)             |
+| `/resume`    | resume automatic execution                                        |
+| `/pnl`       | today's PnL and win rate                                          |
+| `/balance`   | wallet balance and bankroll                                       |
+| `/positions` | open positions and resting orders                                 |
+| `/logs`      | recent audit and error lines                                      |
+| `/health`    | dependency health, same data as Mission Control                   |
+| `/mode`      | show mode; with an argument, switch Observe/Armed/Manual/Strategy |
 
 Write commands are confirmed, rate-limited and audited. Alerts (risk breach, kill switch, reconciler drift, feed staleness, settlement divergence) continue to push to the same chat.
 
@@ -439,9 +439,9 @@ Enforcement: the window record's frozen fields are write-once at the repository 
 
 ## N. Settlement TWAP
 
-| Market | Settlement TWAP |
-|---|---|
-| BTC 5 minute | final 30-second TWAP |
+| Market        | Settlement TWAP      |
+| ------------- | -------------------- |
+| BTC 5 minute  | final 30-second TWAP |
 | BTC 15 minute | final 60-second TWAP |
 
 The engine continuously evaluates the live settlement TWAP against each open window's frozen trigger until that window expires. Opening TWAP (the capture that produces the trigger) and Settlement TWAP (the live comparand) are distinct, separately named values and are never conflated in code, storage, UI or replay. Feed staleness invalidates evaluation: a stale settlement TWAP blocks triggering rather than firing on old data.
@@ -454,13 +454,13 @@ One resolver owns discovery and publishes a single `activeMarket` in the engine 
 
 ## P. V1 and V2 — one implementation, two environments
 
-| | V1 | V2 |
-|---|---|---|
+|             | V1      | V2      |
+| ----------- | ------- | ------- |
 | Environment | Testnet | Mainnet |
-| UI | same | same |
-| Engine | same | same |
-| Features | same | same |
-| Strategy | same | same |
+| UI          | same    | same    |
+| Engine      | same    | same    |
+| Features    | same    | same    |
+| Strategy    | same    | same    |
 | Credentials | testnet | mainnet |
 
 **Only the environment changes.** There is no V1 code path and no V2 code path, no `if (mainnet)` branch, no parallel module, no separate build. Promotion from V1 to V2 is a credential and endpoint change in `.env` plus a restart. Any pull request that introduces an environment-conditional behavioural branch is rejected by review.
@@ -496,10 +496,10 @@ Quota is evaluated by the engine alone, on its single serialised loop, so two wi
 
 ## S. Order execution modes
 
-| Mode | Behaviour |
-|---|---|
-| **Limit Only** | Submit a limit order only. Unfilled at the deadline → cancel → `LIMIT_TIMEOUT`. |
-| **Market Only** | Submit a market order only. |
+| Mode               | Behaviour                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **Limit Only**     | Submit a limit order only. Unfilled at the deadline → cancel → `LIMIT_TIMEOUT`.                                 |
+| **Market Only**    | Submit a market order only.                                                                                     |
 | **Limit → Market** | Submit limit first; if the configured timeout expires unfilled, cancel and automatically submit a market order. |
 
 **Limit is the default mode.** The fallback timeout is configurable per the Operations Desk. Cancel-then-submit is sequenced so a partially filled limit reduces the fallback market size to the remainder — the engine can never end up long twice for one trigger. Mode and timeout are captured in the window record and shown in Replay.
@@ -516,21 +516,21 @@ Boot → Validate Environment → Open Database → Load Configuration → Marke
      → Initialize Telegram → Replay Recovery → Health Verification → OBSERVE → ARMED
 ```
 
-| Stage | Responsibility | Failure behaviour |
-|---|---|---|
-| Validate Environment | Zod-parse `.env`; assert every required secret is present and well-formed | hard exit, non-zero — PM2 must not loop a misconfigured process |
-| Open Database | open SQLite at `DB_PATH`, apply WAL/pragmas, run pending migrations, verify schema version | hard exit |
-| Load Configuration | read the active configuration version into memory; validate windows, buffers, quotas | hard exit if invalid; no implicit defaults |
-| Market Discovery | resolve the official active BTC market | stay in OBSERVE, alert, retry |
-| Connect Binance | open the price feed, confirm first tick | stay in OBSERVE, retry with backoff |
-| Initialize TWAP | warm the TWAP buffers to full depth before any value is published | TWAP reports `WARMING`; no window may open |
-| Connect Polymarket | authenticate CLOB, load market/token metadata and PTB source | stay in OBSERVE, retry |
-| Load Wallet | derive address, read balances and allowances | stay in OBSERVE |
-| Initialize Telegram | bind bot, verify chat id, announce boot | non-fatal; degraded |
-| Replay Recovery | reconcile persisted state with the venue (section W) | must complete before ARMED |
-| Health Verification | assert every dependency healthy and TWAP warm | blocks ARMED |
-| OBSERVE | engine runs, evaluates, records — **places no orders** | steady state |
-| ARMED | execution enabled, by explicit operator action or configured auto-arm | steady state |
+| Stage                | Responsibility                                                                             | Failure behaviour                                               |
+| -------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Validate Environment | Zod-parse `.env`; assert every required secret is present and well-formed                  | hard exit, non-zero — PM2 must not loop a misconfigured process |
+| Open Database        | open SQLite at `DB_PATH`, apply WAL/pragmas, run pending migrations, verify schema version | hard exit                                                       |
+| Load Configuration   | read the active configuration version into memory; validate windows, buffers, quotas       | hard exit if invalid; no implicit defaults                      |
+| Market Discovery     | resolve the official active BTC market                                                     | stay in OBSERVE, alert, retry                                   |
+| Connect Binance      | open the price feed, confirm first tick                                                    | stay in OBSERVE, retry with backoff                             |
+| Initialize TWAP      | warm the TWAP buffers to full depth before any value is published                          | TWAP reports `WARMING`; no window may open                      |
+| Connect Polymarket   | authenticate CLOB, load market/token metadata and PTB source                               | stay in OBSERVE, retry                                          |
+| Load Wallet          | derive address, read balances and allowances                                               | stay in OBSERVE                                                 |
+| Initialize Telegram  | bind bot, verify chat id, announce boot                                                    | non-fatal; degraded                                             |
+| Replay Recovery      | reconcile persisted state with the venue (section W)                                       | must complete before ARMED                                      |
+| Health Verification  | assert every dependency healthy and TWAP warm                                              | blocks ARMED                                                    |
+| OBSERVE              | engine runs, evaluates, records — **places no orders**                                     | steady state                                                    |
+| ARMED                | execution enabled, by explicit operator action or configured auto-arm                      | steady state                                                    |
 
 SPACE never boots straight into ARMED after an unclean shutdown; the operator arms it, or auto-arm fires only after Health Verification passes clean.
 
@@ -587,15 +587,15 @@ This is what keeps the SQLite decision reversible: a future PostgreSQL move is a
 
 > **If a feature cannot be tested, it is not complete.**
 
-| Layer | Scope |
-|---|---|
-| Unit | TWAP maths, buffer application, direction resolution, trigger construction, quota accounting, risk predicates |
-| Integration | repositories against a real SQLite file, migrations, configuration versioning, command bus |
-| Engine | full window lifecycle over a simulated clock and synthetic feed: trigger, no-trigger, quota exhaustion, risk rejection, limit timeout, disabled window/market |
-| Replay | determinism — replaying an event log reproduces identical projections, digests and frozen triggers |
-| Recovery | kill the process at each hazardous point; assert idempotent restore and zero duplicate orders |
-| End-to-end trading | testnet: discovery → window → trigger → order → fill → settlement → statistics → replay |
-| VPS deployment validation | clean VPS: clone → install → `.env` → restore backup → `pm2 start` → health green |
+| Layer                     | Scope                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit                      | TWAP maths, buffer application, direction resolution, trigger construction, quota accounting, risk predicates                                                 |
+| Integration               | repositories against a real SQLite file, migrations, configuration versioning, command bus                                                                    |
+| Engine                    | full window lifecycle over a simulated clock and synthetic feed: trigger, no-trigger, quota exhaustion, risk rejection, limit timeout, disabled window/market |
+| Replay                    | determinism — replaying an event log reproduces identical projections, digests and frozen triggers                                                            |
+| Recovery                  | kill the process at each hazardous point; assert idempotent restore and zero duplicate orders                                                                 |
+| End-to-end trading        | testnet: discovery → window → trigger → order → fill → settlement → statistics → replay                                                                       |
+| VPS deployment validation | clean VPS: clone → install → `.env` → restore backup → `pm2 start` → health green                                                                             |
 
 Determinism is a first-class test target: same inputs, same decisions, every run. The architecture tests (layering, no-SQL-outside-repositories, no UI-owns-logic) run in CI as ordinary tests.
 

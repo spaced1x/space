@@ -6,14 +6,14 @@ Historical engineering documentation from STONE and the P4 reference bot.
 
 Expected contents once the STONE repository is merged into SPACE:
 
-| Path | Contents |
-|---|---|
-| `charter/` | `ARC_PROJECT_CHARTER.md` and the original constraints |
-| `adr/` | all architecture decision records |
-| `milestones/` | the milestone, phase and session reports |
-| `audits/` | audit and qualification reports |
-| `knowledge/` | the P4 behavioural specification — the most valuable document set in the archive |
-| `p4/` | the P4 reference source, read-only, excluded from build, lint and tests |
+| Path          | Contents                                                                         |
+| ------------- | -------------------------------------------------------------------------------- |
+| `charter/`    | `ARC_PROJECT_CHARTER.md` and the original constraints                            |
+| `adr/`        | all architecture decision records                                                |
+| `milestones/` | the milestone, phase and session reports                                         |
+| `audits/`     | audit and qualification reports                                                  |
+| `knowledge/`  | the P4 behavioural specification — the most valuable document set in the archive |
+| `p4/`         | the P4 reference source, read-only, excluded from build, lint and tests          |
 
 The authoritative documents live in `docs/`:
 

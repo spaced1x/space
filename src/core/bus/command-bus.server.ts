@@ -18,7 +18,10 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return result;
 }
 
-export type CommandHandler = (command: Command, context: CommandContext) => Verdict | Promise<Verdict>;
+export type CommandHandler = (
+  command: Command,
+  context: CommandContext,
+) => Verdict | Promise<Verdict>;
 
 const handlers = new Map<Command["kind"], CommandHandler>();
 
@@ -38,7 +41,8 @@ function verdict(
 
 function defaultHandler(command: Command, context: CommandContext): Verdict {
   const state = getRuntimeState();
-  const reject = (reason: string) => verdict("REJECTED", reason, command.kind, context.correlationId);
+  const reject = (reason: string) =>
+    verdict("REJECTED", reason, command.kind, context.correlationId);
   const accept = (reason: string, patch: Partial<RuntimeState>) => {
     updateRuntimeState(patch, reason, context.correlationId);
     return verdict("ACCEPTED", reason, command.kind, context.correlationId);

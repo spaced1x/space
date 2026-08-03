@@ -1,13 +1,7 @@
 // DISABLED is deliberately distinct from NOT_INITIALIZED: a disabled module is
 // implemented and healthy but switched off by the operator, while
 // NOT_INITIALIZED means the module does not exist yet in this milestone.
-export const HEALTH_STATES = [
-  "OK",
-  "DEGRADED",
-  "FAILED",
-  "DISABLED",
-  "NOT_INITIALIZED",
-] as const;
+export const HEALTH_STATES = ["OK", "DEGRADED", "FAILED", "DISABLED", "NOT_INITIALIZED"] as const;
 export type HealthState = (typeof HEALTH_STATES)[number];
 
 export const HEALTH_COMPONENTS = [

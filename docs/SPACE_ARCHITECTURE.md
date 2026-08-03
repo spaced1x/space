@@ -1,6 +1,6 @@
 # SPACE — Architecture
 
-Companion to `SPACE_SPECIFICATION.md`. The specification defines *what* SPACE does; this document defines *how it is structured*. Where the two disagree, the specification wins.
+Companion to `SPACE_SPECIFICATION.md`. The specification defines _what_ SPACE does; this document defines _how it is structured_. Where the two disagree, the specification wins.
 
 ---
 
@@ -33,17 +33,17 @@ There is no second service, no queue broker, no cache server, no external backen
 shared → contracts → configuration → infrastructure → market → decision → trade → platform → app
 ```
 
-| Layer | Owns |
-|---|---|
-| `shared` | branded ids, `Clock`, deep-freeze, stable stringify, hashing |
-| `contracts` | event envelope, reason codes, typed command and snapshot shapes |
-| `configuration` | one Zod schema for `.env`, one schema for database-held configuration |
-| `infrastructure` | FSM helper, health registry, structured logging, scheduler, metrics, watchdogs, secret scanner |
-| `market` | discovery, feeds, Opening TWAP, Settlement TWAP, PTB, conditioning, lifecycle |
-| `decision` | window FSM, frozen trigger creation, pure `decide()`, quota |
-| `trade` | risk engine, exposure ledger, order FSM, standing-order engine, venue gateway, settlement, accounting |
-| `platform` | event log, ledger, replay, recovery, audit, notifications, backup |
-| `app` | HTTP routes, dashboard, Telegram adapter, command bus, composition root |
+| Layer            | Owns                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `shared`         | branded ids, `Clock`, deep-freeze, stable stringify, hashing                                          |
+| `contracts`      | event envelope, reason codes, typed command and snapshot shapes                                       |
+| `configuration`  | one Zod schema for `.env`, one schema for database-held configuration                                 |
+| `infrastructure` | FSM helper, health registry, structured logging, scheduler, metrics, watchdogs, secret scanner        |
+| `market`         | discovery, feeds, Opening TWAP, Settlement TWAP, PTB, conditioning, lifecycle                         |
+| `decision`       | window FSM, frozen trigger creation, pure `decide()`, quota                                           |
+| `trade`          | risk engine, exposure ledger, order FSM, standing-order engine, venue gateway, settlement, accounting |
+| `platform`       | event log, ledger, replay, recovery, audit, notifications, backup                                     |
+| `app`            | HTTP routes, dashboard, Telegram adapter, command bus, composition root                               |
 
 ### 2.1 Implemented foundation (milestone 1)
 
@@ -66,13 +66,13 @@ Trading modules (`market`, `decision`, `trade`, `platform`) are not implemented 
 
 **Health states.** Five states, ranked for the overall roll-up:
 
-| State | Meaning | Affects overall |
-|---|---|---|
-| `OK` | implemented, enabled, healthy | yes |
-| `DEGRADED` | implemented and reachable, but limited | yes |
-| `FAILED` | implemented and broken | yes |
-| `DISABLED` | implemented and healthy, switched **off** by the operator | no |
-| `NOT_INITIALIZED` | module does not exist in this milestone | no |
+| State             | Meaning                                                   | Affects overall |
+| ----------------- | --------------------------------------------------------- | --------------- |
+| `OK`              | implemented, enabled, healthy                             | yes             |
+| `DEGRADED`        | implemented and reachable, but limited                    | yes             |
+| `FAILED`          | implemented and broken                                    | yes             |
+| `DISABLED`        | implemented and healthy, switched **off** by the operator | no              |
+| `NOT_INITIALIZED` | module does not exist in this milestone                   | no              |
 
 `DISABLED` is never a defect. `window_5m` and `window_15m` are health components that follow the runtime window switches: enabling reports `OK`, disabling reports `DISABLED` — never `NOT_INITIALIZED`, which is reserved for unbuilt modules.
 
@@ -132,14 +132,21 @@ One entry point for every state-changing operator action, from the dashboard or 
 
 ```ts
 type Command =
-  | { kind: 'ENGINE_ARM' }        | { kind: 'ENGINE_OBSERVE' }
-  | { kind: 'MODE_SET'; mode: 'STRATEGY' | 'MANUAL' }
-  | { kind: 'CONFIG_ACTIVATE'; versionId: string }
-  | { kind: 'MANUAL_ORDER'; direction: 'UP' | 'DOWN'; orderType: 'LIMIT' | 'MARKET';
-      size: number; limitPrice?: number; fallbackMs?: number }
-  | { kind: 'ORDER_CANCEL'; orderId: string }
-  | { kind: 'KILL_SWITCH' }
-  | { kind: 'BACKUP_RUN' }
+  | { kind: "ENGINE_ARM" }
+  | { kind: "ENGINE_OBSERVE" }
+  | { kind: "MODE_SET"; mode: "STRATEGY" | "MANUAL" }
+  | { kind: "CONFIG_ACTIVATE"; versionId: string }
+  | {
+      kind: "MANUAL_ORDER";
+      direction: "UP" | "DOWN";
+      orderType: "LIMIT" | "MARKET";
+      size: number;
+      limitPrice?: number;
+      fallbackMs?: number;
+    }
+  | { kind: "ORDER_CANCEL"; orderId: string }
+  | { kind: "KILL_SWITCH" }
+  | { kind: "BACKUP_RUN" };
 ```
 
 Every command is: Zod-validated at the edge → authenticated (session or allow-listed chat id) → enqueued onto the engine loop → executed → answered with an explicit `Verdict` (`ACCEPTED` / `REJECTED` + reason code) → written to the audit log with actor, source and correlation id. Commands are never executed off-loop, and there is no second write path.
@@ -152,20 +159,20 @@ Reads flow the other way as one `EngineSnapshot`, pushed over SSE and also avail
 
 SQLite (WAL) via `better-sqlite3`. Tables, ported from the best of STONE's Postgres schema and P4's SQLite schema:
 
-| Table | Purpose | Mutability |
-|---|---|---|
-| `markets` | discovered official markets, lifecycle state | mutable status |
-| `windows` | one row per execution window, with the frozen fields | frozen fields write-once |
-| `orders` | order records and idempotency keys | mutable state, append-only log below |
-| `order_events` | full order lifecycle chain | append-only |
-| `fills` | venue fill evidence | append-only |
-| `platform_events` | event-sourced log for replay | append-only |
-| `ledger_records` | money movements | append-only |
-| `settlements` | exactly-once settlement results | insert-once |
-| `configuration_versions` | immutable configuration snapshots | insert-only |
-| `audit_log` | every command, actor, verdict | append-only |
-| `sessions_runtime` | per-process session summary | append + close |
-| `kv` | engine checkpoint, resume flags | mutable |
+| Table                    | Purpose                                              | Mutability                           |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------ |
+| `markets`                | discovered official markets, lifecycle state         | mutable status                       |
+| `windows`                | one row per execution window, with the frozen fields | frozen fields write-once             |
+| `orders`                 | order records and idempotency keys                   | mutable state, append-only log below |
+| `order_events`           | full order lifecycle chain                           | append-only                          |
+| `fills`                  | venue fill evidence                                  | append-only                          |
+| `platform_events`        | event-sourced log for replay                         | append-only                          |
+| `ledger_records`         | money movements                                      | append-only                          |
+| `settlements`            | exactly-once settlement results                      | insert-once                          |
+| `configuration_versions` | immutable configuration snapshots                    | insert-only                          |
+| `audit_log`              | every command, actor, verdict                        | append-only                          |
+| `sessions_runtime`       | per-process session summary                          | append + close                       |
+| `kv`                     | engine checkpoint, resume flags                      | mutable                              |
 
 Append-only tables are enforced by triggers that reject UPDATE and DELETE. Idempotency uses unique constraints and treats a unique violation as the replay signal — the same pattern STONE used against Postgres `23505`.
 
@@ -175,12 +182,12 @@ All access is through typed repositories (specification §18). The async write q
 
 ## 6. External adapters
 
-| Adapter | Role | Failure posture |
-|---|---|---|
-| Binance feed | price samples for both TWAPs | reconnect with backoff; staleness blocks triggering |
-| Polymarket CLOB v2 | market discovery, metadata, PTB, order placement, fills | reconnect; discovery failure degrades to OBSERVE |
-| Wallet / RPC | balances, allowances, EIP-712 signing | failure blocks ARMED |
-| Telegram | operator interface and alerts | non-fatal; degraded badge |
+| Adapter            | Role                                                    | Failure posture                                     |
+| ------------------ | ------------------------------------------------------- | --------------------------------------------------- |
+| Binance feed       | price samples for both TWAPs                            | reconnect with backoff; staleness blocks triggering |
+| Polymarket CLOB v2 | market discovery, metadata, PTB, order placement, fills | reconnect; discovery failure degrades to OBSERVE    |
+| Wallet / RPC       | balances, allowances, EIP-712 signing                   | failure blocks ARMED                                |
+| Telegram           | operator interface and alerts                           | non-fatal; degraded badge                           |
 
 Each adapter sits behind a port defined in its owning layer. The venue port has exactly two implementations: the live CLOB gateway and a paper/chaos gateway. Both satisfy the same contract and the same tests; the engine cannot tell them apart.
 

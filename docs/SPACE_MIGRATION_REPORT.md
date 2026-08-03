@@ -8,12 +8,12 @@ Analysis of the STONE repository and the decisions carried into SPACE. Companion
 
 The STONE archive is **not one system, it is two**.
 
-- **STONE (`src/`)** — "ARC Companion", a TanStack Start / React 19 / Supabase **control plane**, ~200 files. Its charter (`ARC_PROJECT_CHARTER.md`, ADR-0001) *forbids* trading logic from ever existing in it.
+- **STONE (`src/`)** — "ARC Companion", a TanStack Start / React 19 / Supabase **control plane**, ~200 files. Its charter (`ARC_PROJECT_CHARTER.md`, ADR-0001) _forbids_ trading logic from ever existing in it.
 - **P4 / "reze" (`docs/reference/p4/`)** — the **actual trading bot**: Next.js 14 + PM2 + `better-sqlite3` + Polymarket CLOB v2, ~28,000 LOC, declared read-only reference and excluded from build, lint and tests.
 
 Consequence: STONE contains a large, high-quality, fully-tested **domain library** for trading (`core/market`, `core/decision`, `core/trade`) that is **never wired into a running process**. The only file that assembles all three domains is `core/qualification/scenario.ts`, a deterministic harness on a `FixedClock`. There is no live tick loop, no real venue client (`VenueGateway` has one implementation: `RecordingVenueGateway`) and no real feed decoder.
 
-Meanwhile P4 *does* trade, with EIP-712 signing, post-only maker orders, chaos-tested paper mode, settlement, dust compounding and forensic replay — but is architecturally frozen out of the repository.
+Meanwhile P4 _does_ trade, with EIP-712 signing, post-only maker orders, chaos-tested paper mode, settlement, dust compounding and forensic replay — but is architecturally frozen out of the repository.
 
 **SPACE's value is joining the two halves:** STONE's domain model plus P4's proven execution reality, in one Node process.
 
@@ -21,21 +21,21 @@ Meanwhile P4 *does* trade, with EIP-712 signing, post-only maker orders, chaos-t
 
 ## 1. Repository overview
 
-| | STONE (`src/`) | P4 (`docs/reference/p4/`) |
-|---|---|---|
-| Framework | TanStack Start v1, React 19, Vite 8 | Next.js 14 App Router |
-| Runtime | Cloudflare Workers (serverless) | Long-lived Node, PM2 fork, 1 instance |
-| Database | Supabase Postgres, 20 tables, RLS | SQLite WAL: `trades`, `kv`, `order_log`, `audit_log` |
-| Auth | Supabase Auth + `user_roles` + RLS | Dashboard user/pass + optional bearer token |
-| Trading | none (charter-forbidden) | full engine, SLO, live + paper executors |
-| Tests | 31 files, 512 tests, core only | 39 files, chaos/integration heavy |
-| Deploy | Lovable / Workers | PM2 + Nginx reverse proxy |
+|           | STONE (`src/`)                      | P4 (`docs/reference/p4/`)                            |
+| --------- | ----------------------------------- | ---------------------------------------------------- |
+| Framework | TanStack Start v1, React 19, Vite 8 | Next.js 14 App Router                                |
+| Runtime   | Cloudflare Workers (serverless)     | Long-lived Node, PM2 fork, 1 instance                |
+| Database  | Supabase Postgres, 20 tables, RLS   | SQLite WAL: `trades`, `kv`, `order_log`, `audit_log` |
+| Auth      | Supabase Auth + `user_roles` + RLS  | Dashboard user/pass + optional bearer token          |
+| Trading   | none (charter-forbidden)            | full engine, SLO, live + paper executors             |
+| Tests     | 31 files, 512 tests, core only      | 39 files, chaos/integration heavy                    |
+| Deploy    | Lovable / Workers                   | PM2 + Nginx reverse proxy                            |
 
 ## 2. Runtime architecture (STONE)
 
 `core/runtime.ts` (104 LOC) is the composition root and wires **only** infrastructure: config, logger, metrics registry, health registry, scheduler, event-envelope factory. It imports nothing from `market/`, `decision/` or `trade/`. Two health checks are registered. The only server-side runtime surface is `/api/public/health/*` and `/api/public/authority/*`.
 
-Layering is enforced *executably* by `tests/unit/architecture.test.ts`. This is one of STONE's best assets and survives into SPACE.
+Layering is enforced _executably_ by `tests/unit/architecture.test.ts`. This is one of STONE's best assets and survives into SPACE.
 
 ## 3. Trading engine architecture
 
@@ -45,7 +45,7 @@ Layering is enforced *executably* by `tests/unit/architecture.test.ts`. This is 
 - `decision/` — `decide()` is a pure function of (market state, window instance, config) → `BUY_UP | BUY_DOWN | NO_SIGNAL`, using a per-window `ABSOLUTE`/`PERCENT` buffer against PTB. `ExecutionWindowManager` drives a six-state window FSM, one intent per window forever, plus a `TradeQuota`. Window priority derives from offset.
 - `trade/` — risk engine (seven ordered checks, all always evaluated for a full audit trace), `ExposureLedger` with a fail-fast invariant, an eight-state order FSM, and `standing-order-engine.ts` (523 LOC, harvested from P4): passive maker resting, bounded cancel/replace, retry ladder, partial-fill accumulation, IOC fallback on deadline, exactly-once settlement.
 
-This is roughly **85% of the Frozen Window Engine**. Missing: latching the trigger *value* at window open (today `decide()` recomputes against live effective TWAP on every evaluation), a real venue, a real feed, and a process to run in.
+This is roughly **85% of the Frozen Window Engine**. Missing: latching the trigger _value_ at window open (today `decide()` recomputes against live effective TWAP on every evaluation), a real venue, a real feed, and a process to run in.
 
 **P4 engine:** a 1,697-LOC tick loop with `PRIORITY_1` / `PRIORITY_2` / `STOPPING` phases, slot rollover, `settleSlot()`, and a 2,859-LOC independent Standing Limit Order manager on its own clock. SPACE replaces the phase loop with the Frozen Window lifecycle and keeps the money-correctness code.
 
@@ -69,15 +69,15 @@ Two independent systems exist, and SPACE keeps both:
 
 SPACE is not locked to PostgreSQL just because STONE used Supabase.
 
-| Objective | SQLite (WAL) | PostgreSQL (local) |
-|---|---|---|
-| One local database | a single file | a server, a daemon, a role, a socket |
-| No cloud dependency | yes | yes |
-| VPS deployment | nothing to install; the app *is* the database | install, tune, secure, upgrade across majors |
-| Backup | `VACUUM INTO` — one atomic file, hot, no downtime | `pg_dump`, restore ordering, ownership fixes |
-| Migration to another VPS | copy one file | dump, match major version, restore, re-grant |
-| Reliability | WAL + `synchronous=NORMAL` is crash-safe; fewer moving parts | robust, but a second supervised process that can fail |
-| Concurrency | one writer, unlimited readers | full MVCC, many writers |
+| Objective                | SQLite (WAL)                                                 | PostgreSQL (local)                                    |
+| ------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- |
+| One local database       | a single file                                                | a server, a daemon, a role, a socket                  |
+| No cloud dependency      | yes                                                          | yes                                                   |
+| VPS deployment           | nothing to install; the app _is_ the database                | install, tune, secure, upgrade across majors          |
+| Backup                   | `VACUUM INTO` — one atomic file, hot, no downtime            | `pg_dump`, restore ordering, ownership fixes          |
+| Migration to another VPS | copy one file                                                | dump, match major version, restore, re-grant          |
+| Reliability              | WAL + `synchronous=NORMAL` is crash-safe; fewer moving parts | robust, but a second supervised process that can fail |
+| Concurrency              | one writer, unlimited readers                                | full MVCC, many writers                               |
 
 SPACE is a single process with exactly one writer — the engine. Trade volume is bounded by the market clock. SQLite's only real limitation does not exist in this design; PostgreSQL would add an entire subsystem to solve a problem SPACE does not have. P4 already proved the pattern in production.
 
@@ -107,46 +107,46 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, nine Radix pr
 
 ## Classification and migration matrix
 
-| STONE / P4 component | Decision | Reason | SPACE replacement |
-|---|---|---|---|
-| `core/shared` (ids, Clock) | **KEEP** | Branded ids and an injectable clock enable deterministic replay | As-is; upgrade `digest128` (4×FNV-1a) to SHA-256 since digests gate event idempotency |
-| `core/contracts/event-envelope` | **KEEP** | Correlation, causation and idempotency done right | As-is, with a durable local sink |
-| `core/contracts/reason-codes` (1,051 LOC) | **REFACTOR** | ~20 domains catalogued, few have producers | Prune to codes with real emitters; add the window-outcome codes |
-| `core/contracts/versions` | **REMOVE** | All 24 entries pinned to `1.0.0`; machinery never invoked | Single build version string |
-| `core/market/*` (TWAP, PTB, conditioning, lifecycle) | **KEEP** | Correct, pure, tested; exactly SPACE's Opening-TWAP/PTB model | As-is, plus an explicit Settlement TWAP (30s / 60s) |
-| `core/market/feed-provider` | **REFACTOR** | Vendor names with no vendor code behind them | Real Binance client and CLOB WS client, ported from P4 `feeds/` |
-| `core/decision/*` (window FSM, pure `decide`, quota) | **KEEP** | The Frozen Window Engine's skeleton, already pure | Add **trigger latching** at window open; drop the unimplemented `SCHEDULED_TICK` mode |
-| `core/decision/execution-context` exposure placeholder | **REMOVE** | Inert duplicate of the real `ExposureLedger` | Trade-domain ledger only |
-| `core/trade/*` (risk, exposure, order FSM, coordinator) | **KEEP** | Fail-fast invariants, idempotent fills, exactly-once settlement | As-is |
-| `core/trade/standing-order-engine` | **KEEP** | Already the decoupled port of P4's proven SLO | Extend with P4's stuck-RESTING and duplicate-order guards |
-| `core/trade/venue-gateway` | **REFACTOR** | Interface is right, implementation is a recording stub | Port P4 `execution/live.ts` (CLOB v2, EIP-712, post-only) and `paper.ts` chaos executor behind the same port |
-| `core/platform/replay` + `recovery` | **KEEP** | Pure, digest-verified, PM2-restart dedupe | As-is |
-| `core/platform/ledger` | **KEEP** | Deterministic reconstruction from BUSINESS events | As-is |
-| `core/platform/audit.ts` | **REMOVE** | Superseded by `audit-record.ts`; two shapes into one table | Single audit writer |
-| `core/platform/notifications.ts` | **REFACTOR** | Framework has no channel and is disconnected from the table used | One notification service plus P4's Telegram transport |
-| `core/platform/authority-*` | **REMOVE** | Exists solely to bridge the companion↔VPS split SPACE deletes | In-process module calls |
-| `core/qualification/{gates,live-gates,activation,mainnet,deployment}` | **REFACTOR** | Four abstractions independently recompute the same evidence | One readiness evaluator |
-| `core/qualification/scenario.ts` | **KEEP** | The only place the engine is fully assembled | Promote to SPACE's integration suite |
-| `core/infrastructure/*` | **KEEP** | Solid, generic, portable | Rename watchdog subsystem `"supabase"` → `"database"`; wire metrics to a real `/metrics` route |
-| `env-validator` vs `environment` | **REFACTOR** | Two sources of truth with conflicting key names | One Zod schema, one `.env.example` |
-| Execution-profile DSL parser | **REFACTOR** | Non-trivial parser hidden inside config loading | Structured profiles in the local DB, Zod-validated, edited in the Operations Desk |
-| Supabase (client, RLS, Auth, PostgREST, 12 migrations) | **REMOVE** | SPACE has no cloud dependency | Local SQLite (WAL) behind repositories; app-layer authz; local session auth |
-| `src/lib/*.functions.ts` / `*.server.ts` (~4,000 LOC) | **REFACTOR** | Correct surface, but `any`-cast Supabase calls throughout | Typed service layer over the local DB |
-| STONE UI shell, primitives, tokens, 18 routes | **KEEP** | Genuinely good operator UI | Keep the design system; merge the seven telemetry re-slices into Mission Control; split `execution-profiles.tsx` |
-| `src/routes/index.tsx` | **REMOVE** | Hardcoded, stale "Session 0" checklist | Login redirect |
-| `api/public/authority/*` | **REMOVE** | Cross-process protocol, obsolete in one process | — |
-| `api/public/health/*` | **KEEP** | Nginx and PM2 probes need exactly these | As-is |
-| P4 `engine.ts` phase loop | **REFACTOR** | Superseded by the Frozen Window lifecycle | Frozen Window Engine on STONE's window FSM |
-| P4 `settlement-*`, `accounting-verifier`, `bankroll`, dust compounding | **KEEP (port)** | Money-correctness logic earned through real production bugs | `core/settlement`, `core/accounting` |
-| P4 `reconciler`, `watchdog`, `orphan-cleaner`, `preflight` | **KEEP (port)** | Live-drift detection has no STONE equivalent | SPACE infrastructure layer |
-| P4 `trade-replay.ts` evidence model and view | **KEEP (port)** | Already captures the fields SPACE's replay must show | Extended with frozen trigger, buffer and window outcome |
-| P4 `http-agent`, `proxy`, `telegram-console`, dual `/v1` `/v2` dashboards | **REMOVE** | Dead weight and duplication | — |
-| Both PM2 configs | **REFACTOR** | One is half-fictional, one is Next-specific | One `ecosystem.config.cjs`: one app, fork, 1 instance, graceful dispose |
-| P4 nginx conf | **KEEP** | Correct proxy, SSE, WS and quiet health handling | Adapt ports and paths |
-| Five `.env` templates | **REMOVE** | Five templates for one system | One small `.env.example` |
-| `docs/knowledge/**` (P4 behavioural spec) | **KEEP** | The most valuable document set in the archive | `docs/archive/knowledge/`, SPACE's behavioural reference |
-| ~60 milestone / phase / audit reports | **ARCHIVE** | Historical value, no operational value | `docs/archive/`, never deleted |
-| P4 `db.ts` SQLite engine + write queue | **KEEP (port)** | Proven crash-safe pattern; matches the DB decision | Repository layer over `better-sqlite3` |
+| STONE / P4 component                                                      | Decision        | Reason                                                           | SPACE replacement                                                                                                |
+| ------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `core/shared` (ids, Clock)                                                | **KEEP**        | Branded ids and an injectable clock enable deterministic replay  | As-is; upgrade `digest128` (4×FNV-1a) to SHA-256 since digests gate event idempotency                            |
+| `core/contracts/event-envelope`                                           | **KEEP**        | Correlation, causation and idempotency done right                | As-is, with a durable local sink                                                                                 |
+| `core/contracts/reason-codes` (1,051 LOC)                                 | **REFACTOR**    | ~20 domains catalogued, few have producers                       | Prune to codes with real emitters; add the window-outcome codes                                                  |
+| `core/contracts/versions`                                                 | **REMOVE**      | All 24 entries pinned to `1.0.0`; machinery never invoked        | Single build version string                                                                                      |
+| `core/market/*` (TWAP, PTB, conditioning, lifecycle)                      | **KEEP**        | Correct, pure, tested; exactly SPACE's Opening-TWAP/PTB model    | As-is, plus an explicit Settlement TWAP (30s / 60s)                                                              |
+| `core/market/feed-provider`                                               | **REFACTOR**    | Vendor names with no vendor code behind them                     | Real Binance client and CLOB WS client, ported from P4 `feeds/`                                                  |
+| `core/decision/*` (window FSM, pure `decide`, quota)                      | **KEEP**        | The Frozen Window Engine's skeleton, already pure                | Add **trigger latching** at window open; drop the unimplemented `SCHEDULED_TICK` mode                            |
+| `core/decision/execution-context` exposure placeholder                    | **REMOVE**      | Inert duplicate of the real `ExposureLedger`                     | Trade-domain ledger only                                                                                         |
+| `core/trade/*` (risk, exposure, order FSM, coordinator)                   | **KEEP**        | Fail-fast invariants, idempotent fills, exactly-once settlement  | As-is                                                                                                            |
+| `core/trade/standing-order-engine`                                        | **KEEP**        | Already the decoupled port of P4's proven SLO                    | Extend with P4's stuck-RESTING and duplicate-order guards                                                        |
+| `core/trade/venue-gateway`                                                | **REFACTOR**    | Interface is right, implementation is a recording stub           | Port P4 `execution/live.ts` (CLOB v2, EIP-712, post-only) and `paper.ts` chaos executor behind the same port     |
+| `core/platform/replay` + `recovery`                                       | **KEEP**        | Pure, digest-verified, PM2-restart dedupe                        | As-is                                                                                                            |
+| `core/platform/ledger`                                                    | **KEEP**        | Deterministic reconstruction from BUSINESS events                | As-is                                                                                                            |
+| `core/platform/audit.ts`                                                  | **REMOVE**      | Superseded by `audit-record.ts`; two shapes into one table       | Single audit writer                                                                                              |
+| `core/platform/notifications.ts`                                          | **REFACTOR**    | Framework has no channel and is disconnected from the table used | One notification service plus P4's Telegram transport                                                            |
+| `core/platform/authority-*`                                               | **REMOVE**      | Exists solely to bridge the companion↔VPS split SPACE deletes    | In-process module calls                                                                                          |
+| `core/qualification/{gates,live-gates,activation,mainnet,deployment}`     | **REFACTOR**    | Four abstractions independently recompute the same evidence      | One readiness evaluator                                                                                          |
+| `core/qualification/scenario.ts`                                          | **KEEP**        | The only place the engine is fully assembled                     | Promote to SPACE's integration suite                                                                             |
+| `core/infrastructure/*`                                                   | **KEEP**        | Solid, generic, portable                                         | Rename watchdog subsystem `"supabase"` → `"database"`; wire metrics to a real `/metrics` route                   |
+| `env-validator` vs `environment`                                          | **REFACTOR**    | Two sources of truth with conflicting key names                  | One Zod schema, one `.env.example`                                                                               |
+| Execution-profile DSL parser                                              | **REFACTOR**    | Non-trivial parser hidden inside config loading                  | Structured profiles in the local DB, Zod-validated, edited in the Operations Desk                                |
+| Supabase (client, RLS, Auth, PostgREST, 12 migrations)                    | **REMOVE**      | SPACE has no cloud dependency                                    | Local SQLite (WAL) behind repositories; app-layer authz; local session auth                                      |
+| `src/lib/*.functions.ts` / `*.server.ts` (~4,000 LOC)                     | **REFACTOR**    | Correct surface, but `any`-cast Supabase calls throughout        | Typed service layer over the local DB                                                                            |
+| STONE UI shell, primitives, tokens, 18 routes                             | **KEEP**        | Genuinely good operator UI                                       | Keep the design system; merge the seven telemetry re-slices into Mission Control; split `execution-profiles.tsx` |
+| `src/routes/index.tsx`                                                    | **REMOVE**      | Hardcoded, stale "Session 0" checklist                           | Login redirect                                                                                                   |
+| `api/public/authority/*`                                                  | **REMOVE**      | Cross-process protocol, obsolete in one process                  | —                                                                                                                |
+| `api/public/health/*`                                                     | **KEEP**        | Nginx and PM2 probes need exactly these                          | As-is                                                                                                            |
+| P4 `engine.ts` phase loop                                                 | **REFACTOR**    | Superseded by the Frozen Window lifecycle                        | Frozen Window Engine on STONE's window FSM                                                                       |
+| P4 `settlement-*`, `accounting-verifier`, `bankroll`, dust compounding    | **KEEP (port)** | Money-correctness logic earned through real production bugs      | `core/settlement`, `core/accounting`                                                                             |
+| P4 `reconciler`, `watchdog`, `orphan-cleaner`, `preflight`                | **KEEP (port)** | Live-drift detection has no STONE equivalent                     | SPACE infrastructure layer                                                                                       |
+| P4 `trade-replay.ts` evidence model and view                              | **KEEP (port)** | Already captures the fields SPACE's replay must show             | Extended with frozen trigger, buffer and window outcome                                                          |
+| P4 `http-agent`, `proxy`, `telegram-console`, dual `/v1` `/v2` dashboards | **REMOVE**      | Dead weight and duplication                                      | —                                                                                                                |
+| Both PM2 configs                                                          | **REFACTOR**    | One is half-fictional, one is Next-specific                      | One `ecosystem.config.cjs`: one app, fork, 1 instance, graceful dispose                                          |
+| P4 nginx conf                                                             | **KEEP**        | Correct proxy, SSE, WS and quiet health handling                 | Adapt ports and paths                                                                                            |
+| Five `.env` templates                                                     | **REMOVE**      | Five templates for one system                                    | One small `.env.example`                                                                                         |
+| `docs/knowledge/**` (P4 behavioural spec)                                 | **KEEP**        | The most valuable document set in the archive                    | `docs/archive/knowledge/`, SPACE's behavioural reference                                                         |
+| ~60 milestone / phase / audit reports                                     | **ARCHIVE**     | Historical value, no operational value                           | `docs/archive/`, never deleted                                                                                   |
+| P4 `db.ts` SQLite engine + write queue                                    | **KEEP (port)** | Proven crash-safe pattern; matches the DB decision               | Repository layer over `better-sqlite3`                                                                           |
 
 ---
 
@@ -182,7 +182,7 @@ STONE is lean: React 19, TanStack Router/Start/Query, Tailwind v4, nine Radix pr
 - **Order fidelity.** `Order.forceState()` hand-encodes replay paths that must stay manually in sync with the FSM table.
 - **Money.** `ExposureLedger.commit()` recomputes notional from fill price against a reservation seeded from intent size; per-record clamping hides rather than reconciles price-move divergence.
 - **Single point of failure.** One PM2 instance by necessity. Restart safety rests entirely on recovery-from-events plus P4's auto-resume and orphan sweep — both ported, not reinvented.
-- **Deployment.** Losing Supabase means losing Auth *and* RLS simultaneously; authorization must move into the app layer in the same change.
+- **Deployment.** Losing Supabase means losing Auth _and_ RLS simultaneously; authorization must move into the app layer in the same change.
 - **Trading.** The live executor has never run inside STONE. The first SPACE milestone able to place a real order is gated behind paper mode, preflight and a kill switch.
 - **Recovery.** STONE's `runtimeState` store silently falls back to in-memory while everything around it persists — state loss on every restart.
 

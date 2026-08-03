@@ -1,5 +1,11 @@
 import { systemClock } from "../shared/clock";
-import type { HealthComponent, HealthEntry, HealthReport, HealthResult, HealthState } from "./types";
+import type {
+  HealthComponent,
+  HealthEntry,
+  HealthReport,
+  HealthResult,
+  HealthState,
+} from "./types";
 import { HEALTH_COMPONENTS } from "./types";
 
 export type HealthCheck = () => HealthResult | Promise<HealthResult>;

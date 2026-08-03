@@ -12,7 +12,7 @@ Status: **LOCKED**. Version 1.0. This document is the single source of truth for
 
 SPACE is a single-operator automated trading system for Polymarket's official BTC up/down markets, driven by a Binance-sourced TWAP and the **Frozen Window** strategy.
 
-It is the successor to STONE. STONE contained a high-quality, fully-tested trading *domain library* that was never wired into a running process, and a proven trading bot (P4) that was architecturally frozen out of the repository. SPACE joins those two halves into **one Node.js application** that a single operator runs on **one VPS**, backed by **one local database**, supervised by **one PM2 process**, behind **one Nginx configuration**, configured by **one `.env.example`**.
+It is the successor to STONE. STONE contained a high-quality, fully-tested trading _domain library_ that was never wired into a running process, and a proven trading bot (P4) that was architecturally frozen out of the repository. SPACE joins those two halves into **one Node.js application** that a single operator runs on **one VPS**, backed by **one local database**, supervised by **one PM2 process**, behind **one Nginx configuration**, configured by **one `.env.example`**.
 
 SPACE is not a platform, not a product for multiple users, and not a cloud service. It is an operator's instrument. Every architectural decision serves reliability, recoverability and explainability.
 
@@ -75,10 +75,10 @@ No page, component, loader, hook or route may compute a price, a direction, a tr
 
 ### 2.2 Engine modes
 
-| Axis | Values |
-|---|---|
-| Arming | `OBSERVE` (evaluates and records, places no orders) · `ARMED` (execution enabled) |
-| Control | `STRATEGY` (automatic) · `MANUAL` (operator-driven) |
+| Axis    | Values                                                                            |
+| ------- | --------------------------------------------------------------------------------- |
+| Arming  | `OBSERVE` (evaluates and records, places no orders) · `ARMED` (execution enabled) |
+| Control | `STRATEGY` (automatic) · `MANUAL` (operator-driven)                               |
 
 The two axes are independent, but `MANUAL` disables automatic strategy execution entirely (section 10).
 
@@ -127,15 +127,15 @@ This is the single most important behavioural difference from STONE, whose execu
 
 Every window closes with exactly one terminal outcome, persisted with its evidence:
 
-| Outcome | Meaning |
-|---|---|
-| `FILLED` | trigger hit, risk passed, order filled, settled |
-| `NO_TRIGGER` | window expired without the live settlement TWAP reaching the frozen trigger |
-| `QUOTA_EXHAUSTED` | trades-per-market budget already consumed by earlier windows |
-| `RISK_REJECTED` | trigger hit, risk engine vetoed — the failing check is named |
-| `LIMIT_TIMEOUT` | limit order unfilled at the deadline, with fallback disabled or also unfilled |
-| `MARKET_DISABLED` | the market was disabled in the Operations Desk |
-| `WINDOW_DISABLED` | this execution window was disabled in the Operations Desk |
+| Outcome           | Meaning                                                                       |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `FILLED`          | trigger hit, risk passed, order filled, settled                               |
+| `NO_TRIGGER`      | window expired without the live settlement TWAP reaching the frozen trigger   |
+| `QUOTA_EXHAUSTED` | trades-per-market budget already consumed by earlier windows                  |
+| `RISK_REJECTED`   | trigger hit, risk engine vetoed — the failing check is named                  |
+| `LIMIT_TIMEOUT`   | limit order unfilled at the deadline, with fallback disabled or also unfilled |
+| `MARKET_DISABLED` | the market was disabled in the Operations Desk                                |
+| `WINDOW_DISABLED` | this execution window was disabled in the Operations Desk                     |
 
 ---
 
@@ -143,16 +143,16 @@ Every window closes with exactly one terminal outcome, persisted with its eviden
 
 SPACE uses **two distinct TWAPs**. They are separately named, separately stored, and never conflated in code, storage, UI or replay.
 
-| | Purpose | When |
-|---|---|---|
-| **Opening TWAP** | produces the direction and the frozen trigger | captured once, at window open |
+|                     | Purpose                                                 | When                                   |
+| ------------------- | ------------------------------------------------------- | -------------------------------------- |
+| **Opening TWAP**    | produces the direction and the frozen trigger           | captured once, at window open          |
 | **Settlement TWAP** | the live comparand evaluated against the frozen trigger | continuously, until the window expires |
 
 ### 4.1 Settlement TWAP definition
 
-| Market | Settlement TWAP |
-|---|---|
-| BTC 5 minute | final **30-second** TWAP |
+| Market        | Settlement TWAP          |
+| ------------- | ------------------------ |
+| BTC 5 minute  | final **30-second** TWAP |
 | BTC 15 minute | final **60-second** TWAP |
 
 ### 4.2 PTB
@@ -208,10 +208,10 @@ Quota is evaluated by the engine alone, on its single serialised loop, so two wi
 
 ## 7. Order execution modes
 
-| Mode | Behaviour |
-|---|---|
-| **Limit Only** | Submit a limit order only. Unfilled at the deadline → cancel → `LIMIT_TIMEOUT`. |
-| **Market Only** | Submit a market order only. |
+| Mode               | Behaviour                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **Limit Only**     | Submit a limit order only. Unfilled at the deadline → cancel → `LIMIT_TIMEOUT`.                                 |
+| **Market Only**    | Submit a market order only.                                                                                     |
 | **Limit → Market** | Submit limit first; if the configured timeout expires unfilled, cancel and automatically submit a market order. |
 
 **Limit is the default mode.** The fallback timeout is configurable in the Operations Desk. Cancel-then-submit is sequenced so a partially filled limit reduces the fallback market size to the remainder — the engine can never end up long twice for one trigger. Mode and timeout are captured in the window record and shown in Replay.
@@ -226,12 +226,12 @@ Dark-only oklch token system, IBM Plex Sans with JetBrains Mono for all numerics
 
 The operator's primary status panel, present on every page:
 
-| Group | Items |
-|---|---|
-| Engine | Engine status · Observe / Armed · Manual Mode · Strategy Mode · Current Engine Mode · Current Session (id, start time, uptime) |
-| Markets | Active Market · Market Countdown to settlement · Current Execution Window · BTC 5m · BTC 15m |
-| Money | Wallet balance · Today's PnL · Active trades |
-| Dependencies | Binance · Polymarket · TWAP · Database · Telegram |
+| Group        | Items                                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Engine       | Engine status · Observe / Armed · Manual Mode · Strategy Mode · Current Engine Mode · Current Session (id, start time, uptime) |
+| Markets      | Active Market · Market Countdown to settlement · Current Execution Window · BTC 5m · BTC 15m                                   |
+| Money        | Wallet balance · Today's PnL · Active trades                                                                                   |
+| Dependencies | Binance · Polymarket · TWAP · Database · Telegram                                                                              |
 
 Each dependency renders as a health tone (healthy / degraded / unavailable) with last-seen age. Because every value comes from one snapshot subscription, no two panels can disagree.
 
@@ -333,21 +333,21 @@ Boot → Validate Environment → Open Database → Load Configuration → Marke
      → Initialize Telegram → Replay Recovery → Health Verification → OBSERVE → ARMED
 ```
 
-| Stage | Responsibility | Failure behaviour |
-|---|---|---|
-| Validate Environment | Zod-parse `.env`; assert every required secret is present and well-formed | hard exit, non-zero — PM2 must not loop a misconfigured process |
-| Open Database | open SQLite at `DB_PATH`, apply pragmas, run pending migrations, verify schema version | hard exit |
-| Load Configuration | read the active configuration version; validate windows, buffers, quotas | hard exit if invalid; no implicit defaults |
-| Market Discovery | resolve the official active BTC market | stay in OBSERVE, alert, retry |
-| Connect Binance | open the price feed, confirm first tick | stay in OBSERVE, retry with backoff |
-| Initialize TWAP | warm the buffers to full depth before publishing any value | TWAP reports `WARMING`; no window may open |
-| Connect Polymarket | authenticate CLOB, load market/token metadata and the PTB source | stay in OBSERVE, retry |
-| Load Wallet | derive address, read balances and allowances | stay in OBSERVE |
-| Initialize Telegram | bind bot, verify chat id, announce boot | non-fatal; degraded |
-| Replay Recovery | reconcile persisted state with the venue (section 14) | must complete before ARMED |
-| Health Verification | assert every dependency healthy and TWAP warm | blocks ARMED |
-| OBSERVE | engine runs, evaluates, records — places no orders | steady state |
-| ARMED | execution enabled | steady state |
+| Stage                | Responsibility                                                                         | Failure behaviour                                               |
+| -------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Validate Environment | Zod-parse `.env`; assert every required secret is present and well-formed              | hard exit, non-zero — PM2 must not loop a misconfigured process |
+| Open Database        | open SQLite at `DB_PATH`, apply pragmas, run pending migrations, verify schema version | hard exit                                                       |
+| Load Configuration   | read the active configuration version; validate windows, buffers, quotas               | hard exit if invalid; no implicit defaults                      |
+| Market Discovery     | resolve the official active BTC market                                                 | stay in OBSERVE, alert, retry                                   |
+| Connect Binance      | open the price feed, confirm first tick                                                | stay in OBSERVE, retry with backoff                             |
+| Initialize TWAP      | warm the buffers to full depth before publishing any value                             | TWAP reports `WARMING`; no window may open                      |
+| Connect Polymarket   | authenticate CLOB, load market/token metadata and the PTB source                       | stay in OBSERVE, retry                                          |
+| Load Wallet          | derive address, read balances and allowances                                           | stay in OBSERVE                                                 |
+| Initialize Telegram  | bind bot, verify chat id, announce boot                                                | non-fatal; degraded                                             |
+| Replay Recovery      | reconcile persisted state with the venue (section 14)                                  | must complete before ARMED                                      |
+| Health Verification  | assert every dependency healthy and TWAP warm                                          | blocks ARMED                                                    |
+| OBSERVE              | engine runs, evaluates, records — places no orders                                     | steady state                                                    |
+| ARMED                | execution enabled                                                                      | steady state                                                    |
 
 SPACE never boots straight into `ARMED` after an unclean shutdown. The operator arms it, or auto-arm fires only after Health Verification passes clean.
 
@@ -387,7 +387,7 @@ Objective: **clone repository → restore backup → run SPACE.**
 
 - **Full backup** — one command producing a single timestamped archive containing the hot SQLite snapshot (`VACUUM INTO` — no downtime, no torn WAL), the exported configuration, and a manifest with schema version, app version and checksum.
 - **Restore** — one command that verifies manifest and checksum, refuses a schema-version mismatch it cannot migrate, restores the database file and re-imports configuration.
-- **Database portability** — a single file; copying it *is* the migration.
+- **Database portability** — a single file; copying it _is_ the migration.
 - **Configuration portability** — configuration exports as JSON independently of the database, so settings can move without trade history.
 - **VPS migration** — clone, install, drop in `.env`, restore the archive, `pm2 start`.
 - Scheduled local backups with retention, plus a documented off-box copy step. **Backups never contain secrets.**
@@ -398,17 +398,17 @@ Objective: **clone repository → restore backup → run SPACE.**
 
 Telegram is a **control surface**, not just an alert channel. It is authenticated by a chat-id allow-list and routes through the same command bus, rate limits and audit trail as the dashboard.
 
-| Command | Effect |
-|---|---|
-| `/status` | engine mode, market, active window, open orders |
-| `/pause` | pause automatic execution (does not kill the process) |
-| `/resume` | resume automatic execution |
-| `/pnl` | today's PnL and win rate |
-| `/balance` | wallet balance and bankroll |
-| `/positions` | open positions and resting orders |
-| `/logs` | recent audit and error lines |
-| `/health` | dependency health, same data as Mission Control |
-| `/mode` | show mode; with an argument, switch Observe/Armed/Manual/Strategy |
+| Command      | Effect                                                            |
+| ------------ | ----------------------------------------------------------------- |
+| `/status`    | engine mode, market, active window, open orders                   |
+| `/pause`     | pause automatic execution (does not kill the process)             |
+| `/resume`    | resume automatic execution                                        |
+| `/pnl`       | today's PnL and win rate                                          |
+| `/balance`   | wallet balance and bankroll                                       |
+| `/positions` | open positions and resting orders                                 |
+| `/logs`      | recent audit and error lines                                      |
+| `/health`    | dependency health, same data as Mission Control                   |
+| `/mode`      | show mode; with an argument, switch Observe/Armed/Manual/Strategy |
 
 Write commands are confirmed, rate-limited and audited. Alerts (risk breach, kill switch, reconciler drift, feed staleness, settlement divergence) push to the same chat.
 
@@ -474,13 +474,13 @@ Windows, buffers, sizes, quotas, retries, order types, market toggles, risk limi
 
 ## 20. V1 and V2
 
-| | V1 | V2 |
-|---|---|---|
+|             | V1      | V2      |
+| ----------- | ------- | ------- |
 | Environment | Testnet | Mainnet |
-| UI | same | same |
-| Engine | same | same |
-| Features | same | same |
-| Strategy | same | same |
+| UI          | same    | same    |
+| Engine      | same    | same    |
+| Features    | same    | same    |
+| Strategy    | same    | same    |
 | Credentials | testnet | mainnet |
 
 **Only the environment changes.** There is no V1 code path and no V2 code path, no `if (mainnet)` branch, no parallel module, no separate build. Promotion from V1 to V2 is a credential and endpoint change in `.env` plus a restart. Any change introducing an environment-conditional behavioural branch is rejected in review.
@@ -491,15 +491,15 @@ Windows, buffers, sizes, quotas, retries, order types, market toggles, risk limi
 
 > **If a feature cannot be tested, it is not complete.**
 
-| Layer | Scope |
-|---|---|
-| Unit | TWAP maths, buffer application, direction resolution, trigger construction, quota accounting, risk predicates |
-| Integration | repositories against a real SQLite file, migrations, configuration versioning, command bus |
-| Engine | full window lifecycle over a simulated clock and synthetic feed: trigger, no-trigger, quota exhaustion, risk rejection, limit timeout, disabled window/market |
-| Replay | determinism — replaying an event log reproduces identical projections, digests and frozen triggers |
-| Recovery | kill the process at each hazardous point; assert idempotent restore and zero duplicate orders |
-| End-to-end trading | testnet: discovery → window → trigger → order → fill → settlement → statistics → replay |
-| VPS deployment validation | clean VPS: clone → install → `.env` → restore backup → `pm2 start` → health green |
+| Layer                     | Scope                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit                      | TWAP maths, buffer application, direction resolution, trigger construction, quota accounting, risk predicates                                                 |
+| Integration               | repositories against a real SQLite file, migrations, configuration versioning, command bus                                                                    |
+| Engine                    | full window lifecycle over a simulated clock and synthetic feed: trigger, no-trigger, quota exhaustion, risk rejection, limit timeout, disabled window/market |
+| Replay                    | determinism — replaying an event log reproduces identical projections, digests and frozen triggers                                                            |
+| Recovery                  | kill the process at each hazardous point; assert idempotent restore and zero duplicate orders                                                                 |
+| End-to-end trading        | testnet: discovery → window → trigger → order → fill → settlement → statistics → replay                                                                       |
+| VPS deployment validation | clean VPS: clone → install → `.env` → restore backup → `pm2 start` → health green                                                                             |
 
 Determinism is a first-class test target: same inputs, same decisions, every run. Architecture tests (layering, no SQL outside repositories, no UI-owned logic) run in CI as ordinary tests.
 
