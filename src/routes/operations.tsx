@@ -100,7 +100,14 @@ function OperationsDesk() {
       subtitle="The one place operational settings live. Secrets stay in .env; everything here is stored in SPACE and promoted to the engine when the next market is discovered."
     >
       {!draft || !operations.data ? (
-        <p className="font-mono text-sm text-muted-foreground">loading configuration…</p>
+        <AsyncPanel
+          label="the operations configuration document"
+          data={operations.data && draft ? draft : undefined}
+          error={(operations.error as Error | null) ?? null}
+          action="The configuration lives in SPACE's database — check Diagnostics for the database card, then retry. SPACE keeps polling automatically."
+        >
+          {() => null}
+        </AsyncPanel>
       ) : (
         <>
           {snapshot.data && (
