@@ -35,7 +35,7 @@ subscribeOperations((ops) => {
 
 export function startStrategyEngine(): void {
   if (started) return;
-  engine = createStrategyEngine(DEFAULT_STRATEGY_CONFIG);
+  engine = createStrategyEngine(toStrategyConfig(activeOperations(), DEFAULT_STRATEGY_CONFIG));
   started = true;
   startedAt = clock().iso();
   evaluations = 0;
