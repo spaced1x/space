@@ -1,5 +1,6 @@
 import { executionRepository } from "../db/repositories/execution.repository";
 import { replayRepository } from "../db/repositories/replay.repository";
+import { settlementRepository } from "../db/repositories/settlement.repository";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
 import type { MarketHorizon } from "../market/types";
