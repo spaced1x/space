@@ -137,6 +137,8 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
     const discovered = market.markets[plan.horizon];
     const ptb = discovered?.conditionId === plan.conditionId ? discovered.ptb : null;
     const reading = twap.read(nowMs, plan.settlementAtMs, plan.horizon);
+    // Advisory trend only: remember the previous reading before it changes.
+    previousTwapValue = reading.value ?? previousTwapValue;
     const at = new Date(nowMs).toISOString();
 
     // Deterministic order: furthest-from-settlement first.
