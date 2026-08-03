@@ -30,6 +30,7 @@ import { sampleAndPersistMetrics } from "./metrics/metrics.server";
 import { startTelegramInbound } from "./telegram/inbound.server";
 import { noteTimeline, reportConnection } from "./runtime/connections.server";
 import { syncConnections } from "./runtime/connection-sync.server";
+import { readRuntimeTarget, targetMatchesEnvironment } from "./runtime/target.server";
 import { verifyChainId } from "./execution/wallet.server";
 import { refreshMarkets } from "./market/discovery.server";
 
