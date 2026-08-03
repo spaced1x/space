@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { CommandDeck } from "../components/space/command-deck";
+import { ConsoleNav } from "../components/space/console-shell";
 import { ExecutionPanel, OrderTable, PositionTable } from "../components/space/execution-panel";
 import { MissionControl } from "../components/space/mission-control";
 import { MarketPanel } from "../components/space/market-panel";
@@ -92,6 +93,7 @@ function OperatorConsole() {
       />
 
       <main className="flex-1 space-y-8 p-6 lg:p-10">
+        <ConsoleNav />
         <header className="space-y-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">

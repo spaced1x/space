@@ -1,5 +1,6 @@
 import { clock } from "../clock/clock.service";
 import { loadEnv } from "../config/env.server";
+import { replayRepository } from "../db/repositories/replay.repository";
 import { createLogger } from "../logging/logger";
 import type { HealthResult } from "../health/types";
 import { applyDiscovery } from "./state";
@@ -139,6 +140,10 @@ export async function refreshMarkets(): Promise<void> {
     stats.lastSuccessAt = new Date(clock().now()).toISOString();
     stats.lastError = null;
     applyDiscovery(picked, { ...stats });
+    // Replay reconstructs markets from persisted rows only, so discovery
+    // itself must be durable. Best effort: a runtime without SQLite still
+    // trades, it simply cannot replay afterwards.
+    await persistDiscovery(picked);
   } catch (error) {
     stats.errors += 1;
     stats.lastError = error instanceof Error ? error.message : String(error);
@@ -177,4 +182,32 @@ export function discoveryHealth(): HealthResult {
 
 export function discoveryStats(): DiscoveryStats {
   return { ...stats };
+}
+
+async function persistDiscovery(
+  picked: Partial<Record<MarketHorizon, DiscoveredMarket | null>>,
+): Promise<void> {
+  try {
+    for (const market of Object.values(picked)) {
+      if (!market) continue;
+      await replayRepository.upsertDiscovery({
+        condition_id: market.conditionId,
+        slug: market.slug,
+        horizon: market.horizon,
+        question: market.question,
+        status: market.status,
+        ptb: market.ptb,
+        close_at: market.closeAt,
+        settlement_at: market.settlementAt,
+        up_token_id: market.upTokenId,
+        down_token_id: market.downTokenId,
+        discovered_at: market.discoveredAt,
+        updated_at: clock().iso(),
+      });
+    }
+  } catch (error) {
+    log.warn("discovery not persisted", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

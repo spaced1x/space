@@ -57,6 +57,8 @@ export type RiskCode =
   | "OK"
   | "ENGINE_NOT_ARMED"
   | "MODE_NOT_STRATEGY"
+  | "MODE_NOT_MANUAL"
+  | "MANUAL_DISABLED"
   | "STRATEGY_DISABLED"
   | "MARKET_DISABLED"
   | "WINDOW_DISABLED"
@@ -147,6 +149,13 @@ export interface PositionRecord {
   openedAt: string;
   lastFillAt: string;
   fills: number;
+  /**
+   * Settlement value per share (1 or 0) once the market resolves. Populated by
+   * settlement reconciliation; until then a position is held at cost.
+   */
+  settledValue?: number | null;
+  /** Last known venue price per share, used for unrealized PnL only. */
+  markPrice?: number | null;
 }
 
 export interface ExecutionConfig {
@@ -185,6 +194,13 @@ export interface WalletStatus {
 /** Everything the Risk Engine is allowed to look at. Injected, never fetched. */
 export interface RiskContext {
   at: string;
+  /**
+   * Manual Trading path. Manual orders reuse this exact Risk Engine; only the
+   * strategy-specific checks (strategy mode, strategy enabled, per-market
+   * quota) are swapped for the manual equivalents.
+   */
+  manual?: boolean;
+  manualEnabled?: boolean;
   engineArmed: boolean;
   strategyMode: boolean;
   strategyEnabled: boolean;

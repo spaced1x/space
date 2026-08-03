@@ -1,5 +1,7 @@
 import { eventBus } from "../bus/events";
 import { clock } from "../clock/clock.service";
+import { toStrategyConfig } from "../config/operations";
+import { activeOperations, promoteFor, subscribeOperations } from "../config/operations.server";
 import { strategyRepository } from "../db/repositories/strategy.repository";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
@@ -25,9 +27,15 @@ let lastError: string | null = null;
 let persistenceError: string | null = null;
 let intents = 0;
 
+// The Operations Desk owns operational settings. Promotion happens on a new
+// market only, so a live market keeps the configuration it started with.
+subscribeOperations((ops) => {
+  engine.setConfig(toStrategyConfig(ops, DEFAULT_STRATEGY_CONFIG));
+});
+
 export function startStrategyEngine(): void {
   if (started) return;
-  engine = createStrategyEngine(DEFAULT_STRATEGY_CONFIG);
+  engine = createStrategyEngine(toStrategyConfig(activeOperations(), DEFAULT_STRATEGY_CONFIG));
   started = true;
   startedAt = clock().iso();
   evaluations = 0;
@@ -52,7 +60,10 @@ export async function evaluateStrategy(): Promise<void> {
   const begin = clock().now();
   try {
     const runtime = getRuntimeState();
-    const events = engine.evaluate(begin, getMarketState(), {
+    const market = getMarketState();
+    // Promote any staged configuration if the tracked market set changed.
+    promoteFor(market);
+    const events = engine.evaluate(begin, market, {
       FIVE_MINUTE: runtime.windows.fiveMinute,
       FIFTEEN_MINUTE: runtime.windows.fifteenMinute,
     });

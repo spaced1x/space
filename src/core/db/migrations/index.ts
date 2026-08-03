@@ -244,4 +244,30 @@ export const migrations: Migration[] = [
         BEGIN SELECT RAISE(ABORT, 'risk decisions are append-only'); END;
     `,
   },
+  {
+    id: 4,
+    name: "replay_market_discoveries",
+    sql: `
+      -- Replay must reconstruct a market entirely from persisted data, so
+      -- discovery itself becomes evidence. One row per condition id, updated
+      -- in place as the venue's view of the market changes.
+      CREATE TABLE IF NOT EXISTS market_discoveries (
+        condition_id   TEXT PRIMARY KEY,
+        slug           TEXT NOT NULL,
+        horizon        TEXT NOT NULL,
+        question       TEXT NOT NULL,
+        status         TEXT NOT NULL,
+        ptb            REAL,
+        close_at       TEXT,
+        settlement_at  TEXT,
+        up_token_id    TEXT,
+        down_token_id  TEXT,
+        discovered_at  TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_market_discoveries_settlement
+        ON market_discoveries (settlement_at);
+    `,
+  },
 ];

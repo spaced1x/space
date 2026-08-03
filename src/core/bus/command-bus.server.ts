@@ -71,6 +71,12 @@ function defaultHandler(command: Command, context: CommandContext): Verdict {
       return accept(`15m window ${command.enabled ? "enabled" : "disabled"}`, {
         windows: { ...state.windows, fifteenMinute: command.enabled },
       });
+    case "SET_MODE":
+      if (state.mode === command.mode) return reject(`engine is already in ${command.mode} mode`);
+      if (state.engineStatus === "ARMED") {
+        return reject("disarm before switching operating mode");
+      }
+      return accept(`operating mode set to ${command.mode}`, { mode: command.mode });
   }
 }
 
