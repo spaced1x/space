@@ -24,11 +24,22 @@ export function evaluateRisk(intent: ExecutionIntent, context: RiskContext): Ris
   if (!context.engineArmed) {
     return reject("ENGINE_NOT_ARMED", "engine is not ARMED");
   }
-  if (!context.strategyMode) {
-    return reject("MODE_NOT_STRATEGY", "engine is not in STRATEGY mode");
-  }
-  if (!context.strategyEnabled) {
-    return reject("STRATEGY_DISABLED", "strategy execution disabled in configuration");
+  if (context.manual) {
+    // Manual Trading is an isolated mode: the engine must be in MANUAL and the
+    // operator must have enabled manual trading on the Operations Desk.
+    if (context.strategyMode) {
+      return reject("MODE_NOT_MANUAL", "engine is not in MANUAL mode");
+    }
+    if (!context.manualEnabled) {
+      return reject("MANUAL_DISABLED", "manual trading disabled in configuration");
+    }
+  } else {
+    if (!context.strategyMode) {
+      return reject("MODE_NOT_STRATEGY", "engine is not in STRATEGY mode");
+    }
+    if (!context.strategyEnabled) {
+      return reject("STRATEGY_DISABLED", "strategy execution disabled in configuration");
+    }
   }
   if (!context.marketEnabled) {
     return reject("MARKET_DISABLED", "market execution disabled by operator");
@@ -39,7 +50,7 @@ export function evaluateRisk(intent: ExecutionIntent, context: RiskContext): Ris
   if (!context.dailyTradingEnabled) {
     return reject("DAILY_TRADING_DISABLED", "daily trading switched off");
   }
-  if (context.quotaRemaining <= 0) {
+  if (!context.manual && context.quotaRemaining <= 0) {
     return reject("QUOTA_EXHAUSTED", "trades per market already consumed");
   }
   if (context.openPositions >= context.maxPositions) {
