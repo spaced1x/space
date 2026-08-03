@@ -14,6 +14,7 @@ import { Route as DiagnosticsRouteImport } from './routes/diagnostics'
 import { Route as ManualRouteImport } from './routes/manual'
 import { Route as OperationsRouteImport } from './routes/operations'
 import { Route as ReplayRouteImport } from './routes/replay'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 
@@ -42,6 +43,11 @@ const ReplayRoute = ReplayRouteImport.update({
   path: '/replay',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StatsRoute = StatsRouteImport.update({
   id: '/stats',
   path: '/stats',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/manual': typeof ManualRoute
   '/operations': typeof OperationsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/manual': typeof ManualRoute
   '/operations': typeof OperationsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/manual': typeof ManualRoute
   '/operations': typeof OperationsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/operations'
     | '/replay'
+    | '/settings'
     | '/stats'
     | '/api/public/health'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/operations'
     | '/replay'
+    | '/settings'
     | '/stats'
     | '/api/public/health'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/operations'
     | '/replay'
+    | '/settings'
     | '/stats'
     | '/api/public/health'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   ManualRoute: typeof ManualRoute
   OperationsRoute: typeof OperationsRoute
   ReplayRoute: typeof ReplayRoute
+  SettingsRoute: typeof SettingsRoute
   StatsRoute: typeof StatsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReplayRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/stats': {
       id: '/stats'
       path: '/stats'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   ManualRoute: ManualRoute,
   OperationsRoute: OperationsRoute,
   ReplayRoute: ReplayRoute,
+  SettingsRoute: SettingsRoute,
   StatsRoute: StatsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
 }
