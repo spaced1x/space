@@ -45,6 +45,22 @@ shared → contracts → configuration → infrastructure → market → decisio
 | `platform` | event log, ledger, replay, recovery, audit, notifications, backup |
 | `app` | HTTP routes, dashboard, Telegram adapter, command bus, composition root |
 
+### 2.1 Implemented foundation (milestone 1)
+
+```text
+src/core/shared        clock, ids, errors, json types
+src/core/config        env schema (zod) + single validation point
+src/core/logging       structured logger, redaction, rotating file sink
+src/core/db            driver contract, sqlite (WAL) driver, migrations, repositories
+src/core/health        health registry, component states
+src/core/bus           event bus, command bus (serialised queue + verdicts + audit)
+src/core/state         authoritative runtime state store
+src/core/boot.server   startup sequence · src/core/shutdown.server  shutdown sequence
+src/lib/system.functions.ts   the single read/command surface for the dashboard
+```
+
+Trading modules (`market`, `decision`, `trade`, `platform`) are not implemented yet; their health checks report `NOT_INITIALIZED`.
+
 Imports point left only. `tests/unit/architecture.test.ts` walks the import graph and fails the build on any upward dependency. Two additional architecture tests enforce:
 
 1. nothing outside `db/repositories/**` imports the SQLite driver;
