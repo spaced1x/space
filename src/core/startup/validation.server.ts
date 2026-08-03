@@ -140,7 +140,15 @@ export async function runStartupValidation(): Promise<ValidationReport> {
   };
 
   log.info("startup validation completed", { valid: report.valid, blockers: blockers.length });
+  lastReport = report;
   return report;
+}
+
+let lastReport: ValidationReport | null = null;
+
+/** Most recent validation report, for runtime telemetry. Null before the first run. */
+export function lastValidationReport(): ValidationReport | null {
+  return lastReport;
 }
 
 export function preArmReadiness(): { ready: boolean; reason: string } {
