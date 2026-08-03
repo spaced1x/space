@@ -37,7 +37,28 @@ It reports `CONNECTED`, `WAITING`, `NOT_CONFIGURED` or `FAILED`, naming the exac
 
 **Provider registry** — `src/core/twap/registry.server.ts` owns every provider and initially registers RTDS and Chainlink. The active provider is persisted in the existing configuration store under `twap.active_provider`. Rules: default provider is RTDS; the choice persists across restart; the registry exposes `getActiveProvider()` and `setActiveProvider()`; no UI switching in this milestone — later UI switching uses this same registry.
 
-**Engine integration** — the engine loop consumes settlement TWAP exclusively through the provider registry. The TWAP mathematics in `twap.ts` remain unchanged; only the market data source changes. Binance stays connected for live BTC display, diagnostics and market context, and must never become an automatic fallback settlement source once providers exist. If the active provider is unavailable, the existing `WARMING`/`STALE`/`IDLE` states continue to work naturally using the provider's real state and reason. No synthetic prices, no fabricated values, no hidden fallback.
+**Engine integration** — the execution engine, strategy, manual trading, replay and statistics layers continue to consume settlement TWAP only through the existing TWAP service. The TWAP service becomes responsible for obtaining market data from the active provider selected by the provider registry. The existing TWAP mathematics in `twap.ts` remain completely unchanged; only the underlying sample source changes.
+
+```text
+Strategy
+        │
+Execution
+        │
+Replay
+        │
+Statistics
+        │
+        ▼
+TWAP Service
+        │
+        ▼
+Provider Registry
+        │
+        ├── RTDS Provider
+        └── Chainlink Provider
+```
+
+The rest of the system must never know which provider is active; the provider registry is the single owner of provider selection. Binance remains connected only for live BTC display, diagnostics and market context, and must never become an automatic settlement-TWAP fallback once provider-based TWAP exists. If the active provider is unavailable, the TWAP service continues exposing its existing runtime states (`WARMING`, `STALE`, `IDLE`) using the active provider's real connection state and reason. No fabricated prices, no synthetic values, no hidden provider switching, no automatic fallback.
 
 **Runtime integration** — `connection-sync.server.ts` reports active provider, inactive providers, endpoint, environment, freshness, latency, reconnect count, last update, last error, operator action and trading impact. Mission Control and Diagnostics display the real runtime state of every provider.
 
