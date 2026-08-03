@@ -389,4 +389,49 @@ export const migrations: Migration[] = [
         ON release_artifacts (version);
     `,
   },
+  {
+    id: 7,
+    name: "settlements_and_environment_stamp",
+    sql: `
+      -- Settlement ingestion. The venue's resolved outcome for a closed market
+      -- is evidence, not a derived value: without it Replay cannot say whether a
+      -- frozen-window decision was correct and Statistics cannot report settled
+      -- PnL. One row per market, written once the venue reports resolution.
+      CREATE TABLE IF NOT EXISTS settlements (
+        condition_id     TEXT PRIMARY KEY,
+        slug             TEXT NOT NULL,
+        horizon          TEXT NOT NULL,
+        settled_at       TEXT NOT NULL,
+        resolved_outcome TEXT NOT NULL CHECK (resolved_outcome IN ('UP', 'DOWN', 'UNRESOLVED')),
+        up_price         REAL,
+        down_price       REAL,
+        source           TEXT NOT NULL,
+        recorded_at      TEXT NOT NULL,
+        raw              TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_settlements_settled_at
+        ON settlements (settled_at);
+
+      -- A resolved settlement is immutable evidence. Re-ingestion is an upsert
+      -- only while the market is still UNRESOLVED; see settlement.repository.
+      CREATE TRIGGER IF NOT EXISTS settlements_no_delete
+        BEFORE DELETE ON settlements
+        BEGIN SELECT RAISE(ABORT, 'settlements are append-only evidence'); END;
+
+      -- Configuration-version linkage: every intent records the Operations Desk
+      -- version that produced it, so a PnL number can be attributed to the exact
+      -- configuration that generated the trade.
+      ALTER TABLE execution_intents ADD COLUMN config_version INTEGER;
+
+      -- Environment stamp. A database created under V1_TESTNET must never be
+      -- opened by a V2_MAINNET process, and the reverse. Written on first open,
+      -- verified on every later open.
+      CREATE TABLE IF NOT EXISTS space_meta (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
