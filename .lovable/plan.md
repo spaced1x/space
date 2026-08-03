@@ -4,16 +4,44 @@ Architecture stays frozen. No strategy, risk, execution, replay or statistics be
 
 ## 1. TWAP provider abstraction (only new runtime code)
 
-Today the settlement TWAP is computed in-process from Binance trade samples; there is no provider concept and no RTDS code anywhere in the repository. This milestone introduces the provider layer:
+Today the settlement TWAP is computed in-process from Binance trade samples; there is no provider concept and no RTDS implementation in the repository. This milestone introduces a provider layer that becomes the single source of settlement TWAP for the engine.
 
-- `src/core/twap/provider.ts` — provider contract: `id`, `label`, `describe()` (endpoint, environment, symbol), `start()/stop()`, `latest()` returning `{ price, atMs, latencyMs }`, and a state of `CONNECTED | WAITING | NOT_CONFIGURED | DISABLED | FAILED` with a real reason string.
-- `src/core/twap/rtds.provider.server.ts` — real RTDS adapter against the Polymarket real-time data service (`wss://ws-live-data.polymarket.com`, crypto price channel for the configured symbol). Handles subscribe, heartbeat, reconnect with backoff, freshness age, latency, reconnect count and last error. Endpoint + symbol come from env (`RTDS_WS_URL`, `RTDS_SYMBOL`), added to `env.schema.ts` and `.env.example` with defaults.
-- `src/core/twap/chainlink.provider.server.ts` — thin wrapper over the existing Chainlink feed reader, exposed as the second provider. Reports `NOT_CONFIGURED` with the exact missing variable (`POLYGON_RPC_URL` / `CHAINLINK_BTC_USD_FEED`) when credentials are absent.
-- `src/core/twap/registry.server.ts` — holds both providers, resolves the active one, persists the active provider id in the existing KV repository (`twap.active_provider`), defaulting to `rtds` for both V1 and V2. No UI switching in this milestone; the registry exposes `setActiveProvider()` for the next one.
+**Provider contract** — `src/core/twap/provider.ts` exposes a common interface: `id`, `label`, `describe()` (endpoint, environment, symbol), `start()`, `stop()`, `latest()` returning `{ price, atMs, latencyMs }`, and a runtime state of `CONNECTED | WAITING | NOT_CONFIGURED | DISABLED | FAILED`. Every provider must additionally expose: endpoint, environment, freshness, latency, reconnect count, last successful update, last error, human-readable reason, operator action and trading impact.
 
-The engine loop feeds the settlement TWAP engine from the **active provider** instead of Binance. Binance remains a runtime feed (price display, market context) and is unchanged otherwise. The TWAP maths in `twap.ts` is untouched — only the sample source changes. If the active provider is not `CONNECTED`, the TWAP reports its existing `WARMING`/`STALE`/`IDLE` states and the provider reason is surfaced verbatim; no fallback to Binance samples and no synthetic values.
+**RTDS provider** — `src/core/twap/rtds.provider.server.ts`, the official Polymarket RTDS provider. No endpoint, authentication flow, subscription payload, channel name or protocol assumption is hardcoded; the adapter obtains everything from configuration. New variables in `env.schema.ts` and `.env.example`:
 
-`connection-sync.server.ts` reports `twap_provider` from the registry: active provider, environment, endpoint, last update, latency, freshness age, reason, action, trading impact.
+```text
+RTDS_ENABLED=true
+RTDS_WS_URL=
+RTDS_API_KEY=
+RTDS_API_SECRET=
+RTDS_CHANNEL=
+RTDS_SYMBOL=BTC
+RTDS_AUTH_TYPE=
+```
+
+The adapter supports WebSocket connect, authentication when required, subscriptions, heartbeat, reconnect with exponential backoff, latency measurement, freshness tracking, sequence validation when RTDS exposes sequence numbers, reconnect counters, last successful message, last received message timestamp, last error and graceful shutdown. It must work for both `V1_TESTNET` and `V2_MAINNET` by changing configuration only — no application code changes when Polymarket switches environments.
+
+**Chainlink provider** — `src/core/twap/chainlink.provider.server.ts` wraps the existing Chainlink integration inside the provider interface, with configuration:
+
+```text
+CHAINLINK_ENABLED=false
+CHAINLINK_API_KEY=
+CHAINLINK_API_SECRET=
+CHAINLINK_STREAM_ID=
+CHAINLINK_WS_URL=
+CHAINLINK_HTTP_URL=
+```
+
+It reports `CONNECTED`, `WAITING`, `NOT_CONFIGURED` or `FAILED`, naming the exact missing configuration variable.
+
+**Provider registry** — `src/core/twap/registry.server.ts` owns every provider and initially registers RTDS and Chainlink. The active provider is persisted in the existing configuration store under `twap.active_provider`. Rules: default provider is RTDS; the choice persists across restart; the registry exposes `getActiveProvider()` and `setActiveProvider()`; no UI switching in this milestone — later UI switching uses this same registry.
+
+**Engine integration** — the engine loop consumes settlement TWAP exclusively through the provider registry. The TWAP mathematics in `twap.ts` remain unchanged; only the market data source changes. Binance stays connected for live BTC display, diagnostics and market context, and must never become an automatic fallback settlement source once providers exist. If the active provider is unavailable, the existing `WARMING`/`STALE`/`IDLE` states continue to work naturally using the provider's real state and reason. No synthetic prices, no fabricated values, no hidden fallback.
+
+**Runtime integration** — `connection-sync.server.ts` reports active provider, inactive providers, endpoint, environment, freshness, latency, reconnect count, last update, last error, operator action and trading impact. Mission Control and Diagnostics display the real runtime state of every provider.
+
+**Future-proof requirement** — the RTDS implementation must not assume today's protocol. If Polymarket changes endpoint, authentication, subscription format, message schema, channel naming or environment routing, the operator adapts by updating configuration and the provider adapter only, without modifying Strategy, Risk, Execution, Replay, Statistics, Mission Control or the rest of the architecture.
 
 ## 2. Runtime readiness banner
 
