@@ -325,4 +325,68 @@ export const migrations: Migration[] = [
         ON telegram_outbox (created_at);
     `,
   },
+  {
+    id: 6,
+    name: "milestone_7_metrics_snapshots_inbound_release",
+    sql: `
+      -- Production runtime metrics: memory, CPU, drift, reconnects, DB growth.
+      -- Used for soak testing and release-gate evidence.
+      CREATE TABLE IF NOT EXISTS runtime_metrics (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        sampled_at    TEXT NOT NULL,
+        memory_rss_mb REAL,
+        memory_heap_mb REAL,
+        cpu_user_seconds REAL,
+        cpu_system_seconds REAL,
+        scheduler_drift_ms REAL,
+        scheduler_ticks INTEGER,
+        db_size_bytes INTEGER,
+        feed_reconnects INTEGER NOT NULL DEFAULT 0,
+        venue_errors INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_runtime_metrics_sampled
+        ON runtime_metrics (sampled_at);
+
+      -- Configuration snapshots: active operations document at ARM / mode switch.
+      CREATE TABLE IF NOT EXISTS config_snapshots (
+        id            TEXT PRIMARY KEY,
+        version       INTEGER NOT NULL,
+        active_at     TEXT NOT NULL,
+        reason        TEXT NOT NULL,
+        correlation_id TEXT NOT NULL,
+        document      TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_config_snapshots_active_at
+        ON config_snapshots (active_at);
+
+      -- Inbound Telegram messages (operator commands).
+      CREATE TABLE IF NOT EXISTS telegram_inbound (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at    TEXT NOT NULL,
+        chat_id       TEXT NOT NULL,
+        username      TEXT NOT NULL,
+        text          TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_telegram_inbound_created
+        ON telegram_inbound (created_at);
+
+      -- Versioned release artifacts and release-gate evidence.
+      CREATE TABLE IF NOT EXISTS release_artifacts (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        version       TEXT NOT NULL,
+        deployed_at   TEXT NOT NULL,
+        deployed_by   TEXT,
+        rollback_version TEXT,
+        report_path   TEXT,
+        gate_passed   INTEGER NOT NULL DEFAULT 0,
+        reason        TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_release_artifacts_version
+        ON release_artifacts (version);
+    `,
+  },
 ];

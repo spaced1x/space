@@ -18,6 +18,8 @@ export interface RuntimeState {
   lastTransitionAt: string;
   lastTransitionReason: string;
   version: number;
+  emergencyStop: boolean;
+  emergencyStopReason: string | null;
 }
 
 const RUNTIME_STATE_KEY = "runtime.state";
@@ -33,6 +35,8 @@ let state: RuntimeState = Object.freeze({
   lastTransitionAt: systemClock.iso(),
   lastTransitionReason: "process boot",
   version: 1,
+  emergencyStop: false,
+  emergencyStopReason: null,
 });
 
 export async function loadRuntimeState(): Promise<void> {
@@ -45,6 +49,8 @@ export async function loadRuntimeState(): Promise<void> {
       engineStatus: saved.engineStatus === "ARMED" ? "OBSERVE" : saved.engineStatus,
       mode: saved.mode,
       windows: saved.windows,
+      emergencyStop: saved.emergencyStop ?? false,
+      emergencyStopReason: saved.emergencyStopReason ?? null,
       lastTransitionReason: "restored from persistence",
       version: state.version + 1,
     });
@@ -61,6 +67,8 @@ function persistRuntimeState(): void {
     engineStatus: state.engineStatus,
     mode: state.mode,
     windows: state.windows,
+    emergencyStop: state.emergencyStop,
+    emergencyStopReason: state.emergencyStopReason,
     lastTransitionAt: state.lastTransitionAt,
     lastTransitionReason: state.lastTransitionReason,
   });
@@ -103,4 +111,26 @@ export function updateRuntimeState(
   });
   persistRuntimeState();
   return state;
+}
+
+/**
+ * Latch the emergency stop. Once set, the engine cannot ARM until the operator
+ * explicitly resets the latch. This is a latched kill switch, not a pause:
+ * existing orders stay in flight, but no new orders may be created.
+ */
+export function latchEmergencyStop(reason: string, correlationId: string): RuntimeState {
+  return updateRuntimeState(
+    { emergencyStop: true, emergencyStopReason: reason },
+    `emergency stop: ${reason}`,
+    correlationId,
+  );
+}
+
+/** Reset the emergency stop latch. Only an explicit operator command may do this. */
+export function resetEmergencyStop(correlationId: string): RuntimeState {
+  return updateRuntimeState(
+    { emergencyStop: false, emergencyStopReason: null },
+    "emergency stop reset",
+    correlationId,
+  );
 }

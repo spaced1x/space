@@ -7,7 +7,7 @@ import { configureLogging, createLogger } from "./logging/logger";
 import { eventBus } from "./bus/events";
 import { getRuntimeState, loadRuntimeState, updateRuntimeState } from "./state/store";
 import { correlationId } from "./shared/ids";
-import { registerClockService } from "./clock/clock.service";
+import { registerClockService, clockServiceHealth } from "./clock/clock.service";
 import { loadOperations, operationsHealth } from "./config/operations.server";
 import { replayHealth } from "./replay/replay.server";
 import { statisticsHealth } from "./stats/statistics.server";
@@ -22,6 +22,10 @@ import { registerTelegramEventForwarding } from "./telegram/telegram.service";
 import { telegramServiceHealth } from "./telegram/telegram.health";
 import { backupServiceHealth } from "./backup/backup.health";
 import { performBackup } from "./backup/backup.service";
+import { acquireInstanceLock, releaseInstanceLock } from "./db/lock.server";
+import { runStartupValidation } from "./startup/validation.server";
+import { sampleAndPersistMetrics } from "./metrics/metrics.server";
+import { startTelegramInbound } from "./telegram/inbound.server";
 
 // Startup sequence (specification §13), milestone 2 slice:
 // Boot -> Env -> Logging -> DB -> Clock -> Health -> Scheduler -> Engine loop
@@ -45,6 +49,10 @@ async function runBoot(): Promise<void> {
   });
   const log = createLogger("boot", cid);
   log.info("SPACE starting", { environment: env.SPACE_ENVIRONMENT, nodeEnv: env.NODE_ENV });
+
+  // Prevent two SPACE processes from running against the same database. This
+  // is a single-instance safety guard: double execution would double-trade.
+  await acquireInstanceLock();
 
   await initDatabase();
 
@@ -81,6 +89,7 @@ async function runBoot(): Promise<void> {
     message: "serving mission control",
   }));
 
+  registerHealthCheck("clock", clockServiceHealth);
   registerHealthCheck("scheduler", schedulerHealth);
   registerHealthCheck("engine", engineHealth);
   registerHealthCheck("market_discovery", discoveryHealth);
@@ -104,11 +113,38 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("telegram", telegramServiceHealth);
   registerHealthCheck("backup", backupServiceHealth);
 
+  // Run startup validation before any background work begins. This gate catches
+  // missing secrets, an unhealthy database, or an invalid wallet before the
+  // operator has a chance to ARM.
+  const startupValidation = await runStartupValidation();
+  if (!startupValidation.valid) {
+    log.error("startup validation failed", { blockers: startupValidation.blockers });
+    eventBus.publish({
+      type: "process.startup_validation_failed",
+      severity: "ERROR",
+      correlationId: cid,
+      source: "boot",
+      payload: { blockers: startupValidation.blockers },
+    });
+    throw new Error(`Startup validation failed: ${startupValidation.blockers.join(", ")}`);
+  }
+
   // Timers exist only after the scheduler is up, and the engine loop registers
   // its tasks with that one scheduler rather than owning timers of its own.
   await startScheduler();
   registerAutoDisarmTask();
   registerTelegramEventForwarding();
+  startTelegramInbound();
+
+  // Capture runtime metrics every 30 seconds for soak-test evidence.
+  registerTask({
+    name: "runtime-metrics",
+    intervalMs: 30_000,
+    run: async () => {
+      await sampleAndPersistMetrics();
+    },
+  });
+
   registerTask({
     name: "scheduled-backup",
     intervalMs: 24 * 60 * 60 * 1000,

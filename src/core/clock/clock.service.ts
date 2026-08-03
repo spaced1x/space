@@ -47,6 +47,8 @@ export function clockHealth(): HealthResult {
   };
 }
 
+export const clockServiceHealth = clockHealth;
+
 export function registerClockService(): void {
   registerHealthCheck("clock", clockHealth);
 }

@@ -16,10 +16,6 @@ export const envSchema = z.object({
   LOG_MAX_BYTES: z.coerce.number().int().min(64_000).default(10_000_000),
   LOG_MAX_FILES: z.coerce.number().int().min(1).max(50).default(5),
 
-  // Single-operator auth (specification §17). Argon2id hash, never a password.
-  OPERATOR_PASSWORD_HASH: optionalSecret,
-  SESSION_SECRET: optionalSecret,
-
   // Venue + chain credentials. Absent in authoring environments; required on
   // the VPS before the engine may leave OBSERVE.
   POLYMARKET_API_KEY: optionalSecret,
@@ -54,9 +50,10 @@ export const envSchema = z.object({
 export type SpaceEnv = z.infer<typeof envSchema>;
 
 // Secrets that must exist before ARMED is reachable on a production host.
+// v1.0 relies on external VPS access control; no operator password is kept in
+// the application. The dashboard and Telegram commands are reachable from the
+// operator's trusted network only.
 export const ARMED_REQUIRED_KEYS = [
-  "OPERATOR_PASSWORD_HASH",
-  "SESSION_SECRET",
   "POLYMARKET_API_KEY",
   "POLYMARKET_API_SECRET",
   "POLYMARKET_API_PASSPHRASE",

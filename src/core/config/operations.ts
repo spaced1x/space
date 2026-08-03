@@ -3,6 +3,13 @@ import { z } from "zod";
 import { ORDER_MODES, type ExecutionConfig, type OrderMode } from "../execution/types";
 import type { StrategyConfig } from "../strategy/types";
 
+export const TELEGRAM_PERMISSION_MODES: TelegramPermissionMode[] = [
+  "READ_ONLY",
+  "SAFE_CONTROLS",
+  "FULL_OPERATOR",
+];
+export type TelegramPermissionMode = "READ_ONLY" | "SAFE_CONTROLS" | "FULL_OPERATOR";
+
 // The Operations Desk configuration document.
 //
 // This is the single operational configuration version of SPACE. Secrets stay
@@ -39,6 +46,8 @@ export interface OperationsConfig {
   retryCount: number;
   retryDelayMs: number;
   limitTimeoutMs: number;
+  /** Inbound Telegram command permission level. */
+  telegramPermissionMode: TelegramPermissionMode;
 }
 
 export const DEFAULT_OPERATIONS_CONFIG: OperationsConfig = {
@@ -61,6 +70,7 @@ export const DEFAULT_OPERATIONS_CONFIG: OperationsConfig = {
   retryCount: 2,
   retryDelayMs: 500,
   limitTimeoutMs: 3_000,
+  telegramPermissionMode: "SAFE_CONTROLS",
 };
 
 const windowSchema = z.object({
@@ -83,6 +93,7 @@ export const operationsPatchSchema = z
     retryCount: z.number().int().min(0).max(20),
     retryDelayMs: z.number().int().min(0).max(60_000),
     limitTimeoutMs: z.number().int().min(0).max(120_000),
+    telegramPermissionMode: z.enum(TELEGRAM_PERMISSION_MODES as [TelegramPermissionMode, ...TelegramPermissionMode[]]),
   })
   .partial();
 
