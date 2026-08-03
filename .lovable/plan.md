@@ -38,6 +38,10 @@ Rules:
 
 Every snapshot carries `snapshotVersion`, `runtimeVersion`, `schemaVersion`, `environment`, `timestamp` and a monotonic `sequence`. The dashboard rejects any snapshot with a lower `sequence` than the one it already holds, discards the cache outright when `environment` or `runtimeVersion` changes, and never renders a snapshot it has classified as stale-by-version.
 
+### Runtime snapshot contract freeze
+
+The runtime snapshot schema becomes the canonical interface between the engine and every UI surface. Mission Control, Operations Desk, Replay, Manual Trading, Statistics, Diagnostics and Settings consume this contract **only**. No page may bypass the snapshot by reading runtime state directly. Future field additions must be backward compatible: fields are added, never renamed or removed, and consumers tolerate unknown fields.
+
 ### Snapshot watchdog
 
 If no snapshot has been received for 30 seconds the dashboard enters `STALE` (not `LOADING`), keeps the last known values on screen, and surfaces last successful update, time since last heartbeat and reconnect attempts.
@@ -64,7 +68,9 @@ success  -> content
 
 ## 2b. Environment parity — Preview, Local, Production build, VPS
 
-- All four environments render from the exact same runtime snapshot contract. There is one contract, one server function, one hook.
+- **Production rendering guarantee:** Preview, Local Dev, Production Build and VPS render from identical runtime data through one contract, one server function and one hook. The production build is the source of truth.
+- No component may render additional information only because it is running inside Lovable Preview.
+- Playwright verification runs against the production build, not only the dev server.
 - No page may depend on preview-only state, mocked data, seeded values or development-only providers. Nothing renders differently because `NODE_ENV` differs.
 - A production build must show the identical cards, runtime information, diagnostics and operator state that Lovable Preview shows.
 - When data does differ between environments, Diagnostics names exactly which runtime endpoint or snapshot field is absent, with its reason and recovery — the value is never silently blank.
@@ -161,6 +167,19 @@ Verification before this phase is called done. `tsgo` clean, `vitest run` green,
 | Blank pages / infinite loading | None; 10s timeout always resolves |
 | Stale snapshot rendering | Older `sequence` never rendered |
 | Preview vs production build vs VPS | Identical runtime state rendered |
+
+## 9. Final acceptance gate
+
+Phase 1 is NOT complete until every operator page — Mission Control, Operations Desk, Replay, Manual Trading, Statistics, Diagnostics and Settings — renders successfully. Each page must:
+
+- render without loading forever
+- render without placeholder text
+- render without console errors
+- render without React warnings
+- render without hydration warnings
+- render from the shared runtime snapshot
+- recover automatically after a runtime restart
+- display the same information in Preview, Production Build and VPS
 
 ## Technical notes
 
