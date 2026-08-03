@@ -63,9 +63,18 @@ export function MissionControl({
         />
       </Section>
 
-      <Section title="Session">
-        <Row label="—" value="" />
+      <Section title="Execution">
+        <Row label="Order mode" value={execution.config.mode} accent />
+        <Row label="Wallet" value={execution.wallet.ready ? "ready" : "not ready"} />
+        <Row label="Venue" value={execution.venue.ready ? "connected" : "offline"} />
+        <Row label="Active orders" value={String(execution.counts.active)} />
+        <Row label="Pending" value={String(execution.counts.pending)} />
+        <Row label="Filled" value={String(execution.counts.filled)} />
+        <Row label="Open positions" value={String(execution.counts.positions)} />
+        <Row label="Risk" value={execution.lastRisk?.code ?? "—"} />
       </Section>
+
+      <Section title="Session">
         <Row label="Started" value={new Date(runtime.sessionStartedAt).toLocaleTimeString()} />
         <Row label="Last change" value={new Date(runtime.lastTransitionAt).toLocaleTimeString()} />
         <Row label="Reason" value={runtime.lastTransitionReason} />
@@ -85,9 +94,9 @@ export function MissionControl({
       </Section>
 
       <p className="mt-auto text-[11px] leading-relaxed text-muted-foreground">
-        Operational status only. Wallet, TWAP, PnL and positions attach here in later
-        milestones; configuration always lives in the Operations Desk, never in this panel. Nothing
-        here is simulated.
+        Operational status only. PnL and statistics attach here in a later milestone;
+        configuration always lives in the Operations Desk, never in this panel. Nothing here is
+        simulated.
       </p>
     </aside>
   );
