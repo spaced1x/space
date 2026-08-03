@@ -124,14 +124,15 @@ export function applyOperationsPatch(
   const defined = Object.fromEntries(
     Object.entries(patch).filter(([, value]) => value !== undefined),
   ) as OperationsPatch;
-  return lockOperations({
+  const merged = {
     ...current,
     ...defined,
     markets: { ...current.markets, ...(defined.markets ?? {}) },
     windows: defined.windows ?? current.windows,
     version: current.version + 1,
     updatedAt: at,
-  });
+  } as OperationsConfig;
+  return lockOperations(merged);
 }
 
 /** Projection consumed by the Strategy Engine. */
