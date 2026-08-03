@@ -122,7 +122,7 @@ export function walletHealth(): HealthResult {
     funderAddress: status.funderAddress,
     hasPrivateKey: status.hasPrivateKey,
     hasApiCredentials: status.hasApiCredentials,
-    chain: lastChainCheck,
+    chain: lastChainCheck ? { ...lastChainCheck } : null,
   };
   // A key that exists but cannot be parsed is a hard configuration failure, not
   // a degraded convenience: nothing can ever be signed with it.
@@ -163,7 +163,7 @@ export async function verifyChainId(): Promise<ChainCheck> {
   const env = loadEnv();
   const expectedChainId = CHAIN_IDS[env.SPACE_ENVIRONMENT];
   const checkedAt = new Date().toISOString();
-  const rpcUrl = env.CHAINLINK_RPC_URL;
+  const rpcUrl = env.POLYGON_RPC_URL;
   if (!rpcUrl) {
     lastChainCheck = {
       expectedChainId,
