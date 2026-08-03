@@ -38,6 +38,50 @@ export async function boot(): Promise<void> {
   return bootPromise;
 }
 
+export interface BootStageTrace {
+  stage: string;
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
+  nextStage?: string;
+  error?: string;
+}
+
+const bootTrace: BootStageTrace[] = [];
+
+/** Full boot trace: stage, started, completed, duration, next stage. */
+export function getBootTrace(): BootStageTrace[] {
+  return bootTrace.map((entry) => ({ ...entry }));
+}
+
+/**
+ * Instrument one awaited boot stage. Every stage is timed and logged so a hang
+ * is attributable to a single named step instead of the whole sequence.
+ */
+async function stage<T>(name: string, run: () => T | Promise<T>): Promise<T> {
+  const stageLog = createLogger("boot", undefined);
+  const previous = bootTrace[bootTrace.length - 1];
+  if (previous) previous.nextStage = name;
+
+  const entry: BootStageTrace = { stage: name, startedAt: new Date().toISOString() };
+  bootTrace.push(entry);
+  const started = Date.now();
+  stageLog.info(`boot stage started: ${name}`);
+
+  try {
+    const result = await run();
+    entry.completedAt = new Date().toISOString();
+    entry.durationMs = Date.now() - started;
+    stageLog.info(`boot stage completed: ${name}`, { durationMs: entry.durationMs });
+    return result;
+  } catch (error) {
+    entry.durationMs = Date.now() - started;
+    entry.error = error instanceof Error ? error.message : String(error);
+    stageLog.error(`boot stage failed: ${name}`, { durationMs: entry.durationMs, reason: entry.error });
+    throw error;
+  }
+}
+
 async function runBoot(): Promise<void> {
   const cid = correlationId("boot");
   const env = loadEnv();
@@ -52,20 +96,22 @@ async function runBoot(): Promise<void> {
 
   // Prevent two SPACE processes from running against the same database. This
   // is a single-instance safety guard: double execution would double-trade.
-  await acquireInstanceLock();
+  await stage("instance-lock", () => acquireInstanceLock());
 
-  await initDatabase();
+  await stage("database-init", () => initDatabase());
 
   // Operational settings live in SQLite, never in .env. Restore the operator's
   // configuration document before anything reads it.
-  await loadOperations();
+  await stage("operations-config", () => loadOperations());
 
   // Runtime state is authoritative in memory but persisted for graceful restart
   // continuity. Never restore into ARMED; a reboot always demands an explicit ARM.
-  await loadRuntimeState();
+  await stage("runtime-state", () => loadRuntimeState());
 
   // Clock is a first-class service: registered before anything schedules work.
-  registerClockService();
+  await stage("clock-service", () => registerClockService());
+
+  await stage("health-registry", () => {
 
   registerHealthCheck("configuration", () => {
     const readiness = describeEnvReadiness();
@@ -112,12 +158,13 @@ async function runBoot(): Promise<void> {
 
   registerHealthCheck("telegram", telegramServiceHealth);
   registerHealthCheck("backup", backupServiceHealth);
+  });
 
   // Run startup validation before any background work begins. This gate catches
   // missing secrets, an unhealthy database, or an invalid wallet. Boot always
   // completes so the operator can see the dashboard and the validation report;
   // only the ARM command is blocked when validation fails.
-  const startupValidation = await runStartupValidation();
+  const startupValidation = await stage("startup-validation", () => runStartupValidation());
   if (!startupValidation.valid) {
     log.warn("startup validation has blockers; engine limited to OBSERVE", {
       blockers: startupValidation.blockers,
@@ -133,28 +180,32 @@ async function runBoot(): Promise<void> {
 
   // Timers exist only after the scheduler is up, and the engine loop registers
   // its tasks with that one scheduler rather than owning timers of its own.
-  await startScheduler();
-  registerAutoDisarmTask();
-  registerTelegramEventForwarding();
-  startTelegramInbound();
+  await stage("scheduler", () => startScheduler());
+  await stage("auto-disarm", () => registerAutoDisarmTask());
+  await stage("telegram-outbound", () => registerTelegramEventForwarding());
+  await stage("telegram-inbound", () => startTelegramInbound());
 
   // Capture runtime metrics every 30 seconds for soak-test evidence.
-  registerTask({
-    name: "runtime-metrics",
-    intervalMs: 30_000,
-    run: async () => {
-      await sampleAndPersistMetrics();
-    },
-  });
+  await stage("runtime-metrics", () =>
+    registerTask({
+      name: "runtime-metrics",
+      intervalMs: 30_000,
+      run: async () => {
+        await sampleAndPersistMetrics();
+      },
+    }),
+  );
 
-  registerTask({
-    name: "scheduled-backup",
-    intervalMs: 24 * 60 * 60 * 1000,
-    run: async () => {
-      await performBackup("SCHEDULED");
-    },
-  });
-  await startEngineLoop();
+  await stage("scheduled-backup", () =>
+    registerTask({
+      name: "scheduled-backup",
+      intervalMs: 24 * 60 * 60 * 1000,
+      run: async () => {
+        await performBackup("SCHEDULED");
+      },
+    }),
+  );
+  await stage("engine-loop", () => startEngineLoop());
 
   if (getRuntimeState().engineStatus === "BOOTING") {
     // Never auto-arm. OBSERVE is the only safe post-boot state.
