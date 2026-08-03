@@ -28,6 +28,10 @@ import { acquireInstanceLock, releaseInstanceLock } from "./db/lock.server";
 import { runStartupValidation } from "./startup/validation.server";
 import { sampleAndPersistMetrics } from "./metrics/metrics.server";
 import { startTelegramInbound } from "./telegram/inbound.server";
+import { noteTimeline, reportConnection } from "./runtime/connections.server";
+import { syncConnections } from "./runtime/connection-sync.server";
+import { verifyChainId } from "./execution/wallet.server";
+import { refreshMarkets } from "./market/discovery.server";
 
 // Startup sequence (specification §13), milestone 2 slice:
 // Boot -> Env -> Logging -> DB -> Clock -> Health -> Scheduler -> Engine loop
@@ -50,6 +54,13 @@ export interface BootStageTrace {
 }
 
 const bootTrace: BootStageTrace[] = [];
+
+let bootStartedAt: string | null = null;
+let bootCompletedAt: string | null = null;
+
+export function bootTimes(): { startedAt: string | null; completedAt: string | null } {
+  return { startedAt: bootStartedAt, completedAt: bootCompletedAt };
+}
 
 /** Full boot trace: stage, started, completed, duration, next stage. */
 export function getBootTrace(): BootStageTrace[] {
@@ -86,6 +97,7 @@ async function stage<T>(name: string, run: () => T | Promise<T>): Promise<T> {
 
 async function runBoot(): Promise<void> {
   const cid = correlationId("boot");
+  bootStartedAt = new Date().toISOString();
   const env = loadEnv();
   configureLogging({ level: env.LOG_LEVEL });
   const fileSink = await installFileSink({
@@ -100,7 +112,10 @@ async function runBoot(): Promise<void> {
   // is a single-instance safety guard: double execution would double-trade.
   await stage("instance-lock", () => acquireInstanceLock());
 
-  await stage("database-init", () => initDatabase());
+  await stage("database-init", async () => {
+    reportConnection("sqlite", { state: "CONNECTING", reason: "opening the SQLite database" });
+    await initDatabase();
+  });
 
   // Operational settings live in SQLite, never in .env. Restore the operator's
   // configuration document before anything reads it.
@@ -187,7 +202,18 @@ async function runBoot(): Promise<void> {
 
   // Timers exist only after the scheduler is up, and the engine loop registers
   // its tasks with that one scheduler rather than owning timers of its own.
-  await stage("scheduler", () => startScheduler());
+  await stage("scheduler", async () => {
+    reportConnection("scheduler", { state: "CONNECTING", reason: "starting the heartbeat" });
+    await startScheduler();
+  });
+
+  // Chain identity is verified before anything talks to the venue, so a wrong
+  // RPC can never masquerade as the selected environment.
+  await stage("rpc-verify", async () => {
+    reportConnection("polygon_rpc", { state: "CONNECTING", reason: "verifying chain identity" });
+    await verifyChainId().catch(() => undefined);
+  });
+
   await stage("auto-disarm", () => registerAutoDisarmTask());
   await stage("telegram-outbound", () => registerTelegramEventForwarding());
   await stage("telegram-inbound", () => startTelegramInbound());
@@ -214,10 +240,21 @@ async function runBoot(): Promise<void> {
   );
   await stage("engine-loop", () => startEngineLoop());
 
+  // Discovery runs inside boot so the first dashboard snapshot already knows
+  // whether a BTC market is open, instead of reporting "loading".
+  await stage("market-discovery", () => refreshMarkets().catch(() => undefined));
+
+  // The final stage builds the first runtime snapshot. The UI only ever reads
+  // it; boot never waits on the UI.
+  await stage("dashboard-snapshot", () => syncConnections());
+
   if (getRuntimeState().engineStatus === "BOOTING") {
     // Never auto-arm. OBSERVE is the only safe post-boot state.
     updateRuntimeState({ engineStatus: "OBSERVE" }, "boot complete", cid);
   }
+
+  bootCompletedAt = new Date().toISOString();
+  noteTimeline("scheduler", "SPACE READY (OBSERVE)");
 
   eventBus.publish({
     type: "process.booted",
