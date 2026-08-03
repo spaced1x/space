@@ -1,7 +1,7 @@
 import { eventBus } from "../bus/events";
 import { clock } from "../clock/clock.service";
 import { toStrategyConfig } from "../config/operations";
-import { promoteFor, subscribeOperations } from "../config/operations.server";
+import { activeOperations, promoteFor, subscribeOperations } from "../config/operations.server";
 import { strategyRepository } from "../db/repositories/strategy.repository";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
