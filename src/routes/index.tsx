@@ -3,6 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 
 import { ConsoleShell, Panel } from "../components/space/console-shell";
+import { ConnectionCard } from "../components/space/connection-card";
+import { SummaryRow } from "../components/space/summary-row";
+import { TradingTargetCard } from "../components/space/trading-target-card";
 import { ExecutionPanel, OrderTable, PositionTable } from "../components/space/execution-panel";
 import { MarketPanel } from "../components/space/market-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
@@ -59,11 +62,43 @@ function OperatorConsole() {
       subtitle="What is happening right now. Operational only — configuration lives in the Operations Desk, analysis in Statistics and Replay."
     >
       {!snapshot.data ? (
-        <p className="font-mono text-sm text-muted-foreground">
-          {snapshot.isError ? "snapshot unavailable" : "connecting to SPACE runtime…"}
-        </p>
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="text-card-title font-semibold text-card-foreground">
+            {snapshot.isError ? "Runtime snapshot unavailable" : "Reading runtime snapshot"}
+          </p>
+          <p className="mt-2 text-label leading-relaxed text-muted-foreground">
+            {snapshot.isError
+              ? "The dashboard could not reach the SPACE process. Trading is unaffected by this page, but you are flying blind — check the process with pm2 status and review the logs."
+              : "The engine boots before it answers. Nothing is displayed until the process reports real values."}
+          </p>
+        </div>
       ) : (
         <>
+          <SummaryRow
+            environment={snapshot.data.environment}
+            runtime={snapshot.data.runtime}
+            health={snapshot.data.health}
+            connections={snapshot.data.connections}
+          />
+
+          <Panel title="Current trading target" hint="the market SPACE is pointed at right now">
+            <TradingTargetCard
+              market={
+                snapshot.data.engine.market.markets.FIVE_MINUTE ??
+                snapshot.data.engine.market.markets.FIFTEEN_MINUTE ??
+                null
+              }
+            />
+          </Panel>
+
+          <Panel title="Runtime connections" hint="every external dependency, as observed">
+            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+              {snapshot.data.connections.map((record) => (
+                <ConnectionCard key={record.id} record={record} />
+              ))}
+            </div>
+          </Panel>
+
           <Panel title="Strategy" hint="PTB · settlement TWAP · active window · direction">
             <StrategyPanel strategy={snapshot.data.engine.strategy} />
           </Panel>
@@ -100,12 +135,14 @@ function OperatorConsole() {
                 >
                   <div className="flex items-center gap-2">
                     <StatusDot state={entry.state} />
-                    <h3 className="font-mono text-sm text-card-foreground">{entry.component}</h3>
-                    <span className="ml-auto text-[11px] uppercase text-muted-foreground">
+                    <h3 className="font-mono text-card-title text-card-foreground">
+                      {entry.component}
+                    </h3>
+                    <span className="ml-auto text-status uppercase text-muted-foreground">
                       {stateLabel(entry.state)}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-label leading-relaxed text-muted-foreground">
                     {entry.message}
                   </p>
                 </article>
@@ -118,7 +155,7 @@ function OperatorConsole() {
               {snapshot.data.events.map((event) => (
                 <li
                   key={`${event.correlationId}-${event.occurredAt}-${event.type}`}
-                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 p-3 font-mono text-xs"
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 p-3 font-mono text-table"
                 >
                   <span className="text-muted-foreground">
                     {new Date(event.occurredAt).toLocaleTimeString()}
@@ -132,7 +169,10 @@ function OperatorConsole() {
                 </li>
               ))}
               {snapshot.data.events.length === 0 && (
-                <li className="p-3 font-mono text-xs text-muted-foreground">no events yet</li>
+                <li className="p-3 text-label text-muted-foreground">
+                  No events yet — the bus is empty because the engine has not changed state since
+                  boot. Events appear here as soon as anything happens.
+                </li>
               )}
             </ul>
           </Panel>
