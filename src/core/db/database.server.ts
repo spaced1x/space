@@ -2,6 +2,7 @@ import { loadEnv } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import { DatabaseUnavailableError } from "../shared/errors";
+import type { HealthResult } from "../health/types";
 import type { SqlDriver } from "./driver";
 import { createSqliteDriver } from "./drivers/sqlite.server";
 import { migrations } from "./migrations";
@@ -80,7 +81,7 @@ export async function requireDriver(): Promise<SqlDriver> {
   return current.driver;
 }
 
-export async function databaseHealth() {
+export async function databaseHealth(): Promise<HealthResult> {
   const current = await initDatabase();
   if (!current.driver) {
     return {
@@ -96,7 +97,7 @@ export async function databaseHealth() {
       message: row?.ok === 1 ? "sqlite (WAL) responding" : "unexpected probe result",
       details: {
         path: current.driver.location,
-        openedAt: current.openedAt,
+        openedAt: current.openedAt ?? "unknown",
         migrations: current.appliedMigrations,
       },
     };
