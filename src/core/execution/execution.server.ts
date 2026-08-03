@@ -14,7 +14,7 @@ import { strategySnapshot } from "../strategy/strategy.server";
 import type { ExecutionIntent } from "../strategy/types";
 import { DEFAULT_EXECUTION_CONFIG } from "./config";
 import { createExecutionEngine, type ExecutionEngine } from "./engine";
-import { polymarketAdapter } from "./polymarket.server";
+import { venueAdapter } from "./adapter.server";
 import { reconcileOpenOrders } from "./reconcile.server";
 import type { ExecutionConfig, ExecutionSnapshot, OrderMode, OrderRecord, ReconciliationResult, RiskContext } from "./types";
 import { walletStatus } from "./wallet.server";
@@ -93,7 +93,7 @@ function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext
 function createEngine(): ExecutionEngine {
   return createExecutionEngine({
     store: executionRepository,
-    venue: polymarketAdapter,
+    venue: venueAdapter,
     now: () => clock().now(),
     config: () => config,
     riskContext: buildRiskContext,
@@ -144,7 +144,7 @@ export async function recoverExecutionEngine(): Promise<void> {
       .filter((id): id is string => Boolean(id));
     lastReconciliation = await reconcileOpenOrders({
       store: executionRepository,
-      venue: polymarketAdapter,
+      venue: venueAdapter,
       tokenIds,
     });
 
@@ -195,7 +195,7 @@ export function executionSnapshot(): ExecutionSnapshot {
     config,
     wallet: walletStatus(),
     venue: (() => {
-      const description = polymarketAdapter.describe();
+      const description = venueAdapter.describe();
       return {
         kind: description.kind,
         ready: description.ready,

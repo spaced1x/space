@@ -2,6 +2,7 @@ import { clock } from "../clock/clock.service";
 import { createLogger } from "../logging/logger";
 import { applySettlementSample } from "../market/state";
 import type { TwapProviderStatus } from "./provider";
+import { rtdsSocketResources, stopRtdsSocket } from "./rtds-socket.server";
 import {
   activeProviderId,
   getActiveProvider,
@@ -57,17 +58,26 @@ export async function stopTwapService(): Promise<void> {
   for (const provider of listProviders()) {
     await provider.stop();
   }
+  // The RTDS socket is shared by both RTDS providers, so the service owns its
+  // teardown: no runtime may hand a live socket to the next one.
+  stopRtdsSocket();
   published = 0;
   lastPublishedAtMs = null;
   log.info("twap service stopped", { published });
 }
 
 /** Live resource counts for the runtime resource audit. */
-export function twapResources(): { services: number; providers: number; connected: number } {
+export function twapResources(): {
+  services: number;
+  providers: number;
+  connected: number;
+  rtdsSockets: number;
+} {
   return {
     services: started ? 1 : 0,
     providers: listProviders().length,
     connected: providerStatuses().filter((status) => status.state === "CONNECTED").length,
+    rtdsSockets: rtdsSocketResources().sockets,
   };
 }
 

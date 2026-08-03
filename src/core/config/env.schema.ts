@@ -23,8 +23,21 @@ export const envSchema = z.object({
   POLYMARKET_API_PASSPHRASE: optionalSecret,
   /** Proxy/funder wallet that holds the collateral. Defaults to WALLET_ADDRESS. */
   POLYMARKET_FUNDER_ADDRESS: optionalSecret,
-  /** Venue host. V1 uses the staging CLOB, V2 the production CLOB. */
-  POLYMARKET_CLOB_URL: optionalSecret,
+  /**
+   * Venue host. Polymarket documents exactly one CLOB host; there is no
+   * official staging/testnet host. V1 uses it read-only, V2 for live trading.
+   */
+  POLYMARKET_CLOB_URL: z.string().trim().url().default("https://clob.polymarket.com"),
+  /** Documented CLOB market data WebSocket (public, no credentials). */
+  POLYMARKET_CLOB_WS_URL: z
+    .string()
+    .trim()
+    .url()
+    .default("wss://ws-subscriptions-clob.polymarket.com/ws/market"),
+  /** The docs require a text `PING` frame every 10 seconds on this socket. */
+  POLYMARKET_CLOB_WS_PING_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
+  /** No book update within this window marks the CLOB feed STALE. */
+  POLYMARKET_CLOB_WS_STALE_MS: z.coerce.number().int().min(2_000).default(20_000),
   /** 0 = EOA, 1 = email/magic proxy, 2 = browser wallet proxy. */
   POLYMARKET_SIGNATURE_TYPE: z.coerce.number().int().min(0).max(2).default(0),
   WALLET_PRIVATE_KEY: optionalSecret,
@@ -32,6 +45,12 @@ export const envSchema = z.object({
   POLYGON_RPC_URL: optionalSecret,
   BINANCE_WS_URL: z.string().trim().url().default("wss://stream.binance.com:9443/ws"),
   BINANCE_SYMBOL: z.string().trim().min(3).default("BTCUSDT"),
+  /** No trade message within this window marks the Binance feed STALE. */
+  BINANCE_STALE_MS: z.coerce.number().int().min(2_000).default(15_000),
+
+  /** Shared reconnect budget for every venue WebSocket before it reports FAILED. */
+  WS_MAX_RECONNECT_ATTEMPTS: z.coerce.number().int().min(1).max(1000).default(12),
+  WS_MAX_BACKOFF_MS: z.coerce.number().int().min(1_000).default(30_000),
 
   // Chainlink BTC/USD aggregator on Polygon, read through POLYGON_RPC_URL.
   CHAINLINK_BTC_USD_FEED: z
@@ -41,32 +60,47 @@ export const envSchema = z.object({
     .default("0xc907E116054Ad103354f2D350FD2514433D57F6f"),
 
   // Settlement TWAP providers. The active provider is chosen by the provider
-  // registry and persisted in the database; these are transport credentials
-  // only. Nothing about the RTDS protocol is compiled in.
+  // registry and persisted in the database; these are transport settings only.
+  // Polymarket RTDS is a public, unauthenticated stream — it takes no
+  // credentials of any kind.
   RTDS_ENABLED: z
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
-  RTDS_WS_URL: optionalSecret,
-  RTDS_API_KEY: optionalSecret,
-  RTDS_API_SECRET: optionalSecret,
-  /** Channel name, or a full subscription payload when it is valid JSON. */
-  RTDS_CHANNEL: optionalSecret,
-  RTDS_SYMBOL: z.string().trim().min(1).default("BTC"),
-  RTDS_AUTH_TYPE: z.enum(["none", "api_key", "bearer", "hmac", "query"]).default("none"),
+  RTDS_WS_URL: z.string().trim().url().default("wss://ws-live-data.polymarket.com"),
+  /** The docs require a text `PING` frame every 5 seconds on this socket. */
+  RTDS_PING_MS: z.coerce.number().int().min(1_000).max(60_000).default(5_000),
+  RTDS_STALE_MS: z.coerce.number().int().min(2_000).default(20_000),
+  /** Documented RTDS symbol filter for the crypto price topics. */
+  RTDS_SYMBOL: z.string().trim().min(1).default("btc/usd"),
+  RTDS_TWAP_30_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  RTDS_TWAP_30_TOPIC: z.string().trim().min(1).default("crypto_prices_twap_thirty"),
+  RTDS_TWAP_60_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  RTDS_TWAP_60_TOPIC: z.string().trim().min(1).default("crypto_prices_twap_sixty"),
 
-  CHAINLINK_ENABLED: z
+  // Chainlink Data Streams (third provider). Disabled until credentials exist.
+  CHAINLINK_STREAMS_ENABLED: z
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-  CHAINLINK_API_KEY: optionalSecret,
-  CHAINLINK_API_SECRET: optionalSecret,
-  CHAINLINK_STREAM_ID: optionalSecret,
-  CHAINLINK_WS_URL: optionalSecret,
-  CHAINLINK_HTTP_URL: optionalSecret,
+  CHAINLINK_STREAMS_WS_URL: z.string().trim().url().default("wss://ws.dataengine.chain.link"),
+  CHAINLINK_STREAMS_HTTP_URL: z.string().trim().url().default("https://api.dataengine.chain.link"),
+  CHAINLINK_STREAMS_FEED_ID: optionalSecret,
+  CHAINLINK_STREAMS_API_KEY: optionalSecret,
+  CHAINLINK_STREAMS_API_SECRET: optionalSecret,
 
   // Polymarket public metadata API used for market discovery.
   POLYMARKET_GAMMA_URL: z.string().trim().url().default("https://gamma-api.polymarket.com"),
+  /** Consecutive Gamma failures before the circuit breaker opens. */
+  GAMMA_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(100).default(5),
+  /** How long the breaker stays open before a recovery probe. */
+  GAMMA_RECOVERY_MS: z.coerce.number().int().min(1_000).default(60_000),
 
   TELEGRAM_BOT_TOKEN: optionalSecret,
   TELEGRAM_CHAT_ID: optionalSecret,

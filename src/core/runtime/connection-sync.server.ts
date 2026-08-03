@@ -1,7 +1,7 @@
 import { loadEnv, resolveDbPath } from "../config/env.server";
 import { databaseHealth } from "../db/database.server";
 import { chainCheck, walletStatus } from "../execution/wallet.server";
-import { polymarketAdapter } from "../execution/polymarket.server";
+import { venueAdapter } from "../execution/adapter.server";
 import { rateLimitStatus } from "../execution/rate-limit.server";
 import { feeds } from "../engine/loop.server";
 import { discoveryStats } from "../market/discovery.server";
@@ -329,8 +329,8 @@ function syncTwap(): void {
 
 function syncClob(): void {
   const env = loadEnv();
-  const health = polymarketAdapter.health();
-  const description = polymarketAdapter.describe();
+  const health = venueAdapter.health();
+  const description = venueAdapter.describe();
   const details = (health.details ?? {}) as Record<string, unknown>;
   const wallet = walletStatus();
   const limits = rateLimitStatus();

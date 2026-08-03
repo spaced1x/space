@@ -1,127 +1,79 @@
 import { clock } from "../clock/clock.service";
 import { loadEnv } from "../config/env.server";
 import { createLogger } from "../logging/logger";
+import { createWsClient, type WsClient } from "../shared/ws-client.server";
 import type { HealthResult } from "../health/types";
 import type { FeedStats, PriceFeed, PriceSample } from "./types";
 
 // Binance WebSocket adapter: streaming price only. No TWAP, no strategy.
-// Auto-reconnect with capped backoff, heartbeat/staleness watchdog, latency
-// measurement from the venue event timestamp, and strict message validation.
+//
+// Runtime contract: official Binance endpoint from configuration, heartbeat
+// monitoring, exponential backoff with jitter, automatic resubscribe after
+// every reconnect, stale price detection, last update timestamp and sequence,
+// and measured latency. A price is never fabricated or carried past staleness.
 
 const log = createLogger("binance-feed");
-const STALE_MS = 15_000;
-const MAX_BACKOFF_MS = 30_000;
 
 interface TradeMessage {
   e?: string;
   E?: number;
   s?: string;
   p?: string;
-}
-
-function parseTrade(raw: unknown, symbol: string): PriceSample | null {
-  if (typeof raw !== "string") return null;
-  let parsed: TradeMessage;
-  try {
-    parsed = JSON.parse(raw) as TradeMessage;
-  } catch {
-    return null;
-  }
-  if (parsed.e !== "trade" && parsed.e !== "aggTrade") return null;
-  const price = Number(parsed.p);
-  if (!Number.isFinite(price) || price <= 0) return null;
-  const observedMs = clock().now();
-  const sourceMs = typeof parsed.E === "number" ? parsed.E : null;
-  return {
-    source: "BINANCE",
-    symbol: (parsed.s ?? symbol).toUpperCase(),
-    price,
-    observedAt: new Date(observedMs).toISOString(),
-    sourceAt: sourceMs === null ? null : new Date(sourceMs).toISOString(),
-    latencyMs: sourceMs === null ? null : Math.max(0, observedMs - sourceMs),
-  };
+  t?: number;
+  a?: number;
 }
 
 export function createBinanceFeed(onSample: (sample: PriceSample) => void): PriceFeed {
-  let socket: WebSocket | undefined;
+  let client: WsClient | undefined;
   let stopped = true;
-  let connected = false;
-  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-  let attempt = 0;
   let latest: PriceSample | null = null;
-  let lastMessageAt: number | null = null;
   let samples = 0;
-  let errors = 0;
-  let reconnects = 0;
-  let lastError: string | null = null;
-  let url = "";
+  let parseErrors = 0;
+  let lastSequence: number | null = null;
+  let lastUpdateMs: number | null = null;
   let symbol = "BTCUSDT";
+  let staleMs = 15_000;
+  let stream = "";
 
-  function connect(): void {
-    if (stopped) return;
-    if (typeof WebSocket === "undefined") {
-      lastError = "WebSocket is not available in this runtime";
+  function endpoint(): string {
+    const env = loadEnv();
+    symbol = env.BINANCE_SYMBOL.toUpperCase();
+    stream = `${symbol.toLowerCase()}@trade`;
+    return `${env.BINANCE_WS_URL.replace(/\/$/, "")}/${stream}`;
+  }
+
+  function ingest(raw: string): void {
+    let parsed: TradeMessage;
+    try {
+      parsed = JSON.parse(raw) as TradeMessage;
+    } catch {
+      parseErrors += 1;
       return;
     }
-    try {
-      const next = new WebSocket(url);
-      socket = next;
-      next.onopen = () => {
-        connected = true;
-        attempt = 0;
-        lastMessageAt = clock().now();
-        log.info("binance connected", { url });
-      };
-      next.onmessage = (event: MessageEvent) => {
-        lastMessageAt = clock().now();
-        const sample = parseTrade(
-          typeof event.data === "string" ? event.data : String(event.data),
-          symbol,
-        );
-        if (!sample) return;
-        latest = sample;
-        samples += 1;
-        onSample(sample);
-      };
-      next.onerror = () => {
-        errors += 1;
-        lastError = "socket error";
-      };
-      next.onclose = () => {
-        connected = false;
-        if (!stopped) reconnect();
-      };
-    } catch (error) {
-      errors += 1;
-      lastError = error instanceof Error ? error.message : String(error);
-      reconnect();
+    if (parsed.e !== "trade" && parsed.e !== "aggTrade") return;
+    const price = Number(parsed.p);
+    if (!Number.isFinite(price) || price <= 0) {
+      parseErrors += 1;
+      return;
     }
+    const observedMs = clock().now();
+    const sourceMs = typeof parsed.E === "number" ? parsed.E : null;
+    lastSequence = parsed.t ?? parsed.a ?? null;
+    lastUpdateMs = observedMs;
+    latest = {
+      source: "BINANCE",
+      symbol: (parsed.s ?? symbol).toUpperCase(),
+      price,
+      observedAt: new Date(observedMs).toISOString(),
+      sourceAt: sourceMs === null ? null : new Date(sourceMs).toISOString(),
+      latencyMs: sourceMs === null ? null : Math.max(0, observedMs - sourceMs),
+    };
+    samples += 1;
+    onSample(latest);
   }
 
-  function reconnect(): void {
-    if (stopped || reconnectTimer) return;
-    reconnects += 1;
-    attempt += 1;
-    const delay = Math.min(MAX_BACKOFF_MS, 500 * 2 ** Math.min(attempt, 6));
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = undefined;
-      connect();
-    }, delay);
-    if (reconnectTimer && typeof reconnectTimer === "object" && "unref" in reconnectTimer) {
-      (reconnectTimer as { unref: () => void }).unref();
-    }
-  }
-
-  function close(): void {
-    connected = false;
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = undefined;
-    try {
-      socket?.close();
-    } catch {
-      // already closed
-    }
-    socket = undefined;
+  function isStale(): boolean {
+    return lastUpdateMs !== null && clock().now() - lastUpdateMs > staleMs;
   }
 
   return {
@@ -130,65 +82,92 @@ export function createBinanceFeed(onSample: (sample: PriceSample) => void): Pric
 
     async start() {
       const env = loadEnv();
-      symbol = env.BINANCE_SYMBOL.toUpperCase();
-      url = `${env.BINANCE_WS_URL.replace(/\/$/, "")}/${symbol.toLowerCase()}@trade`;
+      staleMs = env.BINANCE_STALE_MS;
       stopped = false;
-      connect();
+      client = createWsClient({
+        name: "binance",
+        // Resubscription is the stream path itself: a reconnect re-opens the
+        // documented combined-stream URL for the configured symbol.
+        url: endpoint,
+        onMessage: ingest,
+        staleMs,
+        maxAttempts: env.WS_MAX_RECONNECT_ATTEMPTS,
+        maxBackoffMs: env.WS_MAX_BACKOFF_MS,
+      });
+      client.start();
+      log.info("binance feed started", { symbol, stream });
     },
 
     async stop() {
       stopped = true;
-      close();
-      log.info("binance feed stopped", { samples, reconnects });
+      client?.stop();
+      client = undefined;
+      log.info("binance feed stopped", { samples });
     },
 
     // Heartbeat watchdog. The scheduler owns the timer; the feed only reacts.
     async poll() {
       if (stopped) return;
-      const stale = lastMessageAt !== null && clock().now() - lastMessageAt > STALE_MS;
-      if (!connected || stale) {
-        if (stale) lastError = `no message for ${STALE_MS}ms`;
-        close();
-        reconnect();
-      }
+      client?.tick();
     },
 
     latest: () => latest,
 
     stats(): FeedStats {
+      const socket = client?.stats();
+      const stale = isStale();
       return {
-        connected,
+        connected: socket?.connected ?? false,
+        state: stopped ? "IDLE" : stale && socket?.state === "CONNECTED" ? "STALE" : (socket?.state ?? "IDLE"),
         samples,
-        errors,
-        reconnects,
-        lastError,
+        errors: (socket?.errors ?? 0) + parseErrors,
+        reconnects: socket?.reconnects ?? 0,
+        lastError: socket?.lastError ?? null,
         lastSampleAt: latest?.observedAt ?? null,
         latencyMs: latest?.latencyMs ?? null,
+        lastSequence,
+        lastUpdateAt: lastUpdateMs === null ? null : new Date(lastUpdateMs).toISOString(),
+        endpoint: socket?.endpoint ?? null,
       };
     },
 
     health(): HealthResult {
+      const stats = this.stats();
+      const details = {
+        endpoint: stats.endpoint,
+        symbol,
+        stream,
+        state: stats.state,
+        connected: stats.connected,
+        samples,
+        errors: stats.errors,
+        reconnects: stats.reconnects,
+        lastSequence,
+        ageMs: lastUpdateMs === null ? null : clock().now() - lastUpdateMs,
+        price: latest?.price ?? null,
+        latencyMs: latest?.latencyMs ?? null,
+        staleMs,
+      };
       if (stopped) {
-        return { state: "DISABLED", message: "binance feed not started", details: { url } };
+        return { state: "DISABLED", message: "binance feed not started", details };
       }
-      const ageMs = lastMessageAt === null ? null : clock().now() - lastMessageAt;
-      const healthy = connected && ageMs !== null && ageMs <= STALE_MS;
+      if (stats.state === "FAILED") {
+        return {
+          state: "FAILED",
+          message: stats.lastError ?? "binance stream failed after its retry budget",
+          details,
+        };
+      }
+      if (stats.state === "CONNECTED" && !isStale() && latest) {
+        return { state: "OK", message: `streaming ${symbol}`, details };
+      }
       return {
-        state: healthy ? "OK" : "DEGRADED",
-        message: healthy
-          ? `streaming ${symbol}`
-          : (lastError ?? "connecting to binance stream"),
-        details: {
-          url,
-          symbol,
-          connected,
-          samples,
-          errors,
-          reconnects,
-          ageMs,
-          price: latest?.price ?? null,
-          latencyMs: latest?.latencyMs ?? null,
-        },
+        state: "DEGRADED",
+        message:
+          stats.state === "STALE"
+            ? `no ${symbol} trade for ${staleMs}ms`
+            : (stats.lastError ?? `binance stream ${stats.state.toLowerCase()}`),
+        details,
       };
     },
   };

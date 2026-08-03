@@ -15,10 +15,15 @@ import { replayHealth } from "./replay/replay.server";
 import { statisticsHealth } from "./stats/statistics.server";
 import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
 import { discoveryHealth } from "./market/discovery.server";
+import {
+  clobMarketHealth,
+  pollClobMarketFeed,
+  startClobMarketFeed,
+} from "./market/clob-ws.server";
 import { registerTask, schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
 import { settlementTwapHealth, strategyHealth } from "./strategy/strategy.server";
 import { executionHealth, riskHealth } from "./execution/execution.server";
-import { polymarketAdapter } from "./execution/polymarket.server";
+import { venueAdapter } from "./execution/adapter.server";
 import { walletHealth } from "./execution/wallet.server";
 import { registerTelegramEventForwarding } from "./telegram/telegram.service";
 import { telegramServiceHealth } from "./telegram/telegram.health";
@@ -197,13 +202,14 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("settlement_twap", settlementTwapHealth);
   registerHealthCheck("strategy", strategyHealth);
   registerHealthCheck("wallet", walletHealth);
-  registerHealthCheck("polymarket", () => polymarketAdapter.health());
+  registerHealthCheck("polymarket", () => venueAdapter.health());
   registerHealthCheck("risk", riskHealth);
   registerHealthCheck("execution", executionHealth);
   registerHealthCheck("operations", operationsHealth);
   registerHealthCheck("replay", replayHealth);
   registerHealthCheck("statistics", statisticsHealth);
   registerHealthCheck("binance", () => feedHealth("binance"));
+  registerHealthCheck("clob_market_feed", clobMarketHealth);
   registerHealthCheck("chainlink", () => feedHealth("chainlink"));
 
   // Windows are implemented switches, so they report DISABLED (not
@@ -280,6 +286,20 @@ async function runBoot(): Promise<void> {
   // Discovery runs inside boot so the first dashboard snapshot already knows
   // whether a BTC market is open, instead of reporting "loading".
   await stage("market-discovery", () => refreshMarkets().catch(() => undefined));
+
+  // The public CLOB market data socket starts after discovery so its first
+  // subscription already carries the active BTC tokens. It reconciles its
+  // subscriptions on every tick as markets roll over.
+  await stage("clob-market-feed", async () => {
+    startClobMarketFeed();
+    await registerTask({
+      name: "clob-market-feed",
+      intervalMs: 2_000,
+      run: async () => {
+        pollClobMarketFeed();
+      },
+    });
+  });
 
   // The final stage builds the first runtime snapshot. The UI only ever reads
   // it; boot never waits on the UI.
