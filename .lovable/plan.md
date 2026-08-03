@@ -75,9 +75,56 @@ The release gate document is updated so V2 activation is an explicit, checkliste
 - Telegram allow-list rejection.
 - Mode persistence across restart, default `SAFE_CONTROLS` on a fresh database.
 
+## 8. Production runtime metrics
+
+A metrics collector samples the running process and aggregates counters continuously, exposed in Diagnostics and included in the final report:
+
+- Memory: peak and average RSS. CPU: average and peak process usage.
+- Growth: database file size and log directory size, sampled over time.
+- Scheduler: average and maximum tick drift.
+- Reconnect counters per source: Binance, Chainlink, Polymarket, Telegram.
+- Event counters: rate-limit events, recovery events, auto-disarm events.
+- Engine uptime and session start.
+
+Samples persist to the database so a restart during the soak does not lose the record; Diagnostics renders current values plus soak-window aggregates.
+
+## 9. Production release report
+
+Generated at the end of Milestone 7 as `docs/SPACE_PRODUCTION_REPORT.md`, the permanent v1.0 record:
+
+- VPS environment, git commit hash, build version, SQLite schema version, active environment (V1/V2).
+- Runtime metrics from the soak.
+- Test summary.
+- Production Release Gate checklist with pass/fail per item.
+- Final Architecture Audit result.
+- Known limitations.
+- Final release recommendation.
+
+## 10. Configuration snapshots
+
+A snapshot is persisted whenever the operator arms the engine, starts manual trading, or changes configuration. Each snapshot records timestamp, environment, strategy mode, active windows, buffers, trade limits, order mode, manual/strategy mode and a monotonic version number.
+
+Orders, intents and trades reference the snapshot version in force at creation, so Replay and Statistics can always explain which configuration produced any given outcome.
+
+## 11. Startup validation
+
+A validation gate runs before the engine may reach OBSERVE, checking: database schema version, database integrity, environment stamp (the database must match `SPACE_ENVIRONMENT`), wallet consistency, required directories, configuration version, and Telegram, Polymarket, Binance and Chainlink configuration.
+
+On failure the engine stays in OBSERVE, the relevant health component reports DEGRADED or FAILED with the specific reason, and ARM stays blocked. Nothing continues silently.
+
+## 12. Graceful shutdown
+
+The shutdown sequence, in order: stop accepting commands, finish in-flight persistence, flush logs, release the database lock, release the process lock, close WebSockets, close SQLite cleanly, record the shutdown reason, persist final runtime statistics. Shutdown always leaves SPACE in a recoverable state, and the next boot can explain how the previous session ended.
+
+## 13. Final version freeze
+
+On completion of Milestone 7, architecture, database schema, Command Bus contracts, and strategy, risk, execution and replay behaviour are frozen for v1.0. Subsequent functional changes belong to v1.1 or later; the freeze is recorded in the specification and the production report.
+
 ## Technical notes
 
 - New migration adds the Telegram permission mode to the operations configuration; no existing table changes.
+- A further migration adds `config_snapshots` and `runtime_metrics`, plus a snapshot-version reference on execution intents and orders.
 - Telegram receiver lives in `src/core/telegram/`, dispatching through `src/core/bus/command-bus.server.ts` only.
+- Metrics collection registers as a scheduler task; startup validation registers as a boot step and health component ahead of the OBSERVE transition.
 - Lock implemented in `src/core/db/` and registered in the boot and shutdown sequences.
 - Milestones 1–5 remain frozen; the only edits outside Milestone 6 files are the env-schema and documentation removals for authentication.
