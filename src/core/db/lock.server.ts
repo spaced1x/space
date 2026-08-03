@@ -96,3 +96,15 @@ export function releaseInstanceLock(): void {
 export function instanceLockHeld(): boolean {
   return held !== null;
 }
+
+/** True when a process with this PID is currently running. */
+function processAlive(pid: number): boolean {
+  if (pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists but belongs to another user.
+    return (error as { code?: string }).code === "EPERM";
+  }
+}
