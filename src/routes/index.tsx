@@ -217,3 +217,13 @@ function OperatorConsole() {
     </ConsoleShell>
   );
 }
+
+function EmptyLine({ term, detail }: { term: string; detail: string }) {
+  return (
+    <div className="flex flex-wrap gap-x-3 text-body">
+      <dt className="w-24 shrink-0 text-muted-foreground">{term}</dt>
+      <dd className="flex-1 text-foreground">{detail}</dd>
+    </div>
+  );
+}
+
