@@ -61,7 +61,7 @@ export async function generateReleaseReport(version: string): Promise<ReleaseGat
     db_ok: health.components.find((c) => c.component === "database")?.state === "OK",
     scheduler_ok: health.components.find((c) => c.component === "scheduler")?.state === "OK",
     no_emergency_stop: !runtime.emergencyStop,
-    not_armed: runtime.engineStatus !== "ARMED",
+    not_armed: runtime.lifecycle !== "RUNNING",
     metrics_sampled: metrics !== null,
   };
 

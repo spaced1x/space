@@ -72,7 +72,7 @@ function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext
     at: clock().iso(),
     manual: Boolean(manual),
     manualEnabled: ops.manualEnabled,
-    engineArmed: runtime.engineStatus === "ARMED",
+    engineArmed: runtime.lifecycle === "RUNNING",
     strategyMode: runtime.mode === "STRATEGY",
     strategyEnabled: config.strategyEnabled,
     marketEnabled,

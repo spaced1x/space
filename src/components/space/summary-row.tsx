@@ -31,12 +31,12 @@ export function SummaryRow({
 
   const tradingBlockers = connections.filter((record) => record.blocksTrading);
   const trading =
-    runtime.engineStatus === "ARMED"
+    runtime.lifecycle === "RUNNING"
       ? tradingBlockers.length
         ? `BLOCKED BY ${tradingBlockers[0]!.label.toUpperCase()}`
-        : "ARMED"
+        : "RUNNING"
       : market?.state === "CONNECTED"
-        ? `${runtime.engineStatus} — NOT ARMED`
+        ? `${runtime.lifecycle} — NOT RUNNING`
         : "WAITING FOR MARKET";
 
   const cells: Array<{ label: string; value: string; tone?: "accent" | "ok" | "warn" }> = [

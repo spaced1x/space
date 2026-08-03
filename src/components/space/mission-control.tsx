@@ -52,7 +52,7 @@ export function MissionControl({
       </Section>
 
       <Section title="Engine">
-        <Row label="Status" value={runtime.engineStatus} accent />
+        <Row label="Lifecycle" value={runtime.lifecycle} accent />
         <Row label="Mode" value={runtime.mode} />
         <Row label="5m window" value={runtime.windows.fiveMinute ? "enabled" : "disabled"} />
         <Row label="15m window" value={runtime.windows.fifteenMinute ? "enabled" : "disabled"} />

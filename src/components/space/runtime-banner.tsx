@@ -25,9 +25,9 @@ export function RuntimeBanner({
     ? `Trading halted — emergency stop latched (${runtime.emergencyStopReason ?? "no reason recorded"})`
     : blockers.length
       ? `Trading blocked by ${blockers.map((record) => record.label).join(", ")}`
-      : runtime.engineStatus === "ARMED"
+      : runtime.lifecycle === "RUNNING"
         ? "Trading enabled — the engine may submit orders"
-        : `Trading disabled — engine is ${runtime.engineStatus}, not ARMED`;
+        : `Trading disabled — engine is ${runtime.lifecycle}, not RUNNING`;
 
   return (
     <section
@@ -44,7 +44,7 @@ export function RuntimeBanner({
           {environment.label}
         </p>
         <Cell label="Capital" value={live ? "REAL FUNDS AT RISK" : "PAPER — NO REAL FUNDS"} />
-        <Cell label="Engine" value={runtime.engineStatus} />
+        <Cell label="Engine" value={runtime.lifecycle} />
         <Cell label="Trading mode" value={runtime.mode} />
         <Cell label="Emergency stop" value={runtime.emergencyStop ? "LATCHED" : "clear"} />
       </div>
