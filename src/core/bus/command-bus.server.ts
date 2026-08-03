@@ -7,7 +7,6 @@ import { systemClock } from "../shared/clock";
 import { correlationId as newCorrelationId } from "../shared/ids";
 import { sendTelegramMessage } from "../telegram/telegram.service";
 import {
-  ARM_REASON,
   getRuntimeState,
   latchEmergencyStop,
   resetEmergencyStop,
