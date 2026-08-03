@@ -211,5 +211,6 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
           ? "no fills on this market"
           : `${input.fills.length} fill(s) reconstructed from immutable venue trade ids`,
     },
+    windows,
   };
 }
