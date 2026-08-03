@@ -149,6 +149,13 @@ export interface PositionRecord {
   openedAt: string;
   lastFillAt: string;
   fills: number;
+  /**
+   * Settlement value per share (1 or 0) once the market resolves. Populated by
+   * settlement reconciliation; until then a position is held at cost.
+   */
+  settledValue?: number | null;
+  /** Last known venue price per share, used for unrealized PnL only. */
+  markPrice?: number | null;
 }
 
 export interface ExecutionConfig {
