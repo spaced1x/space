@@ -7,7 +7,19 @@ import { CommandDeck } from "../components/space/command-deck";
 import { MissionControl } from "../components/space/mission-control";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
 import type { Command } from "../core/bus/commands";
+import type { EventSeverity } from "../core/bus/events";
 import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
+
+const SEVERITY_TONE: Record<EventSeverity, string> = {
+  INFO: "text-muted-foreground",
+  SUCCESS: "text-ok",
+  WARNING: "text-warn",
+  ERROR: "text-fail",
+};
+
+function severityTone(severity: EventSeverity): string {
+  return SEVERITY_TONE[severity] ?? "text-muted-foreground";
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
