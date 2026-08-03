@@ -9,6 +9,7 @@ import { getMarketState } from "../market/state";
 import { schedulerStatus } from "../scheduler/scheduler.server";
 import { strategySnapshot } from "../strategy/strategy.server";
 import { telegramHealth } from "../telegram/telegram.service";
+import { twapServiceSnapshot } from "../twap/service.server";
 import { reportConnection } from "./connections.server";
 
 // Adapters already track their own statistics. This module is the single place
@@ -256,28 +257,72 @@ function syncBinance(url: string, symbol: string): void {
 function syncTwap(): void {
   const strategy = strategySnapshot();
   const twap = strategy.twap;
+  const service = twapServiceSnapshot();
+  const active = service.active;
+  const inactive = service.providers.filter((entry) => entry.id !== service.activeProviderId);
+
+  // The card reports the provider first (it is the dependency), then what the
+  // TWAP engine has been able to build from it.
+  const state =
+    active === null
+      ? "NOT_STARTED"
+      : active.state === "CONNECTED"
+        ? twap.state === "OK"
+          ? "CONNECTED"
+          : "CONNECTING"
+        : active.state === "NOT_CONFIGURED"
+          ? "NOT_CONFIGURED"
+          : active.state === "FAILED"
+            ? "FAILED"
+            : active.state === "DISABLED"
+              ? "NOT_CONFIGURED"
+              : "WAITING";
 
   reportConnection("twap_provider", {
-    state:
-      twap.state === "OK"
-        ? "CONNECTED"
-        : twap.state === "WARMING"
-          ? "CONNECTING"
-          : twap.state === "STALE"
-            ? "DEGRADED"
-            : "WAITING",
-    reason: twap.message,
-    endpoint: "Binance settlement TWAP",
-    lastSuccessAt: twap.lastUpdateAt,
-    blocksTrading: twap.state !== "OK",
-    recovery: "automatic — rebuilt for every settlement window",
-    action: twap.state === "OK" ? null : "None — samples accumulate automatically",
+    state,
+    reason:
+      active === null
+        ? "TWAP service not started"
+        : active.state === "CONNECTED"
+          ? `${active.label}: ${active.reason} — ${twap.message}`
+          : `${active.label}: ${active.reason}`,
+    endpoint: active?.endpoint ?? null,
+    latencyMs: active?.latencyMs ?? null,
+    reconnects: active?.reconnects ?? 0,
+    lastSuccessAt: active?.lastSuccessAt ?? twap.lastUpdateAt,
+    lastError: active?.lastError ?? null,
+    blocksTrading: state !== "CONNECTED",
+    recovery:
+      active?.state === "NOT_CONFIGURED" || active?.state === "DISABLED"
+        ? "manual — provider configuration required"
+        : "automatic — the provider reconnects with backoff and the window rebuilds",
+    action:
+      active?.action ??
+      (twap.state === "OK" ? null : "None — settlement samples accumulate automatically"),
     details: {
-      value: twap.value,
-      samples: twap.samples,
-      lengthSeconds: twap.lengthSeconds,
+      activeProvider: active?.label ?? service.activeProviderId,
+      providerState: active?.state ?? "NOT_STARTED",
+      transport: active?.transport ?? null,
+      symbol: active?.symbol ?? null,
+      providerEnvironment: active?.environment ?? null,
+      authentication: active?.authType ?? null,
+      providerPrice: active?.price ?? null,
+      freshnessMs: active?.freshnessMs ?? null,
+      providerSamples: active?.samples ?? 0,
+      providerErrors: active?.errors ?? 0,
+      sequence: active?.sequence ?? null,
+      sequenceGaps: active?.sequenceGaps ?? 0,
+      lastMessageAt: active?.lastMessageAt ?? null,
+      publishedSamples: service.published,
+      tradingImpact: active?.tradingImpact ?? "Settlement TWAP unavailable",
+      twapValue: twap.value,
+      twapSamples: twap.samples,
+      twapLengthSeconds: twap.lengthSeconds,
       windowStart: twap.startAt,
       windowEnd: twap.endAt,
+      standbyProviders: inactive
+        .map((entry) => `${entry.label}: ${entry.state.replace(/_/g, " ").toLowerCase()}`)
+        .join(" · "),
     },
   });
 }
