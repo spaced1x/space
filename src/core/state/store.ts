@@ -4,6 +4,10 @@ import { systemClock } from "../shared/clock";
 export type EngineStatus = "BOOTING" | "OBSERVE" | "ARMED" | "PAUSED" | "STOPPED";
 export type OperatingMode = "STRATEGY" | "MANUAL";
 
+// The single sanctioned reason string for entering ARMED. The command bus is
+// the only module allowed to use it.
+export const ARM_REASON = "engine armed";
+
 export interface RuntimeState {
   engineStatus: EngineStatus;
   mode: OperatingMode;
