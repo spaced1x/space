@@ -256,7 +256,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
       venueOrderId: null,
     });
 
-    if (cfg.mode === "LIMIT_THEN_MARKET") {
+    if (order.mode === "LIMIT_THEN_MARKET") {
       // Fallback keeps the same intent and the same order chain; the monitor
       // picks the LIMIT_CANCELLED order up next tick and builds the market leg.
       return;
@@ -478,7 +478,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
         }
 
         // Market fallback waiting to be built (mode LIMIT_THEN_MARKET).
-        if (order.state === "LIMIT_CANCELLED" && cfg.mode === "LIMIT_THEN_MARKET") {
+        if (order.state === "LIMIT_CANCELLED" && order.mode === "LIMIT_THEN_MARKET") {
           const price = await priceFor(intentOf(order), order.tokenId);
           const rebuilt = await advance(order, "ORDER_BUILD", "market fallback after limit timeout", {
             kind: "MARKET",
@@ -528,7 +528,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
           nowMs - submittedAt >= cfg.limitTimeoutMs &&
           (current.state === "LIMIT_SUBMITTED" || current.state === "PARTIAL_FILL") &&
           current.kind === "LIMIT" &&
-          cfg.mode !== "MARKET_ONLY";
+          current.mode !== "MARKET_ONLY";
         if (timedOut) {
           runtime.submittedAtMs.delete(current.id);
           await handleTimeout(current);
