@@ -6,6 +6,9 @@ import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { MarketPanel } from "../components/space/market-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
+import { ExecutionPanel } from "../components/space/execution-panel";
+import { BotPredictionPanel, StrategyPanel } from "../components/space/strategy-panel";
+import { IntentList, WindowTimeline } from "../components/space/window-timeline";
 import type { EventSeverity } from "../core/bus/events";
 import { getDiagnostics } from "../lib/diagnostics.functions";
 
@@ -62,6 +65,26 @@ function Diagnostics() {
 
           <Panel title="Unified market state">
             <MarketPanel market={data.engine.market} />
+          </Panel>
+
+          <Panel title="Strategy engine">
+            <StrategyPanel strategy={data.engine.strategy} />
+          </Panel>
+
+          <Panel title="Bot prediction" hint="advisory only — never places an order">
+            <BotPredictionPanel strategy={data.engine.strategy} />
+          </Panel>
+
+          <Panel title="Execution windows">
+            <WindowTimeline strategy={data.engine.strategy} />
+          </Panel>
+
+          <Panel title="Execution intents">
+            <IntentList strategy={data.engine.strategy} />
+          </Panel>
+
+          <Panel title="Risk and execution">
+            <ExecutionPanel execution={data.execution} />
           </Panel>
 
           <Panel title="Health registry" hint={`overall ${stateLabel(data.health.state)}`}>
