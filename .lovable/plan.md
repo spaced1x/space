@@ -30,18 +30,31 @@ No architectural change, no new subsystems.
    `allowed()` and move the permission table into one map so no command can be added
    without a permission entry.
 
+5. **No settlement ingestion.** Replay reconstructs market → discovery → TWAP → window →
+   trigger → intent → risk → order → fill, but the settlement step is the market close
+   time only; the venue's resolved outcome is never read. Realized PnL is therefore fill
+   PnL, not settled PnL — Replay, Statistics and the production report are all incomplete,
+   and nothing can prove whether a settlement-TWAP decision was actually correct. Add a
+   `settlements` table plus a scheduler task that reads the resolved outcome for every
+   closed market, and feed it into Replay, Statistics and the release report.
+
+6. **Environment conformance gate.** Environment correctness is spread across separate
+   checks today and none of them blocks ARM as a unit. Introduce one composite gate,
+   evaluated at boot and re-evaluated immediately before ARM, with six items that must all
+   pass: V1 Testnet resolves correctly, V2 Mainnet resolves correctly, environment
+   switching yields the matching CLOB host and chain, the RPC's live `eth_chainId` matches
+   the environment, the wallet address matches the environment's expected deployment, and
+   the database's environment stamp equals the running environment. Stamp the environment
+   into the database on migration and refuse to open a database stamped for a different
+   one. Any single FAILED item blocks ARM, surfaced as one line in the pre-ARM gate.
+   Blocker #3 becomes one of these six items rather than a standalone check.
+
 ## Specification conformance defects
 
-5. **Operations Desk edits and Manual orders bypass the Command Bus.** `updateOperations`
+7. **Operations Desk edits and Manual orders bypass the Command Bus.** `updateOperations`
    and `submitManualOrder` call their services directly, so neither is serialised, audited
    or correlation-stamped. Add `UPDATE_OPERATIONS` and `MANUAL_ORDER` commands and route
    both server functions through `dispatchCommand`.
-
-6. **No settlement ingestion.** Replay reconstructs market → discovery → TWAP → window →
-   trigger → intent → risk → order → fill, but the settlement step is the market close
-   time only; the venue's resolved outcome is never read. Realized PnL is therefore fill
-   PnL, not settled PnL. Add a `settlements` table plus a scheduler task that reads the
-   resolved outcome for closed markets, and feed it into Replay and Statistics.
 
 7. **Statistics has no configuration-version linkage.** `config_snapshots` exist but no
    statistic is attributed to a snapshot, so a PnL number cannot be tied to the config
