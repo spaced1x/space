@@ -411,24 +411,239 @@ Nothing is deleted. `docs/archive/` receives the STONE charter, all ADRs, the ~6
 - The VPS is the production environment.
 - Lovable is the authoring environment.
 
+## M. Frozen Window lifecycle (the core of SPACE)
+
+This is product specification, not an implementation detail. The lifecycle is normative.
+
+```text
+Window Opens
+  ↓ Capture Opening TWAP
+  ↓ Compare Opening TWAP with PTB
+  ↓ Determine Direction (UP / DOWN)
+  ↓ Create Frozen Trigger
+       UP   = Opening TWAP + Buffer
+       DOWN = Opening TWAP - Buffer
+  ↓ Persist permanently for that window:
+       Opening TWAP · PTB · Direction · Buffer · Frozen Trigger · Window Open Time
+  ↓ Continuously evaluate the LIVE Settlement TWAP until the window expires
+
+  ├── Trigger reached ──▶ Risk Engine ──▶ Execution Engine ──▶ Settlement ──▶ Window Completed
+  └── Trigger never reached ─────────────────────────────────▶ Window Completed (NO_TRIGGER)
+```
+
+**The invariant:** once a window opens, its Frozen Trigger never changes. Not on a new TWAP tick, not on a PTB update, not on a configuration edit, not on a reconnect, not on a process restart. It is written once, at window open, and every later evaluation and every replay reads that stored value. This is the single most important behavioural difference from STONE, whose execution-window FSM re-evaluated against the moving TWAP and therefore had no frozen trigger at all.
+
+Direction is decided once, from Opening TWAP vs PTB, and is stored with the trigger. Buffer is read once, at window open, from the active configuration version and stored with the trigger — a later Operations Desk edit cannot alter a window already open.
+
+Enforcement: the window record's frozen fields are write-once at the repository layer, and a determinism test asserts that replaying a window's event log reproduces the identical trigger.
+
+## N. Settlement TWAP
+
+| Market | Settlement TWAP |
+|---|---|
+| BTC 5 minute | final 30-second TWAP |
+| BTC 15 minute | final 60-second TWAP |
+
+The engine continuously evaluates the live settlement TWAP against each open window's frozen trigger until that window expires. Opening TWAP (the capture that produces the trigger) and Settlement TWAP (the live comparand) are distinct, separately named values and are never conflated in code, storage, UI or replay. Feed staleness invalidates evaluation: a stale settlement TWAP blocks triggering rather than firing on old data.
+
+## O. Active market discovery
+
+SPACE automatically discovers and tracks the **official active BTC market** from Polymarket. There is no manual market selection anywhere in the product — no dropdown, no override, no URL parameter.
+
+One resolver owns discovery and publishes a single `activeMarket` in the engine snapshot. The Dashboard, Trading Engine, Replay, Statistics and Manual Trading all read that same value, so every surface is always on the same market. On rollover the resolver advances to the next official market; the previous market's windows complete and settle on their own record. If discovery fails or is ambiguous, the engine degrades to OBSERVE and raises an alert rather than guessing.
+
+## P. V1 and V2 — one implementation, two environments
+
+| | V1 | V2 |
+|---|---|---|
+| Environment | Testnet | Mainnet |
+| UI | same | same |
+| Engine | same | same |
+| Features | same | same |
+| Strategy | same | same |
+| Credentials | testnet | mainnet |
+
+**Only the environment changes.** There is no V1 code path and no V2 code path, no `if (mainnet)` branch, no parallel module, no separate build. Promotion from V1 to V2 is a credential and endpoint change in `.env` plus a restart. Any pull request that introduces an environment-conditional behavioural branch is rejected by review.
+
+## Q. Buffer specification
+
+Every execution window owns its own buffer.
+
+- decimal values allowed
+- user editable in the Operations Desk
+- a different value per window
+- stored with the configuration version, not in `.env`
+- **never changes while a market is active** — edits stage and take effect at the next market
+- applied at window open, and copied into the window record with the frozen trigger
+
+Example set: `15s = 6.5 · 10s = 5.0 · 7s = 3.5 · 5s = 2.0 · 3s = 1.0`.
+
+## R. Trades per market — deterministic execution priority
+
+Windows execute in a fixed, deterministic order: **furthest-from-settlement first**, i.e. 15s → 10s → 7s → 5s → 3s. Quota is consumed in that order and only by filled trades.
+
+Worked example — configured windows 15s, 10s, 7s, 5s, 3s with `Trades Per Market = 3`:
+
+```text
+15s  ──▶ fill (1/3)
+10s  ──▶ fill (2/3)
+7s   ──▶ fill (3/3)
+5s   ──▶ Window Completed · QUOTA_EXHAUSTED
+3s   ──▶ Window Completed · QUOTA_EXHAUSTED
+```
+
+Quota is evaluated by the engine alone, on its single serialised loop, so two windows can never race the last slot. `Max positions` is a separate, additional gate. Disabled windows are skipped without consuming quota. The ordering is never influenced by arrival timing, latency or UI state — given the same configuration and the same triggers, the same windows fill every time.
+
+## S. Order execution modes
+
+| Mode | Behaviour |
+|---|---|
+| **Limit Only** | Submit a limit order only. Unfilled at the deadline → cancel → `LIMIT_TIMEOUT`. |
+| **Market Only** | Submit a market order only. |
+| **Limit → Market** | Submit limit first; if the configured timeout expires unfilled, cancel and automatically submit a market order. |
+
+**Limit is the default mode.** The fallback timeout is configurable per the Operations Desk. Cancel-then-submit is sequenced so a partially filled limit reduces the fallback market size to the remainder — the engine can never end up long twice for one trigger. Mode and timeout are captured in the window record and shown in Replay.
+
+## T. Bot Prediction (advisory only)
+
+The Bot Prediction panel is completely isolated from trading. It is **visual only** and **advisory only**: it derives a would-be direction from the same TWAP calculations the engine uses, and displays it. It never creates a trade, never enqueues an intent, never affects strategy mode, and never affects manual mode. It is a read of engine state, not an input to it. Removing the panel would change nothing about execution.
+
+## U. Startup sequence
+
+```text
+Boot → Validate Environment → Open Database → Load Configuration → Market Discovery
+     → Connect Binance → Initialize TWAP → Connect Polymarket → Load Wallet
+     → Initialize Telegram → Replay Recovery → Health Verification → OBSERVE → ARMED
+```
+
+| Stage | Responsibility | Failure behaviour |
+|---|---|---|
+| Validate Environment | Zod-parse `.env`; assert every required secret is present and well-formed | hard exit, non-zero — PM2 must not loop a misconfigured process |
+| Open Database | open SQLite at `DB_PATH`, apply WAL/pragmas, run pending migrations, verify schema version | hard exit |
+| Load Configuration | read the active configuration version into memory; validate windows, buffers, quotas | hard exit if invalid; no implicit defaults |
+| Market Discovery | resolve the official active BTC market | stay in OBSERVE, alert, retry |
+| Connect Binance | open the price feed, confirm first tick | stay in OBSERVE, retry with backoff |
+| Initialize TWAP | warm the TWAP buffers to full depth before any value is published | TWAP reports `WARMING`; no window may open |
+| Connect Polymarket | authenticate CLOB, load market/token metadata and PTB source | stay in OBSERVE, retry |
+| Load Wallet | derive address, read balances and allowances | stay in OBSERVE |
+| Initialize Telegram | bind bot, verify chat id, announce boot | non-fatal; degraded |
+| Replay Recovery | reconcile persisted state with the venue (section W) | must complete before ARMED |
+| Health Verification | assert every dependency healthy and TWAP warm | blocks ARMED |
+| OBSERVE | engine runs, evaluates, records — **places no orders** | steady state |
+| ARMED | execution enabled, by explicit operator action or configured auto-arm | steady state |
+
+SPACE never boots straight into ARMED after an unclean shutdown; the operator arms it, or auto-arm fires only after Health Verification passes clean.
+
+## V. Shutdown sequence
+
+```text
+Stop accepting commands → Complete outstanding writes → Persist engine state
+ → Flush logs → Close database → Dispose resources → PM2 Exit
+```
+
+On `SIGTERM`/`SIGINT` the engine closes the command bus (dashboard and Telegram commands are refused with a clear reason), stops opening new windows, drains the async write queue to completion, writes a shutdown checkpoint containing engine mode, active market, open windows and in-flight orders, flushes logs, closes SQLite cleanly (WAL checkpointed), disposes sockets and timers, and exits 0. A shutdown deadline is enforced; if the drain exceeds it, the engine still writes the checkpoint before exiting so recovery is never blind. Resting orders are **not** silently cancelled — they are recorded so recovery can reconcile them.
+
+## W. Recovery
+
+```text
+VPS Restart → Engine Restart → Restore State → Restore Orders
+ → Prevent Duplicate Orders → Resume Engine
+```
+
+- **Restore State** — load the last checkpoint plus persisted windows; rebuild in-memory state from the database, never from a live feed.
+- **Restore Orders** — query the venue for open and recently filled orders and reconcile them against the local order log. Venue truth wins; local divergence is recorded and alerted.
+- **Prevent duplicate orders** — every order carries a deterministic idempotency key derived from `(market, window, attempt)`. Resubmitting the same key is a no-op at the gateway, so a restart mid-submit can never double-fill. Orphaned local OPEN rows with no venue counterpart are closed and refunded, as P4 already does at boot.
+- **Expired windows** — a window whose expiry passed while the process was down is completed with its stored outcome; it is never re-triggered.
+- **Resume Engine** — resume in OBSERVE, run Health Verification, then arm.
+
+Recovery is **deterministic and idempotent**: running it twice produces the same state as running it once, and it is covered by a dedicated recovery test suite that kills the process at each hazardous point.
+
+## X. Local authentication
+
+SPACE is a **single-operator application**. It is not a multi-user platform: no signup, no roles, no permissions matrix, no invitations, no password reset flow, no user table.
+
+- One operator credential: a username and an Argon2id password hash in `.env`, plus `SESSION_SECRET`.
+- Login issues a signed, httpOnly, SameSite=strict session cookie with an idle timeout; `secure` on when served over TLS.
+- Every route except the login page and the health endpoint requires that session, enforced server-side in one place.
+- Rate-limited login attempts, audited logins, and a documented rotation procedure (edit `.env`, restart).
+- Nginx terminates TLS and may add an IP allow-list; that is deployment hardening, not application logic.
+
+If a second operator is ever genuinely needed, the answer is a second credential — not a user-management subsystem.
+
+## Y. Database layer rule (binding)
+
+> **Every database operation passes through the repository layer.**
+
+- No UI component, route, loader, or server function executes SQL.
+- No business logic bypasses a repository.
+- Repositories expose typed, intention-revealing methods (`recordFrozenTrigger`, `completeWindow`, `appendOrderEvent`) — never a generic `query(sql)` escape hatch.
+- The engine is the only writer; read-only surfaces use read methods.
+- Schema changes ship as forward-only numbered migrations applied at boot.
+- An executable architecture test fails the build if anything outside `src/db/repositories/**` imports the SQLite driver.
+
+This is what keeps the SQLite decision reversible: a future PostgreSQL move is a change inside one directory.
+
+## Z. Testing philosophy
+
+> **If a feature cannot be tested, it is not complete.**
+
+| Layer | Scope |
+|---|---|
+| Unit | TWAP maths, buffer application, direction resolution, trigger construction, quota accounting, risk predicates |
+| Integration | repositories against a real SQLite file, migrations, configuration versioning, command bus |
+| Engine | full window lifecycle over a simulated clock and synthetic feed: trigger, no-trigger, quota exhaustion, risk rejection, limit timeout, disabled window/market |
+| Replay | determinism — replaying an event log reproduces identical projections, digests and frozen triggers |
+| Recovery | kill the process at each hazardous point; assert idempotent restore and zero duplicate orders |
+| End-to-end trading | testnet: discovery → window → trigger → order → fill → settlement → statistics → replay |
+| VPS deployment validation | clean VPS: clone → install → `.env` → restore backup → `pm2 start` → health green |
+
+Determinism is a first-class test target: same inputs, same decisions, every run. The architecture tests (layering, no-SQL-outside-repositories, no UI-owns-logic) run in CI as ordinary tests.
+
+## AA. Consistency review — contradictions found and resolved
+
+A full re-read of the architecture surfaced these, all now resolved in the text above:
+
+1. **Two TWAPs, one name.** Opening TWAP and Settlement TWAP were both "TWAP". Resolved: separate names, separate fields, separate storage, distinct Mission Control indicators (section N).
+2. **Buffer edit vs frozen trigger.** The Operations Desk allows live buffer edits while section M forbids a trigger changing. Resolved: buffer is copied into the window at open; edits stage and apply at the next market (section Q).
+3. **STONE's window FSM contradicts freezing.** STONE re-evaluates against a moving TWAP. Resolved: explicitly classified REFACTOR — trigger latching is added, not inherited (section M).
+4. **Quota ordering was undefined.** Resolved: fixed furthest-first priority, engine-serialised, quota consumed only by fills (section R).
+5. **Manual mode vs quota and windows.** Resolved: manual orders never consume strategy quota and never mutate window state (section B), and manual mode disables strategy entirely.
+6. **Limit → Market double-fill risk.** Resolved: cancel-then-submit with remainder sizing and one idempotency key per attempt (sections S, W).
+7. **Bot Prediction adjacency to execution.** Resolved: declared read-only, non-input, removable without behavioural change (section T).
+8. **Mission Control values could diverge from engine truth.** Resolved: one snapshot subscription is the only source (section D); the UI computes nothing (section A).
+9. **`.env` vs Operations Desk boundary was fuzzy.** Resolved: the closed secret list in section I; everything else in the database.
+10. **Auto-arm after crash.** Resolved: ARMED only after Health Verification, never straight out of an unclean shutdown (section U).
+11. **Backups and secrets.** Resolved: backups contain database and configuration only, never `.env` (sections G, I).
+12. **Telegram as a second command path.** Resolved: Telegram routes through the same command bus, audit trail and rate limits as the dashboard (section H).
+13. **Market discovery failure was unspecified.** Resolved: degrade to OBSERVE and alert; never guess a market (section O).
+14. **V1/V2 drift.** Resolved: no environment-conditional behaviour; credentials only (section P).
+
+No unresolved contradictions remain. The architecture is internally consistent and, in my assessment, stable enough to remain unchanged throughout implementation.
+
 ## L. `docs/SPACE_SPECIFICATION.md` — table of contents
 
 1. Product vision
 2. Architecture (single process, module boundaries, engine ownership)
-3. Frozen Window Strategy
-4. TWAP Strategy (opening capture, live settlement TWAP, PTB, buffer)
-5. Dashboard (Mission Control, pages, design system)
-6. Operations Desk
-7. Manual Trading
-8. Replay
-9. Statistics
-10. Backup and Restore
-11. Telegram operator interface
-12. Deployment (PM2, Nginx, `.env.example`)
-13. V1 — Testnet / paper qualification
-14. V2 — Mainnet activation
-15. Recovery
-16. Engineering principles
+3. Frozen Window Strategy — full lifecycle and the immutable trigger
+4. TWAP Strategy — opening capture, settlement TWAP (30s / 60s), PTB, buffer
+5. Active market discovery
+6. Buffers, trades per market, execution priority
+7. Order execution modes
+8. Dashboard (Mission Control, pages, design system)
+9. Operations Desk
+10. Manual Trading and Bot Prediction
+11. Replay — trades and skipped windows
+12. Statistics
+13. Startup and shutdown sequences
+14. Recovery
+15. Backup and Restore
+16. Telegram operator interface
+17. Local authentication
+18. Database layer and repository rule
+19. Deployment (PM2, Nginx, `.env.example`)
+20. V1 — Testnet · V2 — Mainnet
+21. Testing philosophy
+22. Engineering principles
 
 ## Deliverables on approval
 
