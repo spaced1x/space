@@ -181,7 +181,22 @@ Phase 1 is NOT complete until every operator page — Mission Control, Operation
 - recover automatically after a runtime restart
 - display the same information in Preview, Production Build and VPS
 
+### No mock data
+
+- No mocked runtime values.
+- No fabricated timestamps.
+- No placeholder metrics.
+- No fake connection states.
+
+If runtime data does not exist, the UI renders exactly `No data observed yet`, with Reason, Recovery and Operator Action.
+
+### Production-mode verification
+
+Beyond "the production build passes": build and run it locally (`bun run build && bun run start`) and run the Playwright verification against that production server, not only the dev server. Preview output and production output must match.
+
 ## Technical notes
+
+- **Runtime snapshot API freeze:** the runtime snapshot is the only public runtime API consumed by the frontend. Future phases may extend the schema but may not break compatibility. No frontend component may access runtime internals directly.
 
 - New files: `src/lib/use-runtime-snapshot.ts` (single poller, lifecycle, watchdog, version guard), `src/components/space/async-panel.tsx` (pending / timeout / error / empty), `src/routes/api/runtime.health.ts`, `src/components/space/runtime-events.tsx`.
 - Edited: `connections.server.ts`, `connection-sync.server.ts`, `boot.server.ts`, `resources.server.ts`, `validation.server.ts`, `system.functions.ts`, `operations.functions.ts`, all seven route files, `console-shell.tsx`, `mission-control.tsx`, `connection-card.tsx`, `runtime-diagnostics.tsx`.
