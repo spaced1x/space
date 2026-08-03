@@ -14,6 +14,8 @@ interface DatabaseState {
   error?: string;
   appliedMigrations: number[];
   openedAt?: string;
+  environmentStamp?: string;
+  stampMismatch?: string;
 }
 
 const state: DatabaseState = { appliedMigrations: [] };
@@ -28,6 +30,8 @@ export async function initDatabase(): Promise<DatabaseState> {
       try {
         const driver = await createSqliteDriver(env.DB_PATH);
         applyMigrations(driver);
+        stampEnvironment(driver, env.SPACE_ENVIRONMENT);
+        if (state.stampMismatch) throw new Error(state.stampMismatch);
         state.driver = driver;
         state.openedAt = systemClock.iso();
         delete state.error;
@@ -40,6 +44,38 @@ export async function initDatabase(): Promise<DatabaseState> {
     })();
   }
   return initPromise;
+}
+
+// Environment conformance at the storage layer: a database created while running
+// V1_TESTNET must never be reopened by a V2_MAINNET process (or the reverse).
+// The stamp is written once, on the first open after migration 7.
+function stampEnvironment(driver: SqlDriver, environment: string): void {
+  delete state.stampMismatch;
+  const existing = driver.get<{ value: string }>(
+    "SELECT value FROM space_meta WHERE key = 'environment'",
+  )?.value;
+  if (!existing) {
+    driver.run(
+      "INSERT INTO space_meta (key, value, updated_at) VALUES ('environment', ?, ?)",
+      [environment, systemClock.iso()],
+    );
+    state.environmentStamp = environment;
+    return;
+  }
+  state.environmentStamp = existing;
+  if (existing !== environment) {
+    state.stampMismatch =
+      `database is stamped ${existing} but SPACE_ENVIRONMENT is ${environment}; ` +
+      "refusing to open — point DB_PATH at the database for this environment";
+  }
+}
+
+export async function databaseEnvironmentStamp(): Promise<{
+  stamp: string | null;
+  mismatch: string | null;
+}> {
+  const current = await initDatabase();
+  return { stamp: current.environmentStamp ?? null, mismatch: current.stampMismatch ?? null };
 }
 
 function applyMigrations(driver: SqlDriver): void {
@@ -94,12 +130,17 @@ export async function databaseHealth(): Promise<HealthResult> {
     sizeBytes: null,
   };
   if (!current.driver) {
+    // In production an unreachable database is not a degraded convenience —
+    // no evidence can be written, so the engine must never be armed.
+    const fatal = loadEnv().NODE_ENV === "production" || Boolean(current.stampMismatch);
     return {
-      state: "DEGRADED" as const,
+      state: fatal ? ("FAILED" as const) : ("DEGRADED" as const),
       message: `SQLite not attached: ${current.error ?? "unknown reason"}`,
       details: {
         ...base,
         walEnabled: false,
+        environmentStamp: current.environmentStamp ?? null,
+        stampMismatch: current.stampMismatch ?? null,
         runtime: "no native sqlite; VPS deployment attaches better-sqlite3",
       },
     };
@@ -116,6 +157,7 @@ export async function databaseHealth(): Promise<HealthResult> {
         ...base,
         path: current.driver.location,
         openedAt: current.openedAt ?? "unknown",
+        environmentStamp: current.environmentStamp ?? null,
         journalMode: stats.journalMode ?? "WAL",
         walEnabled: (stats.journalMode ?? "wal").toLowerCase() === "wal",
         sizeBytes: stats.sizeBytes ?? null,
