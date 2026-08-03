@@ -249,12 +249,8 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
     });
 
     if (cfg.mode === "LIMIT_THEN_MARKET") {
-      // Fallback keeps the same intent and the same order chain.
-      const built = await advance(current, "MARKET_SUBMITTED", "market fallback", {
-        kind: "MARKET",
-      }).catch(() => null);
-      void built;
-      // advance() above would skip the ORDER_BUILD evidence, so do it properly:
+      // Fallback keeps the same intent and the same order chain; the monitor
+      // picks the LIMIT_CANCELLED order up next tick and builds the market leg.
       return;
     }
 
