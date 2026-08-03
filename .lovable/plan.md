@@ -153,7 +153,45 @@ Milestone 6 is complete only when:
 
 ---
 
-## 6. Risks and assumptions
+## 6. Final production release gate
+
+SPACE may only be tagged as v1.0 and considered production-ready after the following checklist passes:
+
+- [ ] Fresh VPS installation succeeds.
+- [ ] `git clone` → `install` → `build` → `PM2 start` → browser works.
+- [ ] Health checks are green.
+- [ ] Recovery reconciliation succeeds.
+- [ ] No duplicate execution after restart.
+- [ ] Telegram notifications and commands verified.
+- [ ] Backup and restore verified.
+- [ ] Export and log download verified.
+- [ ] Replay reconstructs completed markets correctly.
+- [ ] Long-running stability test passes (minimum 24 hours).
+- [ ] Final `.env.example` contains only required variables.
+- [ ] Documentation matches implementation.
+- [ ] No critical known defects remain.
+
+---
+
+## 7. Final architecture audit
+
+Before Milestone 6 is closed, perform one final architecture audit. Verify:
+
+- No duplicate business logic exists between Strategy, Manual Trading, Risk, Execution and Replay.
+- Every database table has one clear owner.
+- Every service has a single responsibility.
+- The Scheduler remains the only owner of timers.
+- All writes continue through the approved architecture.
+- No module bypasses Risk or Execution.
+- No secrets are exposed in the UI.
+- The implementation still conforms to the frozen `SPACE_SPECIFICATION.md` and `SPACE_ARCHITECTURE.md` documents.
+
+If any mismatch is discovered, do not silently change the implementation. Report the mismatch, explain why it exists, propose the fix, and wait for approval before changing frozen behaviour.
+
+---
+
+## 8. Risks and assumptions
+
 
 - **Assumption:** Polymarket CLOB v2 API remains stable during implementation; any breaking change will be treated as a defect and fixed.
 - **Risk:** Orphan-order recovery depends on the venue exposing open orders by wallet; if the endpoint is unreliable, reconciliation may fail and block ARM.
