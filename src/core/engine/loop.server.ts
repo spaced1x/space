@@ -8,6 +8,12 @@ import { createLogger } from "../logging/logger";
 import { discoveryHealth, refreshMarkets } from "../market/discovery.server";
 import { applyPriceSample, getMarketState } from "../market/state";
 import { registerTask, schedulerStatus, unregisterTask } from "../scheduler/scheduler.server";
+import {
+  executionSnapshot,
+  runExecution,
+  startExecutionEngine,
+  stopExecutionEngine,
+} from "../execution/execution.server";
 import { correlationId } from "../shared/ids";
 import {
   evaluateStrategy,
@@ -17,8 +23,9 @@ import {
 } from "../strategy/strategy.server";
 
 // The serialized runtime loop. It owns the scheduler registrations, the feed
-// lifecycle, market state publication, the strategy evaluation step and runtime
-// health. No risk, no orders — those attach in later milestones.
+// lifecycle, market state publication, the strategy evaluation step, the
+// execution step and runtime health. Strategy runs before execution on every
+// pass, so an order can only ever follow an already-persisted intent.
 
 const log = createLogger("engine");
 
@@ -28,6 +35,9 @@ const DISCOVERY_MS = 20_000;
 const PUBLISH_MS = 1_000;
 // The 3s window needs sub-second resolution; this is still one scheduler task.
 const STRATEGY_MS = 200;
+// Execution polls slightly slower than strategy: fills, timeouts and retries
+// are venue-bound, not tick-bound.
+const EXECUTION_MS = 500;
 
 let binance: PriceFeed | undefined;
 let chainlink: PriceFeed | undefined;
@@ -52,6 +62,7 @@ export async function startEngineLoop(): Promise<void> {
   await binance.start();
   await chainlink.start();
   startStrategyEngine();
+  startExecutionEngine();
 
   // Every timer in SPACE belongs to the scheduler. These four registrations are
   // the whole of milestone 2's recurring work.
@@ -82,6 +93,12 @@ export async function startEngineLoop(): Promise<void> {
     name: "strategy.evaluate",
     intervalMs: STRATEGY_MS,
     run: () => evaluateStrategy(),
+  });
+  registerTask({
+    name: "execution.run",
+    intervalMs: EXECUTION_MS,
+    runOnStart: true,
+    run: () => runExecution(),
   });
 
   eventBus.publish({
@@ -120,9 +137,11 @@ export async function stopEngineLoop(): Promise<void> {
     "feed.chainlink.poll",
     "market.discovery",
     "strategy.evaluate",
+    "execution.run",
   ]) {
     unregisterTask(name);
   }
+  stopExecutionEngine();
   stopStrategyEngine();
   await binance?.stop();
   await chainlink?.stop();
@@ -163,6 +182,7 @@ export function engineRuntimeSnapshot() {
     scheduler: schedulerStatus(),
     market: getMarketState(),
     strategy: strategySnapshot(),
+    execution: executionSnapshot(),
     feeds: {
       binance: binance?.stats() ?? null,
       chainlink: chainlink?.stats() ?? null,
