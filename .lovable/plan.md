@@ -154,6 +154,24 @@ docs/releases/
 
 The working documents in `docs/` remain the live copies; the versioned folder is a frozen snapshot taken at release and never edited afterwards.
 
+## 17. Release rollback procedure
+
+Every production deployment has a deterministic rollback path. If any release gate fails after deployment:
+
+1. Stop the SPACE process.
+2. Restore the most recent verified SQLite backup.
+3. Restore the previous `.env`.
+4. Deploy the previous tagged release.
+5. Start PM2.
+6. Verify startup validation.
+7. Verify reconciliation.
+8. Verify Replay, Statistics and Diagnostics.
+9. Record the rollback reason in the production report.
+
+A rollback must never require manual database editing or recovery scripts.
+
+Every release artifact records: deployed version, rollback version, deployment timestamp, rollback timestamp (if applicable), operator and reason.
+
 ## Technical notes
 
 - New migration adds the Telegram permission mode to the operations configuration; no existing table changes.
@@ -162,4 +180,5 @@ The working documents in `docs/` remain the live copies; the versioned folder is
 - Metrics collection registers as a scheduler task; startup validation registers as a boot step and health component ahead of the OBSERVE transition, and the same validators are reused by the pre-ARM gate.
 - Emergency stop lives in runtime state, persists across restarts, and is enforced in the Command Bus, execution engine and manual trading paths.
 - Lock implemented in `src/core/db/` and registered in the boot and shutdown sequences.
+- Rollback runbook lives in `docs/SPACE_DEPLOYMENT.md` and is exercised at least once during the release gate.
 - Milestones 1–5 remain frozen; the only edits outside Milestone 6 files are the env-schema and documentation removals for authentication.
