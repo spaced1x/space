@@ -10,6 +10,7 @@ import { registerClockService } from "./clock/clock.service";
 import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
 import { discoveryHealth } from "./market/discovery.server";
 import { schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
+import { settlementTwapHealth, strategyHealth } from "./strategy/strategy.server";
 
 // Startup sequence (specification §13), milestone 2 slice:
 // Boot -> Env -> Logging -> DB -> Clock -> Health -> Scheduler -> Engine loop
@@ -64,6 +65,8 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("scheduler", schedulerHealth);
   registerHealthCheck("engine", engineHealth);
   registerHealthCheck("market_discovery", discoveryHealth);
+  registerHealthCheck("settlement_twap", settlementTwapHealth);
+  registerHealthCheck("strategy", strategyHealth);
   registerHealthCheck("binance", () => feedHealth("binance"));
   registerHealthCheck("chainlink", () => feedHealth("chainlink"));
 

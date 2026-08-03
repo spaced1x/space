@@ -227,3 +227,91 @@ Single operator, session cookie, server-side gate in one place (specification §
 ## 9. Documentation policy
 
 Nothing from STONE is deleted. `docs/archive/` holds the STONE charter, all ADRs, the milestone and audit reports, the qualification reports, and the P4 reference material including its knowledge documents. The active `docs/` root holds `SPACE_SPECIFICATION.md`, `SPACE_ARCHITECTURE.md`, `SPACE_MIGRATION_REPORT.md` and operational runbooks.
+
+---
+
+## 10. Milestone 3 — Frozen Window Strategy Engine (implemented)
+
+The strategy engine calculates decisions only. It never places an order: its
+sole output is an immutable **Execution Intent** that the Execution Engine will
+consume in a later milestone.
+
+### Modules
+
+| Module                                 | Responsibility                                                        |
+| -------------------------------------- | --------------------------------------------------------------------- |
+| `core/strategy/types.ts`               | strategy vocabulary (pure data)                                        |
+| `core/strategy/config.ts`              | Buffer Engine: window list, per-window buffers, trades per market       |
+| `core/strategy/twap.ts`                | Settlement TWAP Engine (time-weighted, final 30s / 60s)                 |
+| `core/strategy/windows.ts`             | window planning, direction, frozen trigger maths, trigger predicate, quota |
+| `core/strategy/prediction.ts`          | Bot Prediction (advisory only, imported by no strategy module)          |
+| `core/strategy/engine.ts`              | deterministic Frozen Window engine (no clock, no IO)                    |
+| `core/strategy/strategy.server.ts`     | runtime host: tick-driven evaluation, persistence, events, health       |
+| `db/repositories/strategy.repository.ts` | the only place strategy SQL exists                                    |
+
+### Settlement TWAP
+
+Time-weighted, not sample-weighted: each observed price is held until the next
+observation, so an irregular feed cadence cannot skew the average.
+
+- BTC 5 minute — final **30 seconds** before settlement.
+- BTC 15 minute — final **60 seconds** before settlement.
+
+States: `IDLE` (no active market), `WARMING` (below the minimum sample count),
+`OK`, `STALE` (last sample older than `maxTwapAgeMs`). Only `OK` may freeze a
+trigger or satisfy one.
+
+### Window layout and lifecycle
+
+Windows are laid out relative to settlement and never overlap: the 15s window is
+live from T-15s until the 10s window opens at T-10s; the smallest window runs to
+settlement. Exactly one window can be `ACTIVE`, which makes quota consumption
+race-free on the single serialized loop.
+
+```text
+WAITING → OPEN → ACTIVE → TRIGGERED → COMPLETED   (execution intent created)
+WAITING → OPEN → ACTIVE → EXPIRED   → NO_TRIGGER
+WAITING → QUOTA_EXHAUSTED
+WAITING → WINDOW_DISABLED
+```
+
+At window open the engine captures Opening TWAP, PTB, direction, buffer and open
+time and writes the **frozen trigger** exactly once:
+
+```text
+direction = Opening TWAP >= PTB ? UP : DOWN
+UP   trigger = Opening TWAP + buffer
+DOWN trigger = Opening TWAP - buffer
+```
+
+The trigger never changes for the life of that window. `frozen_triggers` is a
+write-once table protected by SQL triggers, so even an engine bug cannot rewrite
+trading evidence. Every transition is appended to `window_transitions`.
+
+### Trigger engine and quota
+
+The live settlement TWAP is compared to the frozen trigger on every strategy
+tick (200ms — the 3s window needs sub-second resolution, still a single
+scheduler task). UP fires at `TWAP >= trigger`, DOWN at `TWAP <= trigger`.
+Quota is consumed only by windows that produced an intent, in the deterministic
+15s → 10s → 7s → 5s → 3s order; remaining windows become `QUOTA_EXHAUSTED`.
+
+### Execution intent
+
+Immutable, persisted to `execution_intents`, with a derived id
+(`intent:<conditionId>:<seconds>s`) so replay reproduces it exactly. Fields:
+market, direction, window, opening TWAP, settlement TWAP, PTB, buffer, frozen
+trigger, trigger time, reason.
+
+### Determinism
+
+The engine takes `(now, unified market state, enabled horizons)` and owns no
+timers and no provider access. Same inputs, same events — this is what makes
+Replay possible. Configuration is locked per market at plan creation, so a later
+Operations Desk edit can never reach a market already in flight.
+
+### Health additions
+
+`settlement_twap` and `strategy` join the registry, reporting `DISABLED` when
+the engine is not running, `DEGRADED` for warming/stale TWAP or unpersisted
+evidence, and `FAILED` on an evaluation error.

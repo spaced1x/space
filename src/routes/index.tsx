@@ -8,6 +8,8 @@ import { MissionControl } from "../components/space/mission-control";
 import { MarketPanel } from "../components/space/market-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
+import { BotPredictionPanel, StrategyPanel } from "../components/space/strategy-panel";
+import { IntentList, WindowTimeline } from "../components/space/window-timeline";
 import type { Command } from "../core/bus/commands";
 import type { EventSeverity } from "../core/bus/events";
 import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
@@ -80,7 +82,12 @@ function OperatorConsole() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
-      <MissionControl runtime={runtime} health={health} market={engine.market} />
+      <MissionControl
+        runtime={runtime}
+        health={health}
+        market={engine.market}
+        strategy={engine.strategy}
+      />
 
       <main className="flex-1 space-y-8 p-6 lg:p-10">
         <header className="space-y-1">
@@ -89,19 +96,47 @@ function OperatorConsole() {
               Mission Control
             </h1>
             <span className="rounded border border-primary/30 bg-accent px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-accent-foreground">
-              milestone 2 — runtime services
+              milestone 3 — frozen window strategy
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Scheduler, market discovery, Binance and Chainlink feeds and the serialized engine loop
-            are live. No TWAP, no windows, no risk and no orders — those attach in later milestones
-            and report NOT_INITIALIZED until then.
+            Settlement TWAP, frozen windows, buffers, triggers, quota and execution intents are
+            live on top of the milestone 2 runtime. Nothing is executed: the strategy produces
+            immutable execution intents only. Risk and order execution attach in later milestones.
           </p>
           <p className="text-xs text-muted-foreground">
             Engine boots into OBSERVE. ARMED is only ever reached by an explicit operator ARM
             command.
           </p>
         </header>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Strategy
+          </h2>
+          <StrategyPanel strategy={engine.strategy} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Bot prediction
+          </h2>
+          <BotPredictionPanel strategy={engine.strategy} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Execution windows
+          </h2>
+          <WindowTimeline strategy={engine.strategy} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Execution intents
+          </h2>
+          <IntentList strategy={engine.strategy} />
+        </section>
 
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">

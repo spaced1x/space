@@ -1,6 +1,7 @@
 import type { HealthReport } from "../../core/health/types";
 import type { MarketState } from "../../core/market/types";
 import type { RuntimeState } from "../../core/state/store";
+import type { StrategySnapshot } from "../../core/strategy/types";
 import { StatusDot, stateLabel } from "./status-dot";
 
 // Permanent left-side panel. Read-only projection of one engine snapshot —
@@ -9,10 +10,12 @@ export function MissionControl({
   runtime,
   health,
   market,
+  strategy,
 }: {
   runtime: RuntimeState;
   health: HealthReport;
   market: MarketState;
+  strategy: StrategySnapshot;
 }) {
   return (
     <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:overflow-y-auto">
@@ -38,6 +41,23 @@ export function MissionControl({
         <Row label="5m market" value={market.markets.FIVE_MINUTE?.status ?? "none"} />
         <Row label="15m market" value={market.markets.FIFTEEN_MINUTE?.status ?? "none"} />
         <Row label="State ver." value={`v${market.version}`} />
+      </Section>
+
+      <Section title="Strategy">
+        <Row label="Market" value={strategy.market.horizon ?? "—"} accent />
+        <Row label="PTB" value={strategy.market.ptb?.toFixed(2) ?? "—"} />
+        <Row label="Settlement TWAP" value={strategy.twap.value?.toFixed(2) ?? "—"} />
+        <Row label="Direction" value={strategy.prediction.direction ?? "—"} />
+        <Row label="Active window" value={strategy.activeWindowId?.split(":").pop() ?? "none"} />
+        <Row
+          label="Frozen trigger"
+          value={strategy.prediction.frozenTrigger?.toFixed(2) ?? "—"}
+        />
+        <Row label="Buffer" value={strategy.prediction.buffer?.toString() ?? "—"} />
+        <Row
+          label="Quota left"
+          value={`${strategy.quota.remaining}/${strategy.quota.tradesPerMarket}`}
+        />
       </Section>
 
       <Section title="Session">
