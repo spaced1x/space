@@ -27,6 +27,7 @@ export const HEALTH_COMPONENTS = [
   "operations",
   "statistics",
   "telegram",
+  "backup",
 ] as const;
 export type HealthComponent = (typeof HEALTH_COMPONENTS)[number];
 

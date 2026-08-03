@@ -270,4 +270,59 @@ export const migrations: Migration[] = [
         ON market_discoveries (settlement_at);
     `,
   },
+  {
+    id: 5,
+    name: "milestone_6_recovery_backup_telegram",
+    sql: `
+      -- Venue reconciliation report. Every boot-time reconciliation is
+      -- persisted so the operator can see what was adopted, closed or failed.
+      CREATE TABLE IF NOT EXISTS reconciliation_reports (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at      TEXT NOT NULL,
+        runtime_id      TEXT NOT NULL,
+        state           TEXT NOT NULL,
+        orders_examined INTEGER NOT NULL DEFAULT 0,
+        adopted         INTEGER NOT NULL DEFAULT 0,
+        closed          INTEGER NOT NULL DEFAULT 0,
+        failed          INTEGER NOT NULL DEFAULT 0,
+        divergences     INTEGER NOT NULL DEFAULT 0,
+        message         TEXT NOT NULL,
+        details         TEXT NOT NULL DEFAULT '{}'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_reconciliation_reports_created
+        ON reconciliation_reports (created_at);
+
+      -- Backup / restore audit trail.
+      CREATE TABLE IF NOT EXISTS backups (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at    TEXT NOT NULL,
+        kind          TEXT NOT NULL CHECK (kind IN ('MANUAL', 'SCHEDULED')),
+        source_path   TEXT NOT NULL,
+        target_path   TEXT NOT NULL,
+        size_bytes    INTEGER,
+        verified      INTEGER NOT NULL DEFAULT 0,
+        state         TEXT NOT NULL,
+        message       TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_backups_created
+        ON backups (created_at);
+
+      -- Telegram messages sent by the bot (for audit / replay of operator
+      -- notifications, not the inbound command log which lives in audit_log).
+      CREATE TABLE IF NOT EXISTS telegram_outbox (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at    TEXT NOT NULL,
+        chat_id       TEXT NOT NULL,
+        type          TEXT NOT NULL,
+        text          TEXT NOT NULL,
+        sent          INTEGER NOT NULL DEFAULT 0,
+        error         TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_telegram_outbox_created
+        ON telegram_outbox (created_at);
+    `,
+  },
 ];

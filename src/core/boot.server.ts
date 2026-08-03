@@ -1,10 +1,11 @@
 import { describeEnvReadiness, loadEnv } from "./config/env.server";
 import { databaseHealth, initDatabase } from "./db/database.server";
+import { registerAutoDisarmTask } from "./health/auto-disarm.server";
 import { registerHealthCheck } from "./health/registry";
 import { installFileSink } from "./logging/file-sink.server";
 import { configureLogging, createLogger } from "./logging/logger";
 import { eventBus } from "./bus/events";
-import { getRuntimeState, updateRuntimeState } from "./state/store";
+import { getRuntimeState, loadRuntimeState, updateRuntimeState } from "./state/store";
 import { correlationId } from "./shared/ids";
 import { registerClockService } from "./clock/clock.service";
 import { loadOperations, operationsHealth } from "./config/operations.server";
@@ -12,11 +13,15 @@ import { replayHealth } from "./replay/replay.server";
 import { statisticsHealth } from "./stats/statistics.server";
 import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
 import { discoveryHealth } from "./market/discovery.server";
-import { schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
+import { registerTask, schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
 import { settlementTwapHealth, strategyHealth } from "./strategy/strategy.server";
 import { executionHealth, riskHealth } from "./execution/execution.server";
 import { polymarketAdapter } from "./execution/polymarket.server";
 import { walletHealth } from "./execution/wallet.server";
+import { registerTelegramEventForwarding } from "./telegram/telegram.service";
+import { telegramServiceHealth } from "./telegram/telegram.health";
+import { backupServiceHealth } from "./backup/backup.health";
+import { performBackup } from "./backup/backup.service";
 
 // Startup sequence (specification §13), milestone 2 slice:
 // Boot -> Env -> Logging -> DB -> Clock -> Health -> Scheduler -> Engine loop
@@ -46,6 +51,10 @@ async function runBoot(): Promise<void> {
   // Operational settings live in SQLite, never in .env. Restore the operator's
   // configuration document before anything reads it.
   await loadOperations();
+
+  // Runtime state is authoritative in memory but persisted for graceful restart
+  // continuity. Never restore into ARMED; a reboot always demands an explicit ARM.
+  await loadRuntimeState();
 
   // Clock is a first-class service: registered before anything schedules work.
   registerClockService();
@@ -92,9 +101,21 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("window_5m", () => windowHealth("fiveMinute", "BTC 5 minute"));
   registerHealthCheck("window_15m", () => windowHealth("fifteenMinute", "BTC 15 minute"));
 
+  registerHealthCheck("telegram", telegramServiceHealth);
+  registerHealthCheck("backup", backupServiceHealth);
+
   // Timers exist only after the scheduler is up, and the engine loop registers
   // its tasks with that one scheduler rather than owning timers of its own.
   await startScheduler();
+  registerAutoDisarmTask();
+  registerTelegramEventForwarding();
+  registerTask({
+    name: "scheduled-backup",
+    intervalMs: 24 * 60 * 60 * 1000,
+    run: async () => {
+      await performBackup("SCHEDULED");
+    },
+  });
   await startEngineLoop();
 
   if (getRuntimeState().engineStatus === "BOOTING") {

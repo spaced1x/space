@@ -58,6 +58,18 @@ export interface VenueDescription {
   message: string;
 }
 
+export interface OpenOrderSummary {
+  venueOrderId: string;
+  clientId: string | null;
+  tokenId: string;
+  side: OrderSide;
+  kind: OrderKind;
+  price: number | null;
+  size: number;
+  filledSize: number;
+  status: VenueOrderStatusCode;
+}
+
 export interface VenueAdapter {
   describe(): VenueDescription;
   ready(): boolean;
@@ -68,5 +80,10 @@ export interface VenueAdapter {
   status(venueOrderId: string): Promise<VenueOrderStatus | null>;
   /** Trades for one order. Used for fill detection and restart reconciliation. */
   trades(venueOrderId: string): Promise<VenueTrade[]>;
+  /**
+   * Open orders for a token. Required for orphan-order reconciliation on boot.
+   * Returns an empty array if the venue has no matching open orders.
+   */
+  openOrders(tokenId: string): Promise<OpenOrderSummary[]>;
   health(): HealthResult;
 }

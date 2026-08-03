@@ -1,7 +1,10 @@
 import { auditRepository } from "../db/repositories/audit.repository";
+import { performBackup, restoreBackup } from "../backup/backup.service";
+import { executionRecoveryStatus } from "../execution/execution.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import { correlationId as newCorrelationId } from "../shared/ids";
+import { sendTelegramMessage } from "../telegram/telegram.service";
 import { ARM_REASON, getRuntimeState, updateRuntimeState, type RuntimeState } from "../state/store";
 import { eventBus } from "./events";
 import { commandSchema, type Command, type CommandContext, type Verdict } from "./commands";
@@ -39,7 +42,7 @@ function verdict(
   return { status, reason, command, correlationId, at: systemClock.iso() };
 }
 
-function defaultHandler(command: Command, context: CommandContext): Verdict {
+async function defaultHandler(command: Command, context: CommandContext): Promise<Verdict> {
   const state = getRuntimeState();
   const reject = (reason: string) =>
     verdict("REJECTED", reason, command.kind, context.correlationId);
@@ -49,11 +52,17 @@ function defaultHandler(command: Command, context: CommandContext): Verdict {
   };
 
   switch (command.kind) {
-    case "ARM":
+    case "ARM": {
       if (state.engineStatus === "ARMED") return reject("engine is already ARMED");
       if (state.engineStatus === "PAUSED") return reject("resume before arming");
       if (state.engineStatus !== "OBSERVE") return reject("engine must be in OBSERVE to arm");
+      const recovery = executionRecoveryStatus();
+      if (!recovery) return reject("execution recovery has not run yet");
+      if (recovery.state === "FAILED") {
+        return reject(`reconciliation failed: ${recovery.message}`);
+      }
       return accept(ARM_REASON, { engineStatus: "ARMED" });
+    }
     case "DISARM":
       if (state.engineStatus === "OBSERVE") return reject("engine is already in OBSERVE");
       return accept("engine disarmed to OBSERVE", { engineStatus: "OBSERVE" });
@@ -77,6 +86,28 @@ function defaultHandler(command: Command, context: CommandContext): Verdict {
         return reject("disarm before switching operating mode");
       }
       return accept(`operating mode set to ${command.mode}`, { mode: command.mode });
+    case "BACKUP": {
+      const result = await performBackup("MANUAL", command.label);
+      return result.success
+        ? verdict("ACCEPTED", result.message, command.kind, context.correlationId)
+        : verdict("REJECTED", result.message, command.kind, context.correlationId);
+    }
+    case "RESTORE": {
+      const id = Number(command.backupId);
+      if (!Number.isFinite(id) || id <= 0) {
+        return reject("backupId must be a positive integer");
+      }
+      const result = await restoreBackup(id);
+      return result.success
+        ? verdict("ACCEPTED", result.message, command.kind, context.correlationId)
+        : verdict("REJECTED", result.message, command.kind, context.correlationId);
+    }
+    case "TELEGRAM_BROADCAST": {
+      await sendTelegramMessage(command.message, "operator");
+      return verdict("ACCEPTED", "message queued for Telegram", command.kind, context.correlationId);
+    }
+    default:
+      return reject("command not implemented");
   }
 }
 

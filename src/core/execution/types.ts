@@ -218,6 +218,16 @@ export interface RiskContext {
   size: number;
 }
 
+export interface ReconciliationResult {
+  state: "OK" | "DIVERGENCE" | "FAILED";
+  examined: number;
+  adopted: number;
+  closed: number;
+  failed: number;
+  divergences: number;
+  message: string;
+}
+
 export interface ExecutionSnapshot {
   config: ExecutionConfig;
   wallet: WalletStatus;
@@ -242,6 +252,7 @@ export interface ExecutionSnapshot {
   intentsSeen: number;
   lastError: string | null;
   startedAt: string | null;
+  reconciliation: ReconciliationResult | null;
 }
 
 export type { ExecutionIntent };

@@ -1,9 +1,12 @@
 import { ClobClient, OrderType, Side } from "@polymarket/clob-client";
 
+import { clock } from "../clock/clock.service";
 import { loadEnv } from "../config/env.server";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
+import type { JsonObject } from "../shared/json";
+import { RateLimitError, rateLimitStatus, withRateLimit } from "./rate-limit.server";
 import { walletSigner, walletStatus } from "./wallet.server";
 import type {
   VenueAdapter,
@@ -152,10 +155,13 @@ export const polymarketAdapter: VenueAdapter = {
   async bestPrice(tokenId, side): Promise<number | null> {
     try {
       const { client } = require_();
-      const response = await track(() => client.getPrice(tokenId, side === "BUY" ? "sell" : "buy"));
+      const response = await withRateLimit("clob_fills", () =>
+        track(() => client.getPrice(tokenId, side === "BUY" ? "sell" : "buy")),
+      );
       const price = num((response as { price?: string }).price, Number.NaN);
       return Number.isFinite(price) ? price : null;
-    } catch {
+    } catch (error) {
+      if (error instanceof RateLimitError) throw error;
       // A missing book must never block execution; the caller falls back to the
       // configured limit price.
       return null;
@@ -166,26 +172,28 @@ export const polymarketAdapter: VenueAdapter = {
     const { client, state: current } = require_();
     const side = request.side === "BUY" ? Side.BUY : Side.SELL;
 
-    const response = await track(async () => {
-      if (request.kind === "MARKET") {
-        const signed = await client.createMarketOrder({
+    const response = await withRateLimit("clob_submit", () =>
+      track(async () => {
+        if (request.kind === "MARKET") {
+          const signed = await client.createMarketOrder({
+            tokenID: request.tokenId,
+            side,
+            // BUY market orders are denominated in collateral, SELL in shares.
+            amount:
+              request.side === "BUY" ? request.size * (request.price ?? 1) : request.size,
+            ...(request.price !== null ? { price: request.price } : {}),
+          });
+          return client.postOrder(signed, OrderType.FOK);
+        }
+        const signed = await client.createOrder({
           tokenID: request.tokenId,
           side,
-          // BUY market orders are denominated in collateral, SELL in shares.
-          amount:
-            request.side === "BUY" ? request.size * (request.price ?? 1) : request.size,
-          ...(request.price !== null ? { price: request.price } : {}),
+          price: request.price ?? 0,
+          size: request.size,
         });
-        return client.postOrder(signed, OrderType.FOK);
-      }
-      const signed = await client.createOrder({
-        tokenID: request.tokenId,
-        side,
-        price: request.price ?? 0,
-        size: request.size,
-      });
-      return client.postOrder(signed, OrderType.GTC);
-    });
+        return client.postOrder(signed, OrderType.GTC);
+      }),
+    );
 
     current.submissions += 1;
     const payload = (response ?? {}) as Record<string, unknown>;
@@ -206,13 +214,15 @@ export const polymarketAdapter: VenueAdapter = {
 
   async cancel(venueOrderId: string): Promise<void> {
     const { client } = require_();
-    await track(() => client.cancelOrder({ orderID: venueOrderId }));
+    await withRateLimit("clob_submit", () => track(() => client.cancelOrder({ orderID: venueOrderId })));
   },
 
   async status(venueOrderId: string): Promise<VenueOrderStatus | null> {
     const { client } = require_();
     try {
-      const order = await track(() => client.getOrder(venueOrderId));
+      const order = await withRateLimit("clob_fills", () =>
+        track(() => client.getOrder(venueOrderId)),
+      );
       if (!order) return null;
       return {
         venueOrderId,
@@ -221,7 +231,8 @@ export const polymarketAdapter: VenueAdapter = {
         filledSize: num(order.size_matched),
         price: num(order.price, Number.NaN) || null,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof RateLimitError) throw error;
       // Unknown order ids are a normal answer after cancellation/expiry.
       return null;
     }
@@ -229,7 +240,9 @@ export const polymarketAdapter: VenueAdapter = {
 
   async trades(venueOrderId: string): Promise<VenueTrade[]> {
     const { client } = require_();
-    const trades = await track(() => client.getTrades({ id: venueOrderId }));
+    const trades = await withRateLimit("clob_fills", () =>
+      track(() => client.getTrades({ id: venueOrderId })),
+    );
     return (trades ?? []).map((trade) => ({
       id: String(trade.id),
       venueOrderId,
@@ -241,8 +254,35 @@ export const polymarketAdapter: VenueAdapter = {
     }));
   },
 
+  async openOrders(tokenId: string) {
+    const { client } = require_();
+    const raw = await withRateLimit("clob_fills", () =>
+      track(() => client.getOpenOrders({ asset_id: tokenId })),
+    );
+    const list = Array.isArray(raw) ? raw : [];
+    return list.map((order) => {
+      const side: "BUY" | "SELL" =
+        String(order.side ?? "").toUpperCase() === "SELL" ? "SELL" : "BUY";
+      const kind: "LIMIT" | "MARKET" =
+        String(order.order_type ?? "").toUpperCase() === "MARKET" ? "MARKET" : "LIMIT";
+      return {
+        venueOrderId: String(order.id ?? ""),
+        clientId: null,
+        tokenId,
+        side,
+        kind,
+        price: num(order.price, Number.NaN) || null,
+        size: num(order.original_size),
+        filledSize: num(order.size_matched),
+        status: mapStatus(order.status),
+      };
+    });
+  },
+
   health(): HealthResult {
     const current = init();
+    const limits = rateLimitStatus();
+    const limited = limits.filter((s) => s.backoffUntil > clock().now());
     const details = {
       host: current.host,
       chainId: current.chainId,
@@ -250,8 +290,16 @@ export const polymarketAdapter: VenueAdapter = {
       errors: current.errors,
       lastError: current.lastError,
       lastCallAt: current.lastCallAt,
-    };
+      rateLimits: JSON.parse(JSON.stringify(limits)) as Record<string, unknown>[],
+    } as JsonObject;
     if (!current.ready) return { state: "DEGRADED", message: current.message, details };
+    if (limited.length) {
+      return {
+        state: "DEGRADED",
+        message: `${limited.length} endpoint(s) rate limited`,
+        details,
+      };
+    }
     if (current.lastError) {
       return { state: "DEGRADED", message: `last call failed: ${current.lastError}`, details };
     }
