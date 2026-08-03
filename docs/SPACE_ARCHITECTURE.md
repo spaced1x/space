@@ -49,6 +49,7 @@ shared → contracts → configuration → infrastructure → market → decisio
 
 ```text
 src/core/shared        clock, ids, errors, json types
+src/core/clock         authoritative Clock service (health-registered)
 src/core/config        env schema (zod) + single validation point
 src/core/logging       structured logger, redaction, rotating file sink
 src/core/db            driver contract, sqlite (WAL) driver, migrations, repositories
@@ -60,6 +61,30 @@ src/lib/system.functions.ts   the single read/command surface for the dashboard
 ```
 
 Trading modules (`market`, `decision`, `trade`, `platform`) are not implemented yet; their health checks report `NOT_INITIALIZED`.
+
+### 2.2 Foundation refinements (milestone 1, final)
+
+**Health states.** Five states, ranked for the overall roll-up:
+
+| State | Meaning | Affects overall |
+|---|---|---|
+| `OK` | implemented, enabled, healthy | yes |
+| `DEGRADED` | implemented and reachable, but limited | yes |
+| `FAILED` | implemented and broken | yes |
+| `DISABLED` | implemented and healthy, switched **off** by the operator | no |
+| `NOT_INITIALIZED` | module does not exist in this milestone | no |
+
+`DISABLED` is never a defect. `window_5m` and `window_15m` are health components that follow the runtime window switches: enabling reports `OK`, disabling reports `DISABLED` — never `NOT_INITIALIZED`, which is reserved for unbuilt modules.
+
+**Clock service.** `src/core/clock/clock.service.ts` is the one authoritative runtime clock, registered in the health registry during boot before anything schedules work. It exposes `clock()`, `setClock()` (replay/tests), `uptimeMs()` and `clockDriftMs()`, and reports `source`, `startedAt`, `now`, `uptimeMs`, `driftMs` and `timezone`. Installing a non-system clock reports `DEGRADED`, so replay can never be mistaken for live time.
+
+**Event severity.** Every `EventEnvelope` carries `severity: INFO | SUCCESS | WARNING | ERROR` (default `INFO`). The runtime event log colour-codes it, and Replay and Telegram will filter on it rather than parsing event type strings.
+
+**Database health interface.** `DatabaseDiagnostics` fixes the field set now so later capability additions need no interface change: `engine`, `path`, `journalMode`, `walEnabled`, `schemaVersion`, `migrationVersion`, `appliedMigrations`, `latencyMs`, `sizeBytes`, `openedAt`. `journalMode`, `walEnabled` and `sizeBytes` come from an optional `SqlDriver.stats()`; fields not yet obtainable in a given runtime report `null` rather than being absent.
+
+**Boot → OBSERVE → ARM.** Boot ends in `OBSERVE`, always. `ARMED` is reachable only through an explicit operator `ARM` command: the state store throws unless the transition carries the single sanctioned `ARM_REASON`, which only the command bus uses, and the bus rejects `ARM` from any status other than `OBSERVE`. Any dashboard screenshot showing `ARMED` means the operator pressed Arm in that session.
+
+**Foundation Console is temporary.** `src/routes/index.tsx` is milestone-1 scaffolding, labelled as such in the UI. It is replaced by the approved Mission Control layout in a later milestone. Mission Control stays operational-status-only; all configuration belongs to the Operations Desk.
 
 Imports point left only. `tests/unit/architecture.test.ts` walks the import graph and fails the build on any upward dependency. Two additional architecture tests enforce:
 
