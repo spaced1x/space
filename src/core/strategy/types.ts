@@ -137,6 +137,13 @@ export interface BotPrediction {
   frozenTrigger: number | null;
   suggestion: "UP" | "DOWN" | "NONE";
   note: string;
+  /**
+   * Advisory-only enrichment (specification §5). Confidence is |difference|
+   * measured against the active buffer, clamped to 0..1; trend is the sign of
+   * the recent TWAP movement. Neither is ever read by the trigger engine.
+   */
+  confidence: number | null;
+  trend: "RISING" | "FALLING" | "FLAT" | null;
 }
 
 export interface QuotaState {
