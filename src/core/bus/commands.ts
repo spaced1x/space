@@ -8,6 +8,16 @@ import type { JsonObject } from "../shared/json";
 export const commandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("START_RUNTIME") }),
   z.object({ kind: z.literal("STOP_RUNTIME") }),
+  // Dual-runtime control: START/STOP always name the environment they act on,
+  // so an operator can never stop the runtime they were not looking at.
+  z.object({
+    kind: z.literal("RUNTIME_START"),
+    environment: z.enum(["V1_TESTNET", "V2_MAINNET"]),
+  }),
+  z.object({
+    kind: z.literal("RUNTIME_STOP"),
+    environment: z.enum(["V1_TESTNET", "V2_MAINNET"]),
+  }),
   z.object({ kind: z.literal("ARM") }),
   z.object({ kind: z.literal("DISARM") }),
   z.object({ kind: z.literal("PAUSE") }),
@@ -55,6 +65,8 @@ export type CommandKind = Command["kind"];
 export const COMMAND_KINDS: CommandKind[] = [
   "START_RUNTIME",
   "STOP_RUNTIME",
+  "RUNTIME_START",
+  "RUNTIME_STOP",
   "ARM",
   "DISARM",
   "PAUSE",

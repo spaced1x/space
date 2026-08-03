@@ -57,7 +57,18 @@ export async function stopTwapService(): Promise<void> {
   for (const provider of listProviders()) {
     await provider.stop();
   }
+  published = 0;
+  lastPublishedAtMs = null;
   log.info("twap service stopped", { published });
+}
+
+/** Live resource counts for the runtime resource audit. */
+export function twapResources(): { services: number; providers: number; connected: number } {
+  return {
+    services: started ? 1 : 0,
+    providers: listProviders().length,
+    connected: providerStatuses().filter((status) => status.state === "CONNECTED").length,
+  };
 }
 
 /** Scheduler step: refresh the active provider and publish any new price. */

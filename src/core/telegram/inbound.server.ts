@@ -233,3 +233,8 @@ export function stopTelegramInbound(): void {
   if (pollTimeout) clearTimeout(pollTimeout);
   pollTimeout = undefined;
 }
+
+/** Live resource counts for the runtime resource audit. */
+export function telegramInboundResources(): { pollers: number; timers: number } {
+  return { pollers: running ? 1 : 0, timers: pollTimeout ? 1 : 0 };
+}

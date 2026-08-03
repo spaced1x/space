@@ -30,7 +30,11 @@ import { sampleAndPersistMetrics } from "./metrics/metrics.server";
 import { startTelegramInbound } from "./telegram/inbound.server";
 import { noteTimeline, reportConnection } from "./runtime/connections.server";
 import { syncConnections } from "./runtime/connection-sync.server";
-import { readRuntimeTarget, targetMatchesEnvironment } from "./runtime/target.server";
+import { readRuntimeTarget, requestEnvironmentSwitch, targetMatchesEnvironment } from "./runtime/target.server";
+import { resetEnvCache } from "./config/env.server";
+import { invalidatePeek, type EnvironmentCode } from "./runtime/peek.server";
+import { auditRuntimeResources, type RuntimeResourceAudit } from "./runtime/resources.server";
+import { teardownRuntime } from "./shutdown.server";
 import { verifyChainId } from "./execution/wallet.server";
 import { refreshMarkets } from "./market/discovery.server";
 
@@ -41,8 +45,28 @@ import { refreshMarkets } from "./market/discovery.server";
 let bootPromise: Promise<void> | undefined;
 
 export async function boot(): Promise<void> {
+  // An operator STOP is a decision, not a fault: a page load must never
+  // resurrect a runtime the operator deliberately shut down.
+  if (stoppedByOperator) return;
   if (!bootPromise) bootPromise = runBoot();
   return bootPromise;
+}
+
+let stoppedByOperator = false;
+
+export function runtimeStoppedByOperator(): boolean {
+  return stoppedByOperator;
+}
+
+/**
+ * Forget the previous boot so the next boot() runs the full sequence again.
+ * Only the lifecycle transitions below call this — never a request handler.
+ */
+function resetBootState(): void {
+  bootPromise = undefined;
+  bootTrace.length = 0;
+  bootStartedAt = null;
+  bootCompletedAt = null;
 }
 
 export interface BootStageTrace {
@@ -298,4 +322,174 @@ function windowHealth(key: "fiveMinute" | "fifteenMinute", label: string) {
     message: enabled ? `${label} window enabled` : `${label} window switched off by operator`,
     details: { window: label, enabled, lifecycle: state.lifecycle },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Runtime lifecycle transitions.
+//
+// boot.server.ts is the one lifecycle owner: START, STOP and SWITCH all run
+// through this module so there can never be two runtimes, two boots or two
+// teardowns racing each other. Every transition ends in a resource audit; a
+// failed audit is a FAILED runtime, never a warning.
+// ---------------------------------------------------------------------------
+
+export interface RuntimeTransition {
+  ok: boolean;
+  reason: string;
+  environment: EnvironmentCode;
+  audit: RuntimeResourceAudit;
+}
+
+let transitionLock: Promise<unknown> = Promise.resolve();
+
+function serialise<T>(task: () => Promise<T>): Promise<T> {
+  const result = transitionLock.then(task, task);
+  transitionLock = result.catch(() => undefined);
+  return result;
+}
+
+function currentEnvironment(): EnvironmentCode {
+  try {
+    return loadEnv().SPACE_ENVIRONMENT;
+  } catch {
+    return "V1_TESTNET";
+  }
+}
+
+async function bootAndAudit(
+  phase: "START" | "SWITCH",
+  cid: string,
+): Promise<RuntimeTransition> {
+  const environment = currentEnvironment();
+  stoppedByOperator = false;
+  try {
+    resetBootState();
+    await boot();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    updateRuntimeState({ lifecycle: "FAILED", shutdownReason: reason }, `boot failed: ${reason}`, cid);
+    return { ok: false, reason, environment, audit: auditRuntimeResources(phase, "RUNNING") };
+  }
+
+  const audit = auditRuntimeResources(phase, "RUNNING");
+  if (!audit.passed) {
+    const reason = `runtime resource audit failed: ${audit.failures.join("; ")}`;
+    updateRuntimeState({ lifecycle: "FAILED", shutdownReason: reason }, reason, cid);
+    return { ok: false, reason, environment, audit };
+  }
+  return { ok: true, reason: `runtime started in ${environment}`, environment, audit };
+}
+
+/** Start (or restart) the runtime in the currently active environment. */
+export function startRuntime(reason: string): Promise<RuntimeTransition> {
+  return serialise(async () => {
+    const cid = correlationId("start");
+    const state = getRuntimeState();
+    const live = state.lifecycle !== "STOPPED" && state.lifecycle !== "FAILED";
+    if (bootCompletedAt && live) {
+      return {
+        ok: false,
+        reason: `runtime is already ${state.lifecycle}`,
+        environment: currentEnvironment(),
+        audit: auditRuntimeResources("START", "RUNNING"),
+      };
+    }
+    // A FAILED or partially started runtime is destroyed before restarting, so
+    // START can never stack a second generation of timers or sockets.
+    await teardownRuntime(`restart: ${reason}`);
+    return bootAndAudit("START", cid);
+  });
+}
+
+/** Stop the runtime completely, leaving the process alive and observable. */
+export function stopRuntime(reason: string): Promise<RuntimeTransition> {
+  return serialise(async () => {
+    const environment = currentEnvironment();
+    const audit = await teardownRuntime(reason);
+    resetBootState();
+    stoppedByOperator = true;
+    if (!audit.passed) {
+      const failure = `runtime resource audit failed: ${audit.failures.join("; ")}`;
+      updateRuntimeState(
+        { lifecycle: "FAILED", shutdownReason: failure },
+        failure,
+        correlationId("stop"),
+      );
+      return { ok: false, reason: failure, environment, audit };
+    }
+    return { ok: true, reason: `runtime stopped: ${reason}`, environment, audit };
+  });
+}
+
+/**
+ * Switch the active environment. The persisted target is written first so a
+ * process restart lands in the same place an in-process switch does.
+ */
+export function switchRuntimeEnvironment(
+  target: EnvironmentCode,
+  actor: string,
+): Promise<RuntimeTransition> {
+  return serialise(async () => {
+    const cid = correlationId("switch");
+    const active = currentEnvironment();
+    const log = createLogger("boot", cid);
+
+    if (target === active) {
+      return {
+        ok: false,
+        reason: `${target} is already the active runtime`,
+        environment: active,
+        audit: auditRuntimeResources("SWITCH", "RUNNING"),
+      };
+    }
+
+    let pinnedDbPath: string | undefined;
+    try {
+      pinnedDbPath = loadEnv().DB_PATH;
+    } catch {
+      pinnedDbPath = undefined;
+    }
+    if (pinnedDbPath) {
+      return {
+        ok: false,
+        reason:
+          "DB_PATH pins this process to one database; unset it so each environment uses its own file",
+        environment: active,
+        audit: auditRuntimeResources("SWITCH", "RUNNING"),
+      };
+    }
+
+    const stopAudit = await teardownRuntime(`switching to ${target}`);
+    stoppedByOperator = true;
+    if (!stopAudit.passed) {
+      const failure = `switch aborted, previous runtime not fully destroyed: ${stopAudit.failures.join("; ")}`;
+      updateRuntimeState({ lifecycle: "FAILED", shutdownReason: failure }, failure, cid);
+      return { ok: false, reason: failure, environment: active, audit: stopAudit };
+    }
+
+    requestEnvironmentSwitch(target, actor);
+    process.env["SPACE_ENVIRONMENT"] = target;
+    resetEnvCache();
+    invalidatePeek();
+    resetBootState();
+
+    // PM2 deployments may prefer a clean process per environment. The target
+    // file is already written, so the respawned process boots into it.
+    if (process.env["SPACE_RESTART_ON_SWITCH"] === "true") {
+      log.warn("exiting for supervisor restart after environment switch", { target });
+      setTimeout(() => process.exit(1), 250);
+      return {
+        ok: true,
+        reason: `target set to ${target}; process is restarting under the supervisor`,
+        environment: target,
+        audit: stopAudit,
+      };
+    }
+
+    const result = await bootAndAudit("SWITCH", cid);
+    return {
+      ...result,
+      reason: result.ok ? `runtime switched to ${target}` : result.reason,
+    };
+  });
 }

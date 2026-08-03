@@ -23,9 +23,18 @@ import {
 } from "../core/runtime/connections.server";
 import { syncConnections } from "../core/runtime/connection-sync.server";
 import { databaseHealth } from "../core/db/database.server";
+import {
+  activeEnvironment,
+  otherEnvironment,
+  peekEnvironment,
+} from "../core/runtime/peek.server";
+import { lastResourceAudit, resourceAuditHistory } from "../core/runtime/resources.server";
+import { readRuntimeTarget } from "../core/runtime/target.server";
 
 // Single read surface: Mission Control, Overview and Statistics all subscribe
-// to this one snapshot so no two panels can disagree.
+// to this one snapshot so no two panels can disagree. It always carries both
+// runtimes: `active` is live telemetry from this process, `inactive` is a
+// read-only peek into the other environment's own database.
 export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async () => {
   await boot();
   // Refresh every connection from its live adapter before answering, so no two
@@ -33,7 +42,9 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
   await syncConnections();
   const db = await databaseHealth();
   const times = bootTimes();
-  return {
+  const environment = activeEnvironment();
+  const inactive = await peekEnvironment(otherEnvironment(environment));
+  const active = {
     runtime: getRuntimeState(),
     health: await collectHealth(),
     events: eventBus.recent(12),
@@ -42,6 +53,8 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
     connections: listConnections(),
     timeline: connectionTimeline(),
     envResolution: environmentResolution(),
+    resourceAudit: lastResourceAudit(),
+    resourceAudits: resourceAuditHistory().slice(-10).reverse(),
     boot: {
       trace: getBootTrace(),
       startedAt: times.startedAt,
@@ -55,6 +68,14 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
       schemaVersion:
         ((db.details as { schemaVersion?: number | null } | undefined)?.schemaVersion ?? null),
     },
+  };
+  return {
+    activeEnvironment: environment,
+    target: readRuntimeTarget(),
+    active,
+    inactive,
+    // Flattened for the panels that only ever render the live runtime.
+    ...active,
   };
 });
 

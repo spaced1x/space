@@ -82,6 +82,30 @@ export function unregisterTask(name: string): void {
   tasks.delete(name);
 }
 
+/**
+ * Remove every registration. Teardown only: a restarted runtime re-registers
+ * its tasks from scratch, so a stale definition can never survive a switch.
+ */
+export function clearTasks(): void {
+  tasks.clear();
+  checkpointRestored = false;
+}
+
+/** Live resource counts for the runtime resource audit. */
+export function schedulerResources(): {
+  schedulers: number;
+  timers: number;
+  tasks: number;
+  taskNames: string[];
+} {
+  return {
+    schedulers: running ? 1 : 0,
+    timers: timer ? 1 : 0,
+    tasks: tasks.size,
+    taskNames: [...tasks.keys()],
+  };
+}
+
 // Restart recovery: a task that was due while the process was down becomes due
 // immediately, and a task that ran recently keeps its original cadence.
 async function restoreCheckpoint(): Promise<void> {

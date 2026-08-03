@@ -81,6 +81,44 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       if (state.lifecycle === "STOPPED") return reject("runtime is already stopped");
       return accept("runtime stopped", { lifecycle: "STOPPED" });
     }
+    case "RUNTIME_START": {
+      // Starting the environment that is not active is a switch: one process
+      // owns exactly one runtime, so the current one is destroyed first.
+      const { startRuntime, switchRuntimeEnvironment } = await import("../boot.server");
+      const { activeEnvironment } = await import("../runtime/peek.server");
+      const active = activeEnvironment();
+      if (state.emergencyStop) {
+        return reject(`emergency stop is latched: ${state.emergencyStopReason}`);
+      }
+      const result =
+        command.environment === active
+          ? await startRuntime(`operator start (${context.actor})`)
+          : await switchRuntimeEnvironment(command.environment, context.actor);
+      return {
+        ...verdict(result.ok ? "ACCEPTED" : "REJECTED", result.reason, command.kind, context.correlationId),
+        details: {
+          environment: result.environment,
+          auditPassed: result.audit.passed,
+          auditFailures: result.audit.failures,
+        },
+      };
+    }
+    case "RUNTIME_STOP": {
+      const { stopRuntime } = await import("../boot.server");
+      const { activeEnvironment } = await import("../runtime/peek.server");
+      if (command.environment !== activeEnvironment()) {
+        return reject(`${command.environment} is not running in this process`);
+      }
+      const result = await stopRuntime(`operator stop (${context.actor})`);
+      return {
+        ...verdict(result.ok ? "ACCEPTED" : "REJECTED", result.reason, command.kind, context.correlationId),
+        details: {
+          environment: result.environment,
+          auditPassed: result.audit.passed,
+          auditFailures: result.audit.failures,
+        },
+      };
+    }
     case "ARM": {
       if (state.lifecycle === "RUNNING") return reject("engine is already RUNNING");
       if (state.lifecycle !== "READY") {

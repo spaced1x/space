@@ -100,6 +100,11 @@ export function instanceLockHeld(): boolean {
   return held !== null;
 }
 
+/** Live resource counts for the runtime resource audit. */
+export function lockResources(): { locks: number; path: string | null } {
+  return { locks: held ? 1 : 0, path: held?.path ?? null };
+}
+
 /** True when a process with this PID is currently running. */
 function processAlive(pid: number): boolean {
   if (pid <= 0) return false;
