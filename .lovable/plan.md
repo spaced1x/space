@@ -1,81 +1,90 @@
-# SPACE — Final Operator Terminal Completion
+# SPACE — Final Operator Terminal Completion (Revised)
 
-Runtime integration, operator UX and bug fixing only. Strategy, Risk, Execution, Replay, Statistics, Scheduler, Recovery, Backup/Restore and database behaviour stay untouched apart from the per-environment isolation described below.
+Architecture frozen. Strategy, Risk, Execution, Replay, Statistics, Scheduler, Recovery and Backup/Restore keep their current behaviour; only the runtime lifecycle, per-environment isolation and the operator terminal change.
 
-## 1. Two runtimes, one process (V1 / V2)
+## 1. Single runtime, two environments
 
-Mission Control always shows both runtime panels:
+One process boots either V1 TESTNET (Paper, blue) or V2 MAINNET (Live, red). Mission Control always shows both runtime panels; only one may be RUNNING.
 
-- V1 TESTNET (Paper) — blue identity
-- V2 MAINNET (Live) — red identity
+Each panel: START, STOP, Runtime Status, Active TWAP Provider, Current Market, Current Position, Runtime Health, Current Database, Last Runtime, Last Shutdown Reason. The inactive runtime stays visible as STOPPED with its last persisted runtime information, read from that environment's own database and target file.
 
-Each panel has START and STOP plus live Status, Current Provider, Current Market, Current Position, Current TWAP. Only one runtime may be RUNNING.
+## 2. Unified runtime lifecycle
 
-How START works:
-1. The chosen environment is written to a supervisor-owned target file (`data/runtime-target.json`) that lives outside either database.
-2. Graceful shutdown runs: scheduler, engine loop, Binance, RTDS, Chainlink, Gamma, CLOB, Telegram closed, logs flushed, runtime state persisted, SQLite closed, lock released.
-3. The process exits non-zero so PM2 restarts it, and boot reads the target file to select the environment.
-4. Boot re-opens every subsystem for that environment; the dashboard polls until the new runtime answers and restores itself automatically.
+```text
+STOPPED -> STARTING -> VALIDATING -> RUNNING -> STOPPING -> STOPPED
+                    \-> FAILED
+```
 
-STOP performs the same graceful shutdown and leaves the process in a stopped runtime: every connection card reads STOPPED/OFFLINE with its last known state and reason, never a stale "connected". Starting one runtime implicitly stops the other. No confirmation dialogs, no hot-swapping adapters inside a process.
+One enum replaces every visible engine state. OBSERVE is removed from the UI entirely; ARM/DISARM leave the operator workflow. The internal safety latch survives as an implementation detail that the validation gate releases — no operator ever sees or presses it. Mission Control, Diagnostics, connection cards and status badges all read this single lifecycle; no duplicated enums.
 
-Per-environment isolation: `space-v1.db` / `space-v2.db` with matching `.lock` files, so runtime state, replay history, statistics, config snapshots, metrics and backups never mix. The existing environment stamp guard stays as the safety net. Replay, Statistics, Operations Desk, Diagnostics and Manual Trading read the active runtime only — they already consume the shared snapshot, so this follows automatically.
+## 3. START / STOP
 
-Engine status wording becomes RUNNING / STARTING / STOPPING / STOPPED. OBSERVE and the ARM/DISARM operator workflow disappear from the UI and the runtime state model; the emergency stop latch remains and still blocks new orders.
+START does not immediately enable trading. It persists the selected runtime target, gracefully shuts down any active runtime (persist state, flush logs, close Scheduler, Binance, RTDS, Chainlink, Gamma, CLOB, Telegram, SQLite, release locks), then exits for supervisor restart and boots the selected runtime.
 
-## 2. Mission Control tabs
+Boot order: STARTING -> Database -> Runtime -> Scheduler -> Wallet -> Polygon RPC -> Gamma -> Binance -> TWAP Provider -> CLOB -> Telegram -> Market Discovery -> Runtime Validation -> RUNNING.
 
-One route, eight tabs on the same snapshot: Overview, Trading, Orders, Positions, TWAP, Connections, Runtime, Recent Events. No new routes, no duplicated state, nothing removed — today's panels move into the tab that owns them.
+STOP runs the reverse sequence. Afterwards every connection reads STOPPED or OFFLINE with the real reason — never a stale CONNECTED.
 
-## 3. Overview
+## 4. Runtime validation gate
 
-Runtime banner, both runtime panels, environment, paper/live capital line, trading mode, emergency stop, Current Trading Target, Current Position, Current TWAP, health and readiness, wallet, provider, current strategy (buffer, PTB, direction, confidence) and recent events. Every section renders something real; no blank cards.
+Between VALIDATING and RUNNING, one gate checks SQLite, Runtime Database, Database Version, Runtime Target, Wallet, Polygon RPC, Chain ID, Gamma, Binance, RTDS, Chainlink (if enabled), TWAP Provider, CLOB Authentication, Telegram, Scheduler and Market Discovery. Only an all-mandatory pass reaches RUNNING; otherwise the runtime stays in FAILED or STARTING with the exact blocking dependency, missing variable and recovery. No generic errors. This extends the existing pre-ARM validation rather than adding a second gate.
 
-## 4. Current Trading Target
+## 5. Per-environment isolation
 
-Waiting state shows last Gamma refresh, discovery latency, markets scanned, BTC markets discovered, next discovery, discovery interval, Gamma endpoint, last successful response, waiting reason, trading impact and recovery.
+`space-v1.db` / `space-v2.db` with matching `.lock` files. Replay, Statistics, configuration snapshots, runtime metrics, backups, runtime events, orders, positions and execution history are isolated per environment. The environment stamp validation stays active as the safety net.
 
-Active state shows question, market ID, condition ID, YES/NO tokens, PTB, bid, ask, mid, spread, liquidity, volume, countdown, settlement and probability. Any field the engine has not observed is shown as not yet observed, never invented.
+## 6. Mission Control tabs
 
-## 5. Current Position
+One workspace, tabs: Overview, Trading, Orders, Positions, TWAP, Connections, Runtime, Recent Events. All tabs consume the shared runtime snapshot; no duplicated state and nothing removed — existing panels move into the tab that owns them.
 
-Always rendered. With no position: "No open position" plus the live strategy intent — direction, PTB, settlement TWAP, buffer, confidence, trigger, window, execution state, risk verdict, waiting reason. With positions: market, token, YES/NO, side, entry, average price, current price, quantity, unrealised and realised PnL, execution status, risk decision. Projection of existing execution state only — no new trading logic.
+## 7. Runtime banner
 
-## 6. Current TWAP card
+Always shows environment, runtime state, trading state, emergency stop, current provider, runtime validation result, blocking dependency, operator action, recovery and paper/live identity. Missing configuration is named exactly (`Missing WALLET_PRIVATE_KEY`, `Missing POLYGON_RPC_URL`, `Missing RTDS_API_KEY`, `Missing POLYMARKET_API_SECRET`, ...) — never a bare "Not Configured".
 
-Active provider, standby provider, settlement price, freshness, latency, samples, sequence, window, current TWAP, last update, environment, endpoint, provider state, trading impact, operator action and reason. When no provider is active the card names the exact missing configuration instead of saying "No provider".
+## 8. Current Trading Target
 
-## 7. Runtime connections
+Waiting: last Gamma refresh, discovery latency, markets scanned, BTC markets discovered, discovery interval, next discovery, waiting reason, trading impact, recovery.
 
-Full card for SQLite, Scheduler, Wallet, Polygon RPC, Gamma, Market Discovery, Binance, RTDS, Chainlink, Polymarket CLOB, Telegram. Each shows status, latency, reconnects, endpoint, environment, last success, last failure, last error, trading impact, recovery, operator action and its own connection history. RTDS and Chainlink become first-class connection entries alongside the existing TWAP provider entry.
+Live: question, market ID, condition ID, YES token, NO token, PTB, bid, ask, mid, spread, liquidity, volume, countdown, settlement, probability. Unobserved fields say so; nothing is fabricated.
 
-## 8. Runtime banner
+## 9. Current Position
 
-Trading-blocked lines gain reason, action and recovery, naming the exact variable (`WALLET_PRIVATE_KEY`, `POLYGON_RPC_URL`, `RTDS_*`, ...) and whether recovery is automatic or manual.
+Always rendered. No position: strategy direction, PTB, settlement TWAP, buffer, confidence, trigger, window, risk verdict, waiting reason. Position open: market, token, YES/NO, side, entry, average price, current price, quantity, unrealised PnL, realised PnL, execution status, risk decision. Read-only projection of existing execution state.
 
-## 9. CLOB card
+## 10. TWAP provider
 
-Authentication state, wallet, signature type, API version, host, environment, rate limits, remaining requests, open orders, open positions, last authenticated, last request, latency, connection status and trading status — all from the live adapter.
+Card shows active provider, standby provider, environment, endpoint, symbol, current TWAP, settlement price, samples, sequence, freshness, latency, last update, buffer, direction, PTB, confidence, trading impact, operator action, reason, plus last provider switch timestamp and switch reason. Active provider selection persists across restart in the environment's own database. Layering is preserved: engine talks only to the TWAP Service, which owns the Provider Registry; no other subsystem knows which provider is active.
 
-## 10-11. Sidebar and typography
+## 11. Runtime connections
 
-Desktop scale: headings 30px, card titles 22px, values 18px, labels 16px, sidebar 17px, tables/buttons/inputs/status badges 16px. Sidebar gets larger type, tighter alignment and less dead whitespace. Responsive behaviour and the current SPACE design language are preserved.
+First-class cards for SQLite, Scheduler, Wallet, Polygon RPC, Gamma, Market Discovery, Binance, RTDS, Chainlink, TWAP Provider, Polymarket CLOB, Telegram. Each shows status, latency, reconnects, endpoint, environment, last success, last failure, last error, trading impact, recovery, operator action and its own connection history. RTDS and Chainlink become registered connection ids alongside the existing TWAP Provider entry.
 
-## 12-13. Bug fixing and Diagnostics
+## 12. CLOB card
 
-Sweep for missing runtime bindings, stale snapshot values, duplicated UI state, cards that do not refresh, placeholder loading text, incorrect environment labels, console/React/hydration warnings, broken or non-responsive layouts, and dead components left over from earlier milestones.
+Authentication, wallet, signature type, API version, host, environment, API key / secret / passphrase configured flags (presence only, never values), rate limits, remaining requests, open orders, open positions, last authentication, last request, latency, connection state — all from the live adapter.
 
-Diagnostics becomes the read-only engineering console: boot timeline, runtime timeline, runtime snapshot, memory, CPU, scheduler, SQLite, reconnect history, per-connection detail for Gamma, Binance, RTDS, Chainlink, CLOB and Telegram, failure history, health, configuration snapshot and recent events.
+## 13-14. Diagnostics timelines
+
+Runtime timeline: timestamped runtime started, wallet connected, RPC connected, Gamma connected, Binance connected, RTDS connected, CLOB authenticated, market found, trading ready, order submitted, recovered, shutdown.
+
+Market timeline: market discovered, discovery complete, TWAP started, trigger fired, intent created, risk approved, order submitted, filled, settlement, replay available. Both are projections of existing runtime events — no new event sources.
+
+## 15. Sidebar and desktop polish
+
+Headings 30px, card titles 22px, values 18px, labels 16px, sidebar 17px, buttons 16px, inputs 16px, status badges 16px. Improved spacing and alignment, SPACE design language and responsive behaviour preserved.
+
+## 16. Bug sweep
+
+Missing runtime bindings, placeholder loading text, empty cards, cards that stop refreshing, incorrect runtime/environment labels, broken V1/V2 display, missing provider / CLOB / RTDS / Chainlink information, stale snapshot values, duplicate runtime state, React and hydration warnings, console errors, dead components, broken layouts, lifecycle inconsistencies. No placeholder UI remains.
 
 ## Technical notes
 
-- New: `src/core/runtime/target.server.ts` (persisted runtime target), runtime lifecycle commands `START_RUNTIME` / `STOP_RUNTIME` on the existing command bus, per-environment DB path resolution in `env.server.ts` / `lock.server.ts`.
-- Changed: `state/store.ts` status enum, `boot.server.ts`, `shutdown.server.ts`, `connections.server.ts` (+ RTDS/Chainlink ids), `connection-sync.server.ts`, `system.functions.ts` snapshot payload, `styles.css` type scale, `workspace-nav.tsx`.
-- New components: runtime panels, mission-control tabs, current-position card, TWAP provider card, CLOB card, discovery-waiting card.
-- START trades: with ARM removed, a RUNNING runtime is the sanctioned trading state; the internal guard that prevents any non-operator code from enabling trading stays in place, driven by the START command instead of ARM.
-- Restart depends on a supervisor (PM2 `ecosystem.config.cjs`) being present; without one the process must be started again by hand, and the UI will say so.
-- Verification: `bunx tsgo --noEmit`, `bunx vitest run`, `bun run build`, and a Playwright walkthrough of every tab plus a V1 START/STOP cycle.
+- New: `src/core/runtime/target.server.ts` (persisted runtime target outside both databases), `START_RUNTIME` / `STOP_RUNTIME` on the existing command bus, per-environment DB and lock path resolution in `env.server.ts` / `lock.server.ts`, `RTDS` and `CHAINLINK` connection ids.
+- Changed: `state/store.ts` lifecycle enum, `boot.server.ts` staged boot, `shutdown.server.ts` reverse sequence, `startup/validation.server.ts` gate, `connections.server.ts`, `connection-sync.server.ts`, `twap/registry.server.ts` persistence, `system.functions.ts` / `diagnostics.functions.ts` snapshots, `styles.css` type scale, `workspace-nav.tsx`, `console-shell.tsx`.
+- New components: runtime lifecycle panels, mission-control tabs, current-position card, TWAP provider card, CLOB runtime card, discovery-waiting card, runtime and market timelines.
+- Restart relies on the PM2 supervisor in `ecosystem.config.cjs`; without a supervisor the process must be restarted manually and the UI says exactly that.
+- Verification: `bunx tsgo --noEmit`, `bunx vitest run`, `bun run build`, and a Playwright walkthrough covering every tab, V1 START/STOP, V2 START/STOP, restart, environment isolation, RTDS, Chainlink standby, CLOB authentication, the validation gate, provider persistence and both timelines.
 
 ## Known blockers
 
-RTDS payload shape and Chainlink stream credentials are still unavailable, so those two cards will report NOT_CONFIGURED with the exact variables required until real credentials exist.
+V2 MAINNET START, real CLOB authentication, RTDS and Chainlink connections cannot reach CONNECTED without live credentials; until those exist those checks report their exact missing variables and V2 stops at the validation gate. This will be reported rather than faked.
