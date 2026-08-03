@@ -25,27 +25,19 @@ describe("single-instance lock", () => {
     }
   });
 
-  it("acquires and releases the lock file", async () => {
+  it("acquires the lock and blocks a second process from creating the same lock file", async () => {
     const { acquireInstanceLock, releaseInstanceLock, instanceLockHeld } = await import(
       "../../src/core/db/lock.server"
     );
     const handle = acquireInstanceLock();
     expect(instanceLockHeld()).toBe(true);
     expect(handle.path).toContain("space.db.lock");
-    releaseInstanceLock();
-    expect(instanceLockHeld()).toBe(false);
-  });
 
-  it("throws when another process already holds the lock", async () => {
-    const { acquireInstanceLock, releaseInstanceLock } = await import(
-      "../../src/core/db/lock.server"
-    );
-    acquireInstanceLock();
-    // Import a second copy of the module state by clearing the require cache
-    // is not reliable in ESM; instead, simulate by trying to open the same
-    // file with wx semantics directly.
+    // Simulate a second SPACE process trying to grab the same file.
     const fs = await import("node:fs");
     expect(() => fs.openSync(`${process.env.DB_PATH}.lock`, "wx")).toThrow();
+
     releaseInstanceLock();
+    expect(instanceLockHeld()).toBe(false);
   });
 });
