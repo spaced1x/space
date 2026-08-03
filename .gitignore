@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SPACE runtime artifacts
+data/
+logs/
