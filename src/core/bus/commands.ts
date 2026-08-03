@@ -10,6 +10,9 @@ export const commandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("RESUME") }),
   z.object({ kind: z.literal("ENABLE_5M"), enabled: z.boolean() }),
   z.object({ kind: z.literal("ENABLE_15M"), enabled: z.boolean() }),
+  // Manual Trading is an operating mode, not a second engine: switching to
+  // MANUAL disables automatic strategy execution.
+  z.object({ kind: z.literal("SET_MODE"), mode: z.enum(["STRATEGY", "MANUAL"]) }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -22,6 +25,7 @@ export const COMMAND_KINDS: CommandKind[] = [
   "RESUME",
   "ENABLE_5M",
   "ENABLE_15M",
+  "SET_MODE",
 ];
 
 export type CommandSource = "dashboard" | "telegram" | "system";
