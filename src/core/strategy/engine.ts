@@ -59,6 +59,7 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
   let timeline: StrategyEvent[] = [];
   let lastBinanceObservedAt: string | null = null;
   let previousTwapValue: number | null = null;
+  let lastTwapValue: number | null = null;
 
   function emit(event: StrategyEvent, sink: StrategyEvent[]): void {
     sink.push(event);
@@ -137,8 +138,11 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
     const discovered = market.markets[plan.horizon];
     const ptb = discovered?.conditionId === plan.conditionId ? discovered.ptb : null;
     const reading = twap.read(nowMs, plan.settlementAtMs, plan.horizon);
-    // Advisory trend only: remember the previous reading before it changes.
-    previousTwapValue = reading.value ?? previousTwapValue;
+    // Advisory trend only: remember the reading before this one.
+    if (reading.value !== null && reading.value !== lastTwapValue) {
+      previousTwapValue = lastTwapValue;
+      lastTwapValue = reading.value;
+    }
     const at = new Date(nowMs).toISOString();
 
     // Deterministic order: furthest-from-settlement first.
