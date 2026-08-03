@@ -90,7 +90,7 @@ Runtime timeline: timestamped restart requested, restart completed, runtime star
 
 Market timeline: market discovered, discovery complete, TWAP started, trigger fired, intent created, risk approved, order submitted, filled, settlement, replay available. Both are projections of existing runtime events — no new event sources.
 
-Current Runtime Configuration table: environment, database, TWAP provider, provider state, strategy, execution mode, version, build, git commit, started at.
+Current Runtime Configuration table: environment, database, database schema version, TWAP provider, provider state, strategy, execution mode, version, build, git commit, started at.
 
 ## 15. Sidebar and desktop polish
 
