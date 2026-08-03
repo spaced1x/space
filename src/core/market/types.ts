@@ -52,11 +52,28 @@ export interface DiscoveryStats {
   latencyMs: number | null;
 }
 
+/**
+ * One settlement price observed by the active TWAP provider. The market state
+ * carries the sample only; which provider produced it is a registry concern.
+ */
+export interface SettlementSample {
+  providerId: string;
+  providerLabel: string;
+  price: number;
+  /** Provider timestamp for the observation, in epoch ms. */
+  atMs: number;
+  observedAt: string;
+  latencyMs: number | null;
+  sequence: number | null;
+}
+
 export interface MarketState {
   version: number;
   publishedAt: string;
   markets: Record<MarketHorizon, DiscoveredMarket | null>;
   binance: PriceSample | null;
   chainlink: PriceSample | null;
+  /** Settlement source of truth for the TWAP service. Null until a provider reports. */
+  settlement: SettlementSample | null;
   discovery: DiscoveryStats;
 }
