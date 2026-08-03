@@ -320,3 +320,206 @@ Computed by the engine from the ledger and order log — never derived in the br
 - average trigger-to-fill latency (frozen trigger hit → fill)
 - daily summaries
 - session summaries (per process run, so a restart is visible)
+
+---
+
+## 13. Startup and shutdown
+
+### 13.1 Startup sequence
+
+```text
+Boot → Validate Environment → Open Database → Load Configuration → Market Discovery
+     → Connect Binance → Initialize TWAP → Connect Polymarket → Load Wallet
+     → Initialize Telegram → Replay Recovery → Health Verification → OBSERVE → ARMED
+```
+
+| Stage | Responsibility | Failure behaviour |
+|---|---|---|
+| Validate Environment | Zod-parse `.env`; assert every required secret is present and well-formed | hard exit, non-zero — PM2 must not loop a misconfigured process |
+| Open Database | open SQLite at `DB_PATH`, apply pragmas, run pending migrations, verify schema version | hard exit |
+| Load Configuration | read the active configuration version; validate windows, buffers, quotas | hard exit if invalid; no implicit defaults |
+| Market Discovery | resolve the official active BTC market | stay in OBSERVE, alert, retry |
+| Connect Binance | open the price feed, confirm first tick | stay in OBSERVE, retry with backoff |
+| Initialize TWAP | warm the buffers to full depth before publishing any value | TWAP reports `WARMING`; no window may open |
+| Connect Polymarket | authenticate CLOB, load market/token metadata and the PTB source | stay in OBSERVE, retry |
+| Load Wallet | derive address, read balances and allowances | stay in OBSERVE |
+| Initialize Telegram | bind bot, verify chat id, announce boot | non-fatal; degraded |
+| Replay Recovery | reconcile persisted state with the venue (section 14) | must complete before ARMED |
+| Health Verification | assert every dependency healthy and TWAP warm | blocks ARMED |
+| OBSERVE | engine runs, evaluates, records — places no orders | steady state |
+| ARMED | execution enabled | steady state |
+
+SPACE never boots straight into `ARMED` after an unclean shutdown. The operator arms it, or auto-arm fires only after Health Verification passes clean.
+
+### 13.2 Shutdown sequence
+
+```text
+Stop accepting commands → Complete outstanding writes → Persist engine state
+ → Flush logs → Close database → Dispose resources → PM2 Exit
+```
+
+On `SIGTERM`/`SIGINT` the engine closes the command bus (dashboard and Telegram commands are refused with a clear reason), stops opening new windows, drains the async write queue to completion, writes a shutdown checkpoint (engine mode, active market, open windows, in-flight orders), flushes logs, checkpoints the WAL and closes SQLite cleanly, disposes sockets and timers, and exits 0.
+
+A shutdown deadline is enforced; if the drain exceeds it, the engine still writes the checkpoint before exiting so recovery is never blind. Resting orders are **not** silently cancelled — they are recorded so recovery can reconcile them.
+
+---
+
+## 14. Recovery
+
+```text
+VPS Restart → Engine Restart → Restore State → Restore Orders
+ → Prevent Duplicate Orders → Resume Engine
+```
+
+- **Restore State** — load the last checkpoint plus persisted windows; rebuild in-memory state from the database, never from a live feed.
+- **Restore Orders** — query the venue for open and recently filled orders and reconcile against the local order log. Venue truth wins; divergence is recorded and alerted.
+- **Prevent duplicate orders** — every order carries a deterministic idempotency key derived from `(market, window, attempt)`. Resubmitting the same key is a no-op at the gateway, so a restart mid-submit can never double-fill. Orphaned local OPEN rows with no venue counterpart are closed and refunded.
+- **Expired windows** — a window whose expiry passed while the process was down is completed with its stored outcome; it is never re-triggered.
+- **Resume Engine** — resume in `OBSERVE`, run Health Verification, then arm.
+
+Recovery is **deterministic and idempotent**: running it twice produces the same state as running it once.
+
+---
+
+## 15. Backup and Restore
+
+Objective: **clone repository → restore backup → run SPACE.**
+
+- **Full backup** — one command producing a single timestamped archive containing the hot SQLite snapshot (`VACUUM INTO` — no downtime, no torn WAL), the exported configuration, and a manifest with schema version, app version and checksum.
+- **Restore** — one command that verifies manifest and checksum, refuses a schema-version mismatch it cannot migrate, restores the database file and re-imports configuration.
+- **Database portability** — a single file; copying it *is* the migration.
+- **Configuration portability** — configuration exports as JSON independently of the database, so settings can move without trade history.
+- **VPS migration** — clone, install, drop in `.env`, restore the archive, `pm2 start`.
+- Scheduled local backups with retention, plus a documented off-box copy step. **Backups never contain secrets.**
+
+---
+
+## 16. Telegram operator interface
+
+Telegram is a **control surface**, not just an alert channel. It is authenticated by a chat-id allow-list and routes through the same command bus, rate limits and audit trail as the dashboard.
+
+| Command | Effect |
+|---|---|
+| `/status` | engine mode, market, active window, open orders |
+| `/pause` | pause automatic execution (does not kill the process) |
+| `/resume` | resume automatic execution |
+| `/pnl` | today's PnL and win rate |
+| `/balance` | wallet balance and bankroll |
+| `/positions` | open positions and resting orders |
+| `/logs` | recent audit and error lines |
+| `/health` | dependency health, same data as Mission Control |
+| `/mode` | show mode; with an argument, switch Observe/Armed/Manual/Strategy |
+
+Write commands are confirmed, rate-limited and audited. Alerts (risk breach, kill switch, reconciler drift, feed staleness, settlement divergence) push to the same chat.
+
+---
+
+## 17. Local authentication
+
+SPACE is a **single-operator application**. No signup, no roles, no permissions matrix, no invitations, no password-reset flow, no user table.
+
+- One operator credential: a username and an Argon2id password hash in `.env`, plus `SESSION_SECRET`.
+- Login issues a signed, httpOnly, SameSite=strict session cookie with an idle timeout; `secure` when served over TLS.
+- Every route except the login page and the health endpoint requires that session, enforced server-side in one place.
+- Rate-limited login attempts, audited logins, and a documented rotation procedure (edit `.env`, restart).
+- Nginx terminates TLS and may add an IP allow-list; that is deployment hardening, not application logic.
+
+If a second operator is ever genuinely needed, the answer is a second credential — not a user-management subsystem.
+
+---
+
+## 18. Database layer rule (binding)
+
+> **Every database operation passes through the repository layer.**
+
+- No UI component, route, loader or server function executes SQL.
+- No business logic bypasses a repository.
+- Repositories expose typed, intention-revealing methods (`recordFrozenTrigger`, `completeWindow`, `appendOrderEvent`) — never a generic `query(sql)` escape hatch.
+- The engine is the only writer; read-only surfaces use read methods.
+- Schema changes ship as forward-only numbered migrations applied at boot.
+- An architecture test fails the build if anything outside the repository directory imports the SQLite driver.
+
+This keeps the SQLite decision reversible: a future PostgreSQL move is a change inside one directory.
+
+---
+
+## 19. Deployment
+
+- **One PM2 app**, fork mode, **1 instance** (in-memory engine state cannot cluster), exponential backoff to 15s, `max_memory_restart`, `kill_timeout` long enough for graceful dispose, SIGINT/SIGTERM trapped.
+- **One Nginx configuration**: reverse proxy to `127.0.0.1:<PORT>`, `proxy_buffering off` for SSE, WebSocket upgrade headers, a quiet health-check location, and the app port firewalled from the public interface.
+- **One `.env.example`**.
+- The **VPS is the production environment**. Lovable is the authoring environment; native modules such as `better-sqlite3` run on the VPS, not in the preview.
+
+### 19.1 Environment rule
+
+> **Only values that cannot be configured through the dashboard belong in `.env.example`. Every operational setting lives inside SPACE.**
+
+These always live in `.env.example` and are **never** editable through the dashboard:
+
+- Wallet Private Key
+- Funder Address
+- CLOB API Key
+- CLOB Secret
+- CLOB Passphrase
+- RPC Endpoints
+- Telegram Token
+- Telegram Chat ID
+- Session Secret
+
+Plus the minimum runtime basics: `NODE_ENV`, `PORT`, `HOST`, `DB_PATH`, and the operator username and password hash. Nothing else.
+
+Windows, buffers, sizes, quotas, retries, order types, market toggles, risk limits and mode all live in the database and are edited in the Operations Desk. One template, no environment-specific variants. Secrets are never rendered, logged, returned by an API, or included in a backup.
+
+---
+
+## 20. V1 and V2
+
+| | V1 | V2 |
+|---|---|---|
+| Environment | Testnet | Mainnet |
+| UI | same | same |
+| Engine | same | same |
+| Features | same | same |
+| Strategy | same | same |
+| Credentials | testnet | mainnet |
+
+**Only the environment changes.** There is no V1 code path and no V2 code path, no `if (mainnet)` branch, no parallel module, no separate build. Promotion from V1 to V2 is a credential and endpoint change in `.env` plus a restart. Any change introducing an environment-conditional behavioural branch is rejected in review.
+
+---
+
+## 21. Testing philosophy
+
+> **If a feature cannot be tested, it is not complete.**
+
+| Layer | Scope |
+|---|---|
+| Unit | TWAP maths, buffer application, direction resolution, trigger construction, quota accounting, risk predicates |
+| Integration | repositories against a real SQLite file, migrations, configuration versioning, command bus |
+| Engine | full window lifecycle over a simulated clock and synthetic feed: trigger, no-trigger, quota exhaustion, risk rejection, limit timeout, disabled window/market |
+| Replay | determinism — replaying an event log reproduces identical projections, digests and frozen triggers |
+| Recovery | kill the process at each hazardous point; assert idempotent restore and zero duplicate orders |
+| End-to-end trading | testnet: discovery → window → trigger → order → fill → settlement → statistics → replay |
+| VPS deployment validation | clean VPS: clone → install → `.env` → restore backup → `pm2 start` → health green |
+
+Determinism is a first-class test target: same inputs, same decisions, every run. Architecture tests (layering, no SQL outside repositories, no UI-owned logic) run in CI as ordinary tests.
+
+---
+
+## 22. Engineering principles
+
+- Every commit leaves the repository buildable.
+- Every phase preserves existing working behaviour.
+- No unnecessary rewrites.
+- No unnecessary abstractions.
+- No cloud dependencies.
+- No Supabase.
+- No Cloudflare runtime assumptions.
+- One repository.
+- One Node.js application.
+- One local database.
+- One PM2 deployment.
+- One Nginx configuration.
+- One `.env.example`.
+- The VPS is the production environment.
+- Lovable is the authoring environment.
+- Simple systems survive. Complex systems fail.
