@@ -366,7 +366,7 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
         activeWindowId: active?.id ?? null,
         windows,
         intents,
-        prediction: buildPrediction(reading, ptb, active),
+        prediction: buildPrediction(reading, ptb, active, previousTwapValue),
         timeline: timeline.slice(-40),
       };
     },
