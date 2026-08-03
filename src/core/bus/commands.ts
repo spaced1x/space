@@ -13,6 +13,18 @@ export const commandSchema = z.discriminatedUnion("kind", [
   // Manual Trading is an operating mode, not a second engine: switching to
   // MANUAL disables automatic strategy execution.
   z.object({ kind: z.literal("SET_MODE"), mode: z.enum(["STRATEGY", "MANUAL"]) }),
+  z.object({
+    kind: z.literal("BACKUP"),
+    label: z.string().max(64).optional(),
+  }),
+  z.object({
+    kind: z.literal("RESTORE"),
+    backupId: z.string(),
+  }),
+  z.object({
+    kind: z.literal("TELEGRAM_BROADCAST"),
+    message: z.string().max(4000),
+  }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -26,6 +38,9 @@ export const COMMAND_KINDS: CommandKind[] = [
   "ENABLE_5M",
   "ENABLE_15M",
   "SET_MODE",
+  "BACKUP",
+  "RESTORE",
+  "TELEGRAM_BROADCAST",
 ];
 
 export type CommandSource = "dashboard" | "telegram" | "system";

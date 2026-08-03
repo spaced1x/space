@@ -222,6 +222,9 @@ export function schedulerStatus(): {
   };
 }
 
+const DRIFT_DEGRADED_MS = 250;
+const DRIFT_FAILED_MS = 1000;
+
 export function schedulerHealth(): HealthResult {
   const status = schedulerStatus();
   if (!status.running) {
@@ -237,6 +240,20 @@ export function schedulerHealth(): HealthResult {
     return {
       state: "DEGRADED",
       message: `${failing.length} failing, ${overdue.length} overdue task(s)`,
+      details: { ...status },
+    };
+  }
+  if (status.maxTickDriftMs > DRIFT_FAILED_MS) {
+    return {
+      state: "FAILED",
+      message: `scheduler drift ${status.maxTickDriftMs.toFixed(1)}ms exceeds safe limit`,
+      details: { ...status },
+    };
+  }
+  if (status.maxTickDriftMs > DRIFT_DEGRADED_MS) {
+    return {
+      state: "DEGRADED",
+      message: `scheduler drift ${status.maxTickDriftMs.toFixed(1)}ms elevated`,
       details: { ...status },
     };
   }

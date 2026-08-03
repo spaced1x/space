@@ -15,7 +15,8 @@ import type { ExecutionIntent } from "../strategy/types";
 import { DEFAULT_EXECUTION_CONFIG } from "./config";
 import { createExecutionEngine, type ExecutionEngine } from "./engine";
 import { polymarketAdapter } from "./polymarket.server";
-import type { ExecutionConfig, ExecutionSnapshot, OrderMode, OrderRecord, RiskContext } from "./types";
+import { reconcileOpenOrders } from "./reconcile.server";
+import type { ExecutionConfig, ExecutionSnapshot, OrderMode, OrderRecord, ReconciliationResult, RiskContext } from "./types";
 import { walletStatus } from "./wallet.server";
 
 // Runtime host for the Execution Engine.
@@ -34,6 +35,7 @@ let ticks = 0;
 let lastTickAt: string | null = null;
 let lastError: string | null = null;
 let recovered = false;
+let lastReconciliation: ReconciliationResult | null = null;
 
 /** Manual submissions in flight, keyed by intent id: size + chosen order mode. */
 const manualIntents = new Map<string, { size: number; mode: OrderMode }>();
@@ -135,8 +137,22 @@ export async function recoverExecutionEngine(): Promise<void> {
   if (!engine || recovered) return;
   try {
     await engine.recover();
+
+    const market = getMarketState();
+    const tokenIds = Object.values(market.markets)
+      .flatMap((m) => (m ? [m.upTokenId, m.downTokenId] : []))
+      .filter((id): id is string => Boolean(id));
+    lastReconciliation = await reconcileOpenOrders({
+      store: executionRepository,
+      venue: polymarketAdapter,
+      tokenIds,
+    });
+
     recovered = true;
-    log.info("execution recovery complete", { orders: engine.orders().length });
+    log.info("execution recovery complete", {
+      orders: engine.orders().length,
+      reconciliation: lastReconciliation,
+    });
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);
     log.error("execution recovery failed", { reason: lastError });
@@ -207,7 +223,12 @@ export function executionSnapshot(): ExecutionSnapshot {
     intentsSeen: engine?.intentsSeen() ?? 0,
     lastError,
     startedAt,
+    reconciliation: lastReconciliation,
   };
+}
+
+export function executionRecoveryStatus(): ReconciliationResult | null {
+  return lastReconciliation;
 }
 
 export function executionHealth(): HealthResult {
@@ -223,6 +244,23 @@ export function executionHealth(): HealthResult {
   };
   if (!started) return { state: "DISABLED", message: "execution engine not running", details };
   if (lastError) return { state: "FAILED", message: lastError, details };
+  if (!recovered) {
+    return { state: "DEGRADED", message: "execution recovery not complete", details };
+  }
+  if (lastReconciliation?.state === "FAILED") {
+    return {
+      state: "FAILED",
+      message: `reconciliation failed: ${lastReconciliation.message}`,
+      details,
+    };
+  }
+  if (lastReconciliation?.state === "DIVERGENCE") {
+    return {
+      state: "DEGRADED",
+      message: `reconciliation divergence: ${lastReconciliation.message}`,
+      details,
+    };
+  }
   if (!snapshot.venue.ready) {
     return { state: "DEGRADED", message: snapshot.venue.message, details };
   }

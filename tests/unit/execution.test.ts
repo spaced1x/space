@@ -170,6 +170,24 @@ function scriptedVenue(): ScriptedVenue {
     async trades(venueOrderId) {
       return trades.get(venueOrderId) ?? [];
     },
+    async openOrders(tokenId) {
+      return [...statuses.entries()]
+        .filter(([_, status]) => status !== null)
+        .map(([venueOrderId, status]) => {
+          const submission = venue.submissions.find((s) => s.tokenId === tokenId);
+          return {
+            venueOrderId,
+            clientId: submission?.clientId ?? null,
+            tokenId,
+            side: (submission?.side ?? "BUY") as "BUY" | "SELL",
+            kind: (submission?.kind ?? "LIMIT") as "LIMIT" | "MARKET",
+            price: submission?.price ?? status?.price ?? null,
+            size: status?.size ?? submission?.size ?? 0,
+            filledSize: status?.filledSize ?? 0,
+            status: status?.status ?? "UNKNOWN",
+          };
+        });
+    },
     setTrades(venueOrderId, list) {
       trades.set(venueOrderId, list);
     },
