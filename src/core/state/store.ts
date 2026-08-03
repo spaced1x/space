@@ -35,6 +35,12 @@ export function updateRuntimeState(
   reason: string,
   correlationId: string,
 ): RuntimeState {
+  // Boot -> OBSERVE -> ARMED is operator-driven only. Nothing but an explicit
+  // ARM command may put the engine into ARMED; any other caller attempting it
+  // is a bug, so fail loudly instead of silently arming a live trading engine.
+  if (patch.engineStatus === "ARMED" && reason !== ARM_REASON) {
+    throw new Error("ARMED may only be entered by an explicit operator ARM command");
+  }
   state = Object.freeze({
     ...state,
     ...patch,
@@ -45,6 +51,7 @@ export function updateRuntimeState(
   });
   eventBus.publish({
     type: "runtime.state.changed",
+    severity: "INFO",
     correlationId,
     source: "state-store",
     payload: { ...state },
