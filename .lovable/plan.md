@@ -108,7 +108,14 @@ Then UI: missing runtime bindings, placeholder loading text, empty cards, cards 
 - Changed: `state/store.ts` lifecycle enum, `boot.server.ts` staged boot, `shutdown.server.ts` reverse sequence, `startup/validation.server.ts` gate, `connections.server.ts`, `connection-sync.server.ts`, `twap/registry.server.ts` persistence, `system.functions.ts` / `diagnostics.functions.ts` snapshots, `styles.css` type scale, `workspace-nav.tsx`, `console-shell.tsx`.
 - New components: runtime lifecycle panels, mission-control tabs, current-position card, TWAP provider card, CLOB runtime card, discovery-waiting card, runtime and market timelines.
 - Restart relies on the PM2 supervisor in `ecosystem.config.cjs`; without a supervisor the process must be restarted manually and the UI says exactly that.
-- Verification: `bunx tsgo --noEmit`, `bunx vitest run`, `bun run build`, and a Playwright walkthrough covering every tab, V1 START/STOP, V2 START/STOP, restart, environment isolation, RTDS, Chainlink standby, CLOB authentication, the validation gate, provider persistence and both timelines.
+
+## Verification
+
+`bunx tsgo --noEmit`, `bunx vitest run`, `bun run build` (production), plus a Playwright and runtime walkthrough covering: cold boot, warm restart, V1 START, V1 STOP, V2 START, V2 STOP, ten restart cycles, every Mission Control tab, environment isolation, RTDS, Chainlink standby, CLOB authentication, the validation gate, provider persistence, connection timeline and market timeline. Pass conditions: no duplicate timers, no duplicate WebSocket connections, no increasing memory across the restart cycles, no console errors, all tests green.
+
+## Final deliverable
+
+A written implementation report listing every file changed, every migration added, every runtime component added, every new environment variable, every new command bus command, every remaining limitation and every known blocker, ending with an explicit confirmation that no placeholder code, TODOs, mocked values or unfinished runtime paths remain.
 
 ## Known blockers
 
