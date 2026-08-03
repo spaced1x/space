@@ -30,10 +30,13 @@ export function MissionControl({
           S P A C E
         </p>
         <p className="mt-1 text-label text-muted-foreground">Mission Control</p>
-        {/* The active environment is never implied — it is always stated. */}
+        {/* The active environment is never implied — it is always stated, and
+            carries the environment identity colour: V1 blue, V2 red. */}
         <p
-          className={`mt-2 inline-flex rounded-md px-2 py-1 font-mono text-status font-semibold uppercase ${
-            environment.live ? "bg-warn/15 text-warn" : "bg-primary/10 text-primary"
+          className={`mt-2 inline-flex rounded-md border px-2 py-1 font-mono text-status font-semibold uppercase ${
+            environment.live
+              ? "border-env-v2 bg-env-v2-surface text-env-v2"
+              : "border-env-v1 bg-env-v1-surface text-env-v1"
           }`}
         >
           {environment.label}
@@ -62,6 +65,14 @@ export function MissionControl({
           accent
         />
         <Row label="BTC (Chainlink)" value={market.chainlink ? market.chainlink.price.toFixed(2) : "—"} />
+        <Row
+          label="Settlement source"
+          value={market.settlement ? market.settlement.providerLabel : "no provider price"}
+        />
+        <Row
+          label="Settlement price"
+          value={market.settlement ? market.settlement.price.toFixed(2) : "—"}
+        />
         <Row label="5m market" value={market.markets.FIVE_MINUTE?.status ?? "none"} />
         <Row label="15m market" value={market.markets.FIFTEEN_MINUTE?.status ?? "none"} />
         <Row label="State ver." value={`v${market.version}`} />

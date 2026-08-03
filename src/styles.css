@@ -64,6 +64,10 @@
   --color-fail: var(--fail);
   --color-idle: var(--idle);
   --color-off: var(--off);
+  --color-env-v1: var(--env-v1);
+  --color-env-v1-surface: var(--env-v1-surface);
+  --color-env-v2: var(--env-v2);
+  --color-env-v2-surface: var(--env-v2-surface);
   --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
   /*
    * Typography scale for the operator terminal. Desktop density was too small
@@ -114,6 +118,12 @@
   --fail: oklch(0.55 0.2 25);
   --idle: oklch(0.62 0.015 285);
   --off: oklch(0.72 0.012 285);
+  /* Environment identity: V1 testnet reads blue (safe/paper), V2 mainnet reads
+     red (live capital). Used for banners and badges only — never for status. */
+  --env-v1: oklch(0.52 0.16 250);
+  --env-v1-surface: oklch(0.955 0.03 250);
+  --env-v2: oklch(0.53 0.21 25);
+  --env-v2-surface: oklch(0.955 0.035 25);
   --chart-1: oklch(0.52 0.19 293);
   --chart-2: oklch(0.53 0.14 155);
   --chart-3: oklch(0.62 0.14 70);

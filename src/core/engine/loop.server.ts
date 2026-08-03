@@ -17,6 +17,12 @@ import {
 import { correlationId } from "../shared/ids";
 import { ingestSettlements } from "../settlement/settlement.server";
 import {
+  pollTwapService,
+  startTwapService,
+  stopTwapService,
+  twapServiceSnapshot,
+} from "../twap/service.server";
+import {
   evaluateStrategy,
   startStrategyEngine,
   stopStrategyEngine,
@@ -42,6 +48,8 @@ const EXECUTION_MS = 500;
 // Venue resolutions arrive minutes after a window closes; polling slowly is
 // enough and keeps Gamma requests far below the rate limit.
 const SETTLEMENT_MS = 30_000;
+// The settlement TWAP needs sub-second resolution near the settlement window.
+const TWAP_MS = 250;
 
 let binance: PriceFeed | undefined;
 let chainlink: PriceFeed | undefined;
@@ -65,6 +73,9 @@ export async function startEngineLoop(): Promise<void> {
   chainlink = createChainlinkFeed((sample) => applyPriceSample(sample));
   await binance.start();
   await chainlink.start();
+  // Settlement prices come from the TWAP service (active provider), never
+  // from the Binance display feed.
+  await startTwapService();
   startStrategyEngine();
   startExecutionEngine();
 
@@ -92,6 +103,12 @@ export async function startEngineLoop(): Promise<void> {
     intervalMs: DISCOVERY_MS,
     runOnStart: true,
     run: () => refreshMarkets(),
+  });
+  registerTask({
+    name: "twap.provider.poll",
+    intervalMs: TWAP_MS,
+    runOnStart: true,
+    run: () => pollTwapService(),
   });
   registerTask({
     name: "strategy.evaluate",
@@ -146,6 +163,7 @@ export async function stopEngineLoop(): Promise<void> {
     "feed.binance.watchdog",
     "feed.chainlink.poll",
     "market.discovery",
+    "twap.provider.poll",
     "strategy.evaluate",
     "execution.run",
     "settlement.ingest",
@@ -154,6 +172,7 @@ export async function stopEngineLoop(): Promise<void> {
   }
   stopExecutionEngine();
   stopStrategyEngine();
+  await stopTwapService();
   await binance?.stop();
   await chainlink?.stop();
   binance = undefined;
@@ -194,6 +213,7 @@ export function engineRuntimeSnapshot() {
     market: getMarketState(),
     strategy: strategySnapshot(),
     execution: executionSnapshot(),
+    twap: twapServiceSnapshot(),
     feeds: {
       binance: binance?.stats() ?? null,
       chainlink: chainlink?.stats() ?? null,

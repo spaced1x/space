@@ -40,6 +40,31 @@ export const envSchema = z.object({
     .regex(/^0x[a-fA-F0-9]{40}$/)
     .default("0xc907E116054Ad103354f2D350FD2514433D57F6f"),
 
+  // Settlement TWAP providers. The active provider is chosen by the provider
+  // registry and persisted in the database; these are transport credentials
+  // only. Nothing about the RTDS protocol is compiled in.
+  RTDS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  RTDS_WS_URL: optionalSecret,
+  RTDS_API_KEY: optionalSecret,
+  RTDS_API_SECRET: optionalSecret,
+  /** Channel name, or a full subscription payload when it is valid JSON. */
+  RTDS_CHANNEL: optionalSecret,
+  RTDS_SYMBOL: z.string().trim().min(1).default("BTC"),
+  RTDS_AUTH_TYPE: z.enum(["none", "api_key", "bearer", "hmac", "query"]).default("none"),
+
+  CHAINLINK_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  CHAINLINK_API_KEY: optionalSecret,
+  CHAINLINK_API_SECRET: optionalSecret,
+  CHAINLINK_STREAM_ID: optionalSecret,
+  CHAINLINK_WS_URL: optionalSecret,
+  CHAINLINK_HTTP_URL: optionalSecret,
+
   // Polymarket public metadata API used for market discovery.
   POLYMARKET_GAMMA_URL: z.string().trim().url().default("https://gamma-api.polymarket.com"),
 
