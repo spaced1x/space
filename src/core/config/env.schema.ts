@@ -10,7 +10,7 @@ export const envSchema = z.object({
   SPACE_ENVIRONMENT: z.enum(["V1_TESTNET", "V2_MAINNET"]).default("V1_TESTNET"),
   PORT: z.coerce.number().int().min(1).max(65535).default(8080),
 
-  DB_PATH: z.string().trim().min(1).default("./data/space.db"),
+  DB_PATH: z.string().trim().min(1).optional(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   LOG_DIR: z.string().trim().min(1).default("./logs"),
   LOG_MAX_BYTES: z.coerce.number().int().min(64_000).default(10_000_000),
