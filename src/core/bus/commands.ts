@@ -29,6 +29,20 @@ export const commandSchema = z.discriminatedUnion("kind", [
     kind: z.literal("TELEGRAM_BROADCAST"),
     message: z.string().max(4000),
   }),
+  // Operator configuration edits are state-changing actions and therefore
+  // commands: they are validated, serialised and audited like every other one.
+  z.object({
+    kind: z.literal("STAGE_OPERATIONS"),
+    document: z.unknown(),
+  }),
+  // Manual trading goes through the same audited path as automatic trading.
+  z.object({
+    kind: z.literal("MANUAL_ORDER"),
+    horizon: z.enum(["FIVE_MINUTE", "FIFTEEN_MINUTE"]),
+    direction: z.enum(["UP", "DOWN"]),
+    orderKind: z.enum(["LIMIT", "MARKET"]),
+    size: z.number().positive().max(100_000),
+  }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -47,6 +61,8 @@ export const COMMAND_KINDS: CommandKind[] = [
   "BACKUP",
   "RESTORE",
   "TELEGRAM_BROADCAST",
+  "STAGE_OPERATIONS",
+  "MANUAL_ORDER",
 ];
 
 export type CommandSource = "dashboard" | "telegram" | "system";
@@ -65,4 +81,6 @@ export interface Verdict {
   correlationId: string;
   command: CommandKind;
   at: string;
+  /** Command-specific result payload (order ids, staged document, ...). */
+  details?: unknown;
 }
