@@ -135,4 +135,113 @@ export const migrations: Migration[] = [
         BEGIN SELECT RAISE(ABORT, 'execution intents are immutable'); END;
     `,
   },
+  {
+    id: 3,
+    name: "execution_orders",
+    sql: `
+      -- Exactly one order chain per execution intent. The UNIQUE constraint is
+      -- the storage-level guarantee behind "restarting SPACE never creates a
+      -- duplicate order": a second attempt to open a chain for the same intent
+      -- is rejected by SQLite, not merely by application logic.
+      CREATE TABLE IF NOT EXISTS orders (
+        id              TEXT PRIMARY KEY,
+        intent_id       TEXT NOT NULL UNIQUE,
+        condition_id    TEXT NOT NULL,
+        slug            TEXT NOT NULL,
+        horizon         TEXT NOT NULL,
+        token_id        TEXT NOT NULL,
+        outcome         TEXT NOT NULL CHECK (outcome IN ('UP', 'DOWN')),
+        side            TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+        mode            TEXT NOT NULL,
+        kind            TEXT NOT NULL CHECK (kind IN ('LIMIT', 'MARKET')),
+        limit_price     REAL,
+        size            REAL NOT NULL,
+        state           TEXT NOT NULL,
+        attempt         INTEGER NOT NULL DEFAULT 0,
+        client_id       TEXT,
+        venue_order_id  TEXT,
+        filled_size     REAL NOT NULL DEFAULT 0,
+        avg_price       REAL,
+        reason          TEXT NOT NULL,
+        last_error      TEXT,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        submitted_at    TEXT,
+        terminal_at     TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_orders_state ON orders (state);
+      CREATE INDEX IF NOT EXISTS idx_orders_condition ON orders (condition_id);
+
+      -- Append-only lifecycle. Every transition is written before the engine
+      -- is allowed to advance, so recovery always sees the true last state.
+      CREATE TABLE IF NOT EXISTS order_events (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id    TEXT NOT NULL,
+        intent_id   TEXT NOT NULL,
+        state       TEXT NOT NULL,
+        reason      TEXT NOT NULL,
+        attempt     INTEGER NOT NULL DEFAULT 0,
+        payload     TEXT NOT NULL DEFAULT '{}',
+        occurred_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events (order_id);
+
+      CREATE TRIGGER IF NOT EXISTS order_events_no_update
+        BEFORE UPDATE ON order_events
+        BEGIN SELECT RAISE(ABORT, 'order events are append-only'); END;
+
+      CREATE TRIGGER IF NOT EXISTS order_events_no_delete
+        BEFORE DELETE ON order_events
+        BEGIN SELECT RAISE(ABORT, 'order events are append-only'); END;
+
+      -- Fills are keyed by the venue trade id, so replaying the trade feed
+      -- after a restart can never double-count a fill.
+      CREATE TABLE IF NOT EXISTS fills (
+        id           TEXT PRIMARY KEY,
+        order_id     TEXT NOT NULL,
+        intent_id    TEXT NOT NULL,
+        condition_id TEXT NOT NULL,
+        token_id     TEXT NOT NULL,
+        outcome      TEXT NOT NULL,
+        side         TEXT NOT NULL,
+        size         REAL NOT NULL,
+        price        REAL NOT NULL,
+        filled_at    TEXT NOT NULL,
+        source       TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_fills_order ON fills (order_id);
+
+      CREATE TRIGGER IF NOT EXISTS fills_no_update
+        BEFORE UPDATE ON fills
+        BEGIN SELECT RAISE(ABORT, 'fills are immutable evidence'); END;
+
+      CREATE TRIGGER IF NOT EXISTS fills_no_delete
+        BEFORE DELETE ON fills
+        BEGIN SELECT RAISE(ABORT, 'fills are immutable evidence'); END;
+
+      -- Every risk verdict is kept, including rejections and retry re-checks.
+      CREATE TABLE IF NOT EXISTS risk_decisions (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        intent_id   TEXT NOT NULL,
+        status      TEXT NOT NULL CHECK (status IN ('APPROVED', 'REJECTED')),
+        code        TEXT NOT NULL,
+        reason      TEXT NOT NULL,
+        attempt     INTEGER NOT NULL DEFAULT 0,
+        occurred_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_risk_decisions_intent ON risk_decisions (intent_id);
+
+      CREATE TRIGGER IF NOT EXISTS risk_decisions_no_update
+        BEFORE UPDATE ON risk_decisions
+        BEGIN SELECT RAISE(ABORT, 'risk decisions are append-only'); END;
+
+      CREATE TRIGGER IF NOT EXISTS risk_decisions_no_delete
+        BEFORE DELETE ON risk_decisions
+        BEGIN SELECT RAISE(ABORT, 'risk decisions are append-only'); END;
+    `,
+  },
 ];

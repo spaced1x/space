@@ -315,3 +315,61 @@ Operations Desk edit can never reach a market already in flight.
 `settlement_twap` and `strategy` join the registry, reporting `DISABLED` when
 the engine is not running, `DEGRADED` for warming/stale TWAP or unpersisted
 evidence, and `FAILED` on an evaluation error.
+
+---
+
+## 11. Milestone 4 — Execution Engine (implemented)
+
+Milestone 4 turns strategy decisions into real orders. The path is fixed and no
+module may shortcut it:
+
+```text
+Strategy -> Execution Intent -> Risk Engine -> Execution Engine
+         -> Polymarket CLOB -> Order Monitor -> Order State
+```
+
+### 11.1 Modules
+
+| Module | File | Purpose |
+| --- | --- | --- |
+| Vocabulary | `src/core/execution/types.ts` | Order states, risk codes, records, config |
+| Config | `src/core/execution/config.ts` | Defaults (`LIMIT_ONLY`), validation, price clamp |
+| Risk Engine | `src/core/execution/risk.ts` | Pure `evaluateRisk(intent, context)` |
+| Lifecycle | `src/core/execution/lifecycle.ts` | Legal transitions + fill accounting |
+| Venue port | `src/core/execution/venue.ts` | Venue-agnostic interface |
+| CLOB adapter | `src/core/execution/polymarket.server.ts` | Official `@polymarket/clob-client` |
+| Wallet layer | `src/core/execution/wallet.server.ts` | Sole reader of `WALLET_PRIVATE_KEY` |
+| Engine | `src/core/execution/engine.ts` | Pure orchestrator over injected ports |
+| Runtime host | `src/core/execution/execution.server.ts` | Wiring, scheduler step, health |
+| Storage | `src/core/db/repositories/execution.repository.ts` | The only SQL |
+
+### 11.2 Idempotency guarantees
+
+1. `orders.intent_id` is `UNIQUE` — one order chain per intent, forever.
+2. `fills.id` is the venue trade id — a replayed trade feed cannot double count.
+3. `order_events` and `risk_decisions` are append-only (SQLite triggers).
+4. Every state is persisted **before** the engine advances.
+5. Recovery reconciles; it never resubmits. An order without a venue id is
+   marked `FAILED`, never retried blindly.
+
+### 11.3 Order modes
+
+`LIMIT_ONLY` (default) submits a limit order, waits `limitTimeoutMs`, cancels,
+and retries the **same intent** up to `maxRetries` before `EXPIRED`.
+`MARKET_ONLY` submits a market order directly. `LIMIT_THEN_MARKET` cancels the
+limit on timeout and submits the market leg on the same order chain.
+
+Retries never create a new intent, never touch the frozen trigger or buffer, and
+are re-checked by the Risk Engine before each resubmission.
+
+### 11.4 V1 / V2
+
+Identical code. `SPACE_ENVIRONMENT=V1_TESTNET` targets the staging CLOB on Amoy
+(chain 80002); `V2_MAINNET` targets the production CLOB on Polygon (137). Only
+`.env` differs — credentials are never editable from the dashboard.
+
+### 11.5 Health
+
+New components: `wallet`, `polymarket`, `risk`, `execution`. All report
+`DISABLED` when the engine is not running and `DEGRADED` (never `FAILED`) when
+credentials are absent, so an unconfigured VPS still boots into OBSERVE.

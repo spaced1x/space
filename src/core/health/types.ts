@@ -20,6 +20,9 @@ export const HEALTH_COMPONENTS = [
   "binance",
   "chainlink",
   "polymarket",
+  "wallet",
+  "risk",
+  "execution",
   "replay",
   "telegram",
 ] as const;

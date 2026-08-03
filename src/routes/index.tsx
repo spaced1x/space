@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { CommandDeck } from "../components/space/command-deck";
+import { ExecutionPanel, OrderTable, PositionTable } from "../components/space/execution-panel";
 import { MissionControl } from "../components/space/mission-control";
 import { MarketPanel } from "../components/space/market-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
@@ -87,6 +88,7 @@ function OperatorConsole() {
         health={health}
         market={engine.market}
         strategy={engine.strategy}
+        execution={engine.execution}
       />
 
       <main className="flex-1 space-y-8 p-6 lg:p-10">
@@ -96,13 +98,13 @@ function OperatorConsole() {
               Mission Control
             </h1>
             <span className="rounded border border-primary/30 bg-accent px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-accent-foreground">
-              milestone 3 — frozen window strategy
+              milestone 4 — execution engine
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Settlement TWAP, frozen windows, buffers, triggers, quota and execution intents are
-            live on top of the milestone 2 runtime. Nothing is executed: the strategy produces
-            immutable execution intents only. Risk and order execution attach in later milestones.
+            Every order follows one immutable execution intent through the Risk Engine, the
+            Execution Engine and the Polymarket CLOB. Strategy never submits an order, the
+            dashboard never submits an order, and restarting SPACE never duplicates one.
           </p>
           <p className="text-xs text-muted-foreground">
             Engine boots into OBSERVE. ARMED is only ever reached by an explicit operator ARM
@@ -115,6 +117,27 @@ function OperatorConsole() {
             Strategy
           </h2>
           <StrategyPanel strategy={engine.strategy} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Execution
+          </h2>
+          <ExecutionPanel execution={engine.execution} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Orders
+          </h2>
+          <OrderTable orders={engine.execution.orders} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Positions
+          </h2>
+          <PositionTable execution={engine.execution} />
         </section>
 
         <section className="space-y-3">
