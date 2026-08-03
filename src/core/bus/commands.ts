@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { JsonObject } from "../shared/json";
+
 // One entry point for every state-changing operator action, from the dashboard
 // or Telegram. Validated at the edge, executed on the engine loop, answered
 // with an explicit verdict, written to the audit log.
@@ -82,5 +84,5 @@ export interface Verdict {
   command: CommandKind;
   at: string;
   /** Command-specific result payload (order ids, staged document, ...). */
-  details?: unknown;
+  details?: JsonObject;
 }
