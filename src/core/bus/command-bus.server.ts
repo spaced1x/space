@@ -2,7 +2,7 @@ import { auditRepository } from "../db/repositories/audit.repository";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import { correlationId as newCorrelationId } from "../shared/ids";
-import { getRuntimeState, updateRuntimeState, type RuntimeState } from "../state/store";
+import { ARM_REASON, getRuntimeState, updateRuntimeState, type RuntimeState } from "../state/store";
 import { eventBus } from "./events";
 import { commandSchema, type Command, type CommandContext, type Verdict } from "./commands";
 
@@ -48,7 +48,8 @@ function defaultHandler(command: Command, context: CommandContext): Verdict {
     case "ARM":
       if (state.engineStatus === "ARMED") return reject("engine is already ARMED");
       if (state.engineStatus === "PAUSED") return reject("resume before arming");
-      return accept("engine armed", { engineStatus: "ARMED" });
+      if (state.engineStatus !== "OBSERVE") return reject("engine must be in OBSERVE to arm");
+      return accept(ARM_REASON, { engineStatus: "ARMED" });
     case "DISARM":
       if (state.engineStatus === "OBSERVE") return reject("engine is already in OBSERVE");
       return accept("engine disarmed to OBSERVE", { engineStatus: "OBSERVE" });
@@ -87,6 +88,7 @@ export async function dispatchCommand(
 
     eventBus.publish({
       type: `command.${result.status.toLowerCase()}`,
+      severity: result.status === "ACCEPTED" ? "SUCCESS" : "WARNING",
       correlationId: cid,
       source: fullContext.source,
       payload: { command: command.kind, reason: result.reason, actor: fullContext.actor },
