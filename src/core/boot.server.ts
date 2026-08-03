@@ -168,6 +168,9 @@ async function runBoot(): Promise<void> {
   // missing secrets, an unhealthy database, or an invalid wallet. Boot always
   // completes so the operator can see the dashboard and the validation report;
   // only the ARM command is blocked when validation fails.
+  // Boot-time evaluation of the composite environment gate; pre-ARM re-runs it.
+  await stage("environment-conformance", () => evaluateEnvironmentConformance());
+
   const startupValidation = await stage("startup-validation", () => runStartupValidation());
   if (!startupValidation.valid) {
     log.warn("startup validation has blockers; engine limited to OBSERVE", {
