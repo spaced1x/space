@@ -108,7 +108,7 @@ export interface ConnectionReport {
   endpoint?: string | null;
   latencyMs?: number | null;
   reconnects?: number;
-  lastSuccessAt?: string | null;
+  lastSuccessAt?: string | null | undefined;
   lastError?: string | null;
   details?: Record<string, string | number | boolean | null>;
 }
