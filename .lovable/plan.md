@@ -41,14 +41,37 @@ No hot swap: adapters, sockets, timers, DB handle and lock are fully torn down b
 
 STOP performs graceful shutdown and persistence, leaving the runtime STOPPED and its panel populated from its database.
 
-## 5. Diagnostics and identity
+## 5. Runtime correctness
+
+At every moment there must be exactly one runtime.
+
+Never allow:
+
+- duplicate engine loops
+- duplicate schedulers
+- duplicate Binance sockets
+- duplicate RTDS sockets
+- duplicate Chainlink providers
+- duplicate Gamma polling
+- duplicate CLOB clients
+- duplicate Telegram clients
+- duplicate timers
+- duplicate event listeners
+
+Every START or SWITCH must first prove the previous runtime has been fully destroyed before booting the next runtime. Verification must fail if more than one instance of any runtime resource exists.
+
+## 6. UI preservation
+
+Do not redesign Mission Control. Do not simplify cards. Do not remove information. Do not rename existing cards. Do not change navigation. Do not create a different dashboard. Reuse the current operator terminal and extend it. The final result should look like today's terminal with V1 and V2 added — not like a new application.
+
+## 7. Diagnostics and identity
 
 Diagnostics are environment-aware: viewing V1 shows only V1 history, viewing V2 only V2. Environment identity (V1 TESTNET / Paper / blue, V2 MAINNET / Live / red) appears on every screen, banner and runtime card, alongside database, provider, wallet, RPC and which runtime is currently active.
 
 ## Technical section
 
 - `src/core/runtime/target.server.ts` — keep the versioned target; add `switchRuntime(environment, actor)` performing shutdown -> persist -> write target -> re-init (or exit under `SPACE_SWITCH_MODE=exit`).
-- New `src/core/runtime/supervisor.server.ts` — owns start/stop/switch: closes scheduler timers, engine loop, Binance/RTDS/Chainlink sockets, CLOB and Telegram clients, releases the DB lock and closes the driver, resets the boot promise, then re-runs `boot()`. Guarantees no duplicated timers or sockets.
+- Do NOT introduce a second runtime supervisor. Reuse and extend the existing runtime lifecycle (`boot.server.ts`, `shutdown.server.ts`, the runtime target manager and the CommandBus). There must be exactly one runtime lifecycle owner; lifecycle logic is not duplicated into a parallel supervisor. Start/stop/switch is added to the existing owner: `shutdown.server.ts` gains a complete teardown (scheduler timers, engine loop, Binance/RTDS/Chainlink sockets, Gamma polling, CLOB and Telegram clients, event listeners, DB lock and driver), and `boot.server.ts` gains a resettable boot promise so it can boot again under the new target after teardown asserts zero live resources.
 - `src/core/db/database.server.ts` — make the singleton resettable (`closeDatabase()`), keyed by the path from `resolveDbPath(env)`.
 - New `src/core/runtime/peek.server.ts` — opens the inactive `space-vX.db` read-only (no migrations, no lock) and returns its last persisted runtime snapshot, connection history, diagnostics, market/TWAP state and config version. Returns an explicit "database not created yet" marker when absent.
 - `src/lib/system.functions.ts` — `getSystemSnapshot` returns `{ active, inactive, activeEnvironment }` so both panels come from one read surface.
@@ -58,4 +81,35 @@ Diagnostics are environment-aware: viewing V1 shows only V1 history, viewing V2 
 
 ## Verification
 
-Both panels permanently visible; identical layouts; isolated databases, histories, provider selections and diagnostics; START/STOP for V1 and V2; switch survives a restart; no duplicated timers or WebSockets (asserted by counting active handles after three switch cycles); no stale snapshots; no placeholder values; `tsc` clean; tests green; production build passes.
+PASS only if ALL are true:
+
+- Both runtime panels always visible
+- V1 and V2 show identical information
+- START/STOP works independently
+- Runtime switch works repeatedly
+- Both databases remain isolated
+- No duplicated timers
+- No duplicated schedulers
+- No duplicated WebSockets
+- No duplicated event listeners
+- No leaked SQLite handles
+- No stale runtime snapshot
+- No placeholder values
+- No mocked runtime values
+- No React warnings
+- No hydration warnings
+- No console errors
+- TypeScript clean
+- Tests green
+- Production build succeeds
+
+Provide a final implementation report listing:
+
+- every changed file
+- every new file
+- every deleted file
+- every migration
+- every new environment variable
+- every runtime command
+- every known limitation
+- every remaining blocker
