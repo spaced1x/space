@@ -17,5 +17,14 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
-  ...(nitroPreset ? { nitro: { preset: nitroPreset } } : {}),
+  ...(nitroPreset
+    ? {
+        nitro: {
+          preset: nitroPreset,
+          // Keep one artifact layout everywhere so PM2 always starts
+          // dist/server/index.mjs.
+          output: { dir: "dist", serverDir: "dist/server", publicDir: "dist/client" },
+        },
+      }
+    : {}),
 });
