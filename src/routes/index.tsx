@@ -1,20 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { toast } from "sonner";
 
-import { CommandDeck } from "../components/space/command-deck";
-import { ConsoleNav } from "../components/space/console-shell";
+import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { ExecutionPanel, OrderTable, PositionTable } from "../components/space/execution-panel";
-import { MissionControl } from "../components/space/mission-control";
 import { MarketPanel } from "../components/space/market-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
-import { BotPredictionPanel, StrategyPanel } from "../components/space/strategy-panel";
-import { IntentList, WindowTimeline } from "../components/space/window-timeline";
-import type { Command } from "../core/bus/commands";
+import { StrategyPanel } from "../components/space/strategy-panel";
 import type { EventSeverity } from "../core/bus/events";
-import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
+import { getSystemSnapshot } from "../lib/system.functions";
 
 const SEVERITY_TONE: Record<EventSeverity, string> = {
   INFO: "text-muted-foreground",
@@ -50,9 +45,7 @@ export const Route = createFileRoute("/")({
 });
 
 function OperatorConsole() {
-  const queryClient = useQueryClient();
   const fetchSnapshot = useServerFn(getSystemSnapshot);
-  const dispatch = useServerFn(sendCommand);
 
   const snapshot = useQuery({
     queryKey: ["system-snapshot"],
@@ -60,186 +53,91 @@ function OperatorConsole() {
     refetchInterval: 5000,
   });
 
-  const command = useMutation({
-    mutationFn: (input: Command) => dispatch({ data: input }),
-    onSuccess: (verdict) => {
-      if (verdict.status === "ACCEPTED") toast.success(`${verdict.command}: ${verdict.reason}`);
-      else toast.error(`${verdict.command} rejected — ${verdict.reason}`);
-      void queryClient.invalidateQueries({ queryKey: ["system-snapshot"] });
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  if (!snapshot.data) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background">
+  return (
+    <ConsoleShell
+      title="Mission Control"
+      subtitle="What is happening right now. Operational only — configuration lives in the Operations Desk, analysis in Statistics and Replay."
+    >
+      {!snapshot.data ? (
         <p className="font-mono text-sm text-muted-foreground">
           {snapshot.isError ? "snapshot unavailable" : "connecting to SPACE runtime…"}
         </p>
-      </main>
-    );
-  }
+      ) : (
+        <>
+          <Panel title="Strategy" hint="PTB · settlement TWAP · active window · direction">
+            <StrategyPanel strategy={snapshot.data.engine.strategy} />
+          </Panel>
 
-  const { runtime, health, events, engine } = snapshot.data;
+          <Panel title="Current market">
+            <MarketPanel market={snapshot.data.engine.market} />
+          </Panel>
 
-  return (
-    <div className="flex min-h-screen flex-col bg-background lg:flex-row">
-      <MissionControl
-        runtime={runtime}
-        health={health}
-        market={engine.market}
-        strategy={engine.strategy}
-        execution={engine.execution}
-      />
+          <Panel title="Execution & wallet">
+            <ExecutionPanel execution={snapshot.data.engine.execution} />
+          </Panel>
 
-      <main className="flex-1 space-y-8 p-6 lg:p-10">
-        <ConsoleNav />
-        <header className="space-y-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Mission Control
-            </h1>
-            <span className="rounded border border-primary/30 bg-accent px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-accent-foreground">
-              milestone 4 — execution engine
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Every order follows one immutable execution intent through the Risk Engine, the
-            Execution Engine and the Polymarket CLOB. Strategy never submits an order, the
-            dashboard never submits an order, and restarting SPACE never duplicates one.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Engine boots into OBSERVE. ARMED is only ever reached by an explicit operator ARM
-            command.
-          </p>
-        </header>
+          <Panel title="Active orders">
+            <OrderTable orders={snapshot.data.engine.execution.orders} />
+          </Panel>
 
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Strategy
-          </h2>
-          <StrategyPanel strategy={engine.strategy} />
-        </section>
+          <Panel title="Positions">
+            <PositionTable execution={snapshot.data.engine.execution} />
+          </Panel>
 
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Execution
-          </h2>
-          <ExecutionPanel execution={engine.execution} />
-        </section>
+          <Panel title="Feeds">
+            <RuntimePanel
+              scheduler={snapshot.data.engine.scheduler}
+              feeds={snapshot.data.engine.feeds}
+            />
+          </Panel>
 
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Orders
-          </h2>
-          <OrderTable orders={engine.execution.orders} />
-        </section>
+          <Panel title="Health summary">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {snapshot.data.health.components.map((entry) => (
+                <article
+                  key={entry.component}
+                  className="rounded-lg border border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <StatusDot state={entry.state} />
+                    <h3 className="font-mono text-sm text-card-foreground">{entry.component}</h3>
+                    <span className="ml-auto text-[11px] uppercase text-muted-foreground">
+                      {stateLabel(entry.state)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    {entry.message}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </Panel>
 
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Positions
-          </h2>
-          <PositionTable execution={engine.execution} />
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Bot prediction
-          </h2>
-          <BotPredictionPanel strategy={engine.strategy} />
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Execution windows
-          </h2>
-          <WindowTimeline strategy={engine.strategy} />
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Execution intents
-          </h2>
-          <IntentList strategy={engine.strategy} />
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Unified market state
-          </h2>
-          <MarketPanel market={engine.market} />
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Runtime
-          </h2>
-          <RuntimePanel scheduler={engine.scheduler} feeds={engine.feeds} />
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Command bus
-          </h2>
-          <CommandDeck
-            runtime={runtime}
-            pending={command.isPending}
-            onCommand={(input) => command.mutate(input)}
-          />
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Health registry
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {health.components.map((entry) => (
-              <article
-                key={entry.component}
-                className="rounded-lg border border-border bg-card p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <StatusDot state={entry.state} />
-                  <h3 className="font-mono text-sm text-card-foreground">{entry.component}</h3>
-                  <span className="ml-auto text-[11px] uppercase text-muted-foreground">
-                    {stateLabel(entry.state)}
+          <Panel title="Recent events">
+            <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
+              {snapshot.data.events.map((event) => (
+                <li
+                  key={`${event.correlationId}-${event.occurredAt}-${event.type}`}
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 p-3 font-mono text-xs"
+                >
+                  <span className="text-muted-foreground">
+                    {new Date(event.occurredAt).toLocaleTimeString()}
                   </span>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  {entry.message}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Runtime event log
-          </h2>
-          <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
-            {events.map((event) => (
-              <li
-                key={`${event.correlationId}-${event.occurredAt}-${event.type}`}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 p-3 font-mono text-xs"
-              >
-                <span className="text-muted-foreground">
-                  {new Date(event.occurredAt).toLocaleTimeString()}
-                </span>
-                <span className={`w-16 shrink-0 uppercase ${severityTone(event.severity)}`}>
-                  {event.severity}
-                </span>
-                <span className="text-primary">{event.type}</span>
-                <span className="text-muted-foreground">{event.source}</span>
-                <span className="ml-auto text-muted-foreground">{event.correlationId}</span>
-              </li>
-            ))}
-            {events.length === 0 && (
-              <li className="p-3 font-mono text-xs text-muted-foreground">no events yet</li>
-            )}
-          </ul>
-        </section>
-      </main>
-    </div>
+                  <span className={`w-16 shrink-0 uppercase ${severityTone(event.severity)}`}>
+                    {event.severity}
+                  </span>
+                  <span className="text-primary">{event.type}</span>
+                  <span className="text-muted-foreground">{event.source}</span>
+                  <span className="ml-auto text-muted-foreground">{event.correlationId}</span>
+                </li>
+              ))}
+              {snapshot.data.events.length === 0 && (
+                <li className="p-3 font-mono text-xs text-muted-foreground">no events yet</li>
+              )}
+            </ul>
+          </Panel>
+        </>
+      )}
+    </ConsoleShell>
   );
 }
