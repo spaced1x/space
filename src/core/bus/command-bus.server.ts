@@ -149,12 +149,10 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       // execution module cycles.
       const { stageOperations } = await import("../config/operations.server");
       const result = await stageOperations(command.document);
-      if (!result.ok) {
-        return reject(`configuration rejected: ${result.errors.join("; ")}`);
-      }
+      if (result.status === "REJECTED") return reject(result.reason);
       return {
-        ...verdict("ACCEPTED", "configuration staged", command.kind, context.correlationId),
-        details: { version: result.staged?.version ?? null, pending: result.pending ?? null },
+        ...verdict("ACCEPTED", result.reason, command.kind, context.correlationId),
+        details: { version: result.staged.version, pending: result.pending },
       };
     }
     case "MANUAL_ORDER": {
@@ -168,12 +166,12 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       });
       return {
         ...verdict(
-          result.accepted ? "ACCEPTED" : "REJECTED",
-          result.message,
+          result.status,
+          result.reason,
           command.kind,
           context.correlationId,
         ),
-        details: { orderId: result.orderId ?? null, intentId: result.intentId ?? null },
+        details: { orderId: result.order?.id ?? null, intentId: result.order?.intentId ?? null },
       };
     }
     default:
