@@ -28,7 +28,7 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
   if (!market) {
     return (
       <EmptyState
-        subject="Current trading target"
+        subject="BTC up/down market"
         status="Waiting for market"
         reason="No official BTC up/down market is open right now"
         action="None — SPACE discovers the next BTC market automatically"
