@@ -25,6 +25,12 @@ export const envSchema = z.object({
   POLYMARKET_API_KEY: optionalSecret,
   POLYMARKET_API_SECRET: optionalSecret,
   POLYMARKET_API_PASSPHRASE: optionalSecret,
+  /** Proxy/funder wallet that holds the collateral. Defaults to WALLET_ADDRESS. */
+  POLYMARKET_FUNDER_ADDRESS: optionalSecret,
+  /** Venue host. V1 uses the staging CLOB, V2 the production CLOB. */
+  POLYMARKET_CLOB_URL: optionalSecret,
+  /** 0 = EOA, 1 = email/magic proxy, 2 = browser wallet proxy. */
+  POLYMARKET_SIGNATURE_TYPE: z.coerce.number().int().min(0).max(2).default(0),
   WALLET_PRIVATE_KEY: optionalSecret,
   WALLET_ADDRESS: optionalSecret,
   POLYGON_RPC_URL: optionalSecret,
