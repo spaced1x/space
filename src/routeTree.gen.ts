@@ -17,6 +17,7 @@ import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
+import { Route as ApiRuntimeHealthRouteImport } from './routes/api/runtime/health'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +59,11 @@ const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
   path: '/api/public/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiRuntimeHealthRoute = ApiRuntimeHealthRouteImport.update({
+  id: '/api/runtime/health',
+  path: '/api/runtime/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/runtime/health': typeof ApiRuntimeHealthRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/runtime/health': typeof ApiRuntimeHealthRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/runtime/health': typeof ApiRuntimeHealthRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stats'
     | '/api/public/health'
+    | '/api/runtime/health'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stats'
     | '/api/public/health'
+    | '/api/runtime/health'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stats'
     | '/api/public/health'
+    | '/api/runtime/health'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +144,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   StatsRoute: typeof StatsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
+  ApiRuntimeHealthRoute: typeof ApiRuntimeHealthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/runtime/health': {
+      id: '/api/runtime/health'
+      path: '/api/runtime/health'
+      fullPath: '/api/runtime/health'
+      preLoaderRoute: typeof ApiRuntimeHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   StatsRoute: StatsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
+  ApiRuntimeHealthRoute: ApiRuntimeHealthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
