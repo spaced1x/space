@@ -100,11 +100,15 @@ function OperatorConsole() {
           </Panel>
 
           <Panel title="Runtime connections" hint="every external dependency, as observed">
-            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {snapshot.data.connections.map((record) => (
                 <ConnectionCard key={record.id} record={record} />
               ))}
             </div>
+          </Panel>
+
+          <Panel title="Connection history" hint="last 300 state changes observed by the runtime">
+            <ConnectionHistory entries={snapshot.data.timeline} />
           </Panel>
 
           <Panel title="Strategy" hint="PTB · settlement TWAP · active window · direction">
@@ -127,7 +131,7 @@ function OperatorConsole() {
             <PositionTable execution={snapshot.data.engine.execution} />
           </Panel>
 
-          <Panel title="Feeds">
+          <Panel title="Feeds & scheduler" hint="live task and feed telemetry">
             <RuntimePanel
               scheduler={snapshot.data.engine.scheduler}
               feeds={snapshot.data.engine.feeds}
