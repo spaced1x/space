@@ -119,7 +119,9 @@ async function publish(events: StrategyEvent[]): Promise<void> {
         await strategyRepository.recordFrozenTrigger(window);
       }
       if (event.type === "intent.created" && event.intent) {
-        await strategyRepository.insertIntent(event.intent);
+        // Every intent is stamped with the Operations Desk version that produced
+        // it, so PnL can be attributed to an exact configuration.
+        await strategyRepository.insertIntent(event.intent, activeOperations().version);
       }
     }
     persistenceError = null;
