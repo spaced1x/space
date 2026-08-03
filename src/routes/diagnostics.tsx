@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { MarketPanel } from "../components/space/market-panel";
+import { ProductionPanel } from "../components/space/production-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
 import { ExecutionPanel } from "../components/space/execution-panel";
