@@ -309,7 +309,7 @@ export function environmentResolution(): {
   const environment = env.SPACE_ENVIRONMENT;
   const namespace = environment === "V1_TESTNET" ? "v1" : "v2";
   const wallet = getConnection("wallet");
-  const clob = getConnection("clob");
+  const clob = getConnection("clob_trading");
   const twap = getConnection("twap_provider");
 
   const rows: EnvironmentResolutionRow[] = [

@@ -340,7 +340,7 @@ function syncClob(): void {
   );
   const environmentMatch = wallet.chainId === (env.SPACE_ENVIRONMENT === "V1_TESTNET" ? 80002 : 137);
 
-  reportConnection("clob", {
+  reportConnection("clob_trading", {
     state: !apiKeyLoaded
       ? "NOT_CONFIGURED"
       : description.ready
