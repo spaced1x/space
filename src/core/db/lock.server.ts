@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { loadEnv } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
@@ -31,7 +32,6 @@ export function acquireInstanceLock(): LockHandle {
   if (held) return held;
 
   const path = lockPath();
-  const fs = require("node:fs");
   const pid = process.pid;
 
   try {
@@ -43,9 +43,23 @@ export function acquireInstanceLock(): LockHandle {
   } catch (error) {
     const code = (error as { code?: string }).code;
     if (code === "EEXIST") {
-      const existing = fs.existsSync(path) ? fs.readFileSync(path, "utf8").split("\n")[0] ?? "unknown" : "unknown";
+      const existing = (
+        fs.existsSync(path) ? fs.readFileSync(path, "utf8").split("\n")[0] ?? "" : ""
+      ).trim();
+      const existingPid = Number.parseInt(existing, 10);
+
+      // A lock left behind by a crashed process is stale: if the recorded PID is
+      // ours, or is no longer alive, reclaim it. This keeps recovery automatic
+      // without ever allowing two live writers.
+      if (Number.isFinite(existingPid) && (existingPid === pid || !processAlive(existingPid))) {
+        log.warn("reclaiming stale instance lock", { path, stalePid: existingPid });
+        fs.rmSync(path, { force: true });
+        held = null;
+        return acquireInstanceLock();
+      }
+
       throw new Error(
-        `SPACE is already running (lock held by PID ${existing.trim()} at ${path}). ` +
+        `SPACE is already running (lock held by PID ${existing || "unknown"} at ${path}). ` +
           `Stop the other process or delete the lock file only if you are certain it is stale.`,
       );
     }
