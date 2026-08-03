@@ -171,7 +171,18 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
           command.kind,
           context.correlationId,
         ),
-        details: { orderId: result.order?.id ?? null, intentId: result.order?.intentId ?? null },
+        details: {
+          orderId: result.order?.id ?? null,
+          intentId: result.order?.intentId ?? null,
+          risk: result.risk
+            ? {
+                status: result.risk.status,
+                reason: result.risk.reason,
+                code: result.risk.code,
+                at: result.risk.at,
+              }
+            : null,
+        },
       };
     }
     default:
