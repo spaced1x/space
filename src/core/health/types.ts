@@ -13,6 +13,8 @@ export const HEALTH_COMPONENTS = [
   "engine",
   "scheduler",
   "market_discovery",
+  "settlement_twap",
+  "strategy",
   "window_5m",
   "window_15m",
   "binance",
