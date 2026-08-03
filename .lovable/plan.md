@@ -15,7 +15,7 @@ STOPPED -> STARTING -> VALIDATING -> READY -> RUNNING -> STOPPING -> STOPPED
                     \-> FAILED
 ```
 
-READY means every mandatory dependency passed but the runtime is still waiting on its first real input — first market discovery, first TWAP sample or first discovery cycle. RUNNING means the runtime has all of them and is operating. Each READY card names exactly what is still missing.
+READY means every mandatory subsystem has started successfully and the runtime is ready to trade. Waiting for a market, waiting for a TWAP sample, or waiting for the next discovery cycle are operational states surfaced by Mission Control and do not prevent the runtime from entering READY. RUNNING means the runtime has entered its normal operating loop and is actively processing live runtime events. A missing market or no current trading opportunity never downgrades the runtime lifecycle by itself.
 
 One enum replaces every visible engine state. OBSERVE is removed from the UI entirely; ARM/DISARM leave the operator workflow. The internal safety latch survives as an implementation detail that the validation gate releases — no operator ever sees or presses it. Mission Control, Diagnostics, connection cards and status badges all read this single lifecycle; no duplicated enums.
 
