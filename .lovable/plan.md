@@ -55,6 +55,13 @@ One workspace, tabs: Overview, Trading, Orders, Positions, TWAP, Connections, Ru
 
 Always shows environment, runtime state, trading state, emergency stop, current provider, runtime validation result, blocking dependency, operator action, recovery and paper/live identity. Missing configuration is named exactly (`Missing WALLET_PRIVATE_KEY`, `Missing POLYGON_RPC_URL`, `Missing RTDS_API_KEY`, `Missing POLYMARKET_API_SECRET`, ...) — never a bare "Not Configured".
 
+The environment badge carries four lines so the operator sees everything at a glance:
+
+```text
+V1 TESTNET / Paper / RTDS / space-v1.db
+V2 MAINNET / Live  / RTDS / space-v2.db
+```
+
 ## 8. Current Trading Target
 
 Waiting: last Gamma refresh, discovery latency, markets scanned, BTC markets discovered, discovery interval, next discovery, waiting reason, trading impact, recovery.
@@ -67,7 +74,7 @@ Always rendered. No position: strategy direction, PTB, settlement TWAP, buffer, 
 
 ## 10. TWAP provider
 
-Card shows active provider, standby provider, environment, endpoint, symbol, current TWAP, settlement price, samples, sequence, freshness, latency, last update, buffer, direction, PTB, confidence, trading impact, operator action, reason, plus last provider switch timestamp and switch reason. Active provider selection persists across restart in the environment's own database. Layering is preserved: engine talks only to the TWAP Service, which owns the Provider Registry; no other subsystem knows which provider is active.
+Card shows active provider, standby provider, environment, endpoint, symbol, current TWAP, settlement price, samples, sequence, freshness, latency, last update, buffer, direction, PTB, confidence, trading impact, operator action, reason, plus last provider switch timestamp and switch reason. Active provider selection persists across restart in the environment's own database. If the previously selected provider is unavailable during boot it stays selected and the runtime reports FAILED; providers are never silently switched. Layering is preserved: engine talks only to the TWAP Service, which owns the Provider Registry; no other subsystem knows which provider is active.
 
 ## 11. Runtime connections
 
@@ -79,9 +86,11 @@ Authentication, wallet, signature type, API version, host, environment, API key 
 
 ## 13-14. Diagnostics timelines
 
-Runtime timeline: timestamped runtime started, wallet connected, RPC connected, Gamma connected, Binance connected, RTDS connected, CLOB authenticated, market found, trading ready, order submitted, recovered, shutdown.
+Runtime timeline: timestamped restart requested, restart completed, runtime started, wallet connected, RPC connected, Gamma connected, Binance connected, RTDS connected, CLOB authenticated, validation passed, validation failed, market found, trading ready, order submitted, recovered, shutdown.
 
 Market timeline: market discovered, discovery complete, TWAP started, trigger fired, intent created, risk approved, order submitted, filled, settlement, replay available. Both are projections of existing runtime events — no new event sources.
+
+Current Runtime Configuration table: environment, database, TWAP provider, provider state, strategy, execution mode, version, build, git commit, started at.
 
 ## 15. Sidebar and desktop polish
 
@@ -89,7 +98,9 @@ Headings 30px, card titles 22px, values 18px, labels 16px, sidebar 17px, buttons
 
 ## 16. Bug sweep
 
-Missing runtime bindings, placeholder loading text, empty cards, cards that stop refreshing, incorrect runtime/environment labels, broken V1/V2 display, missing provider / CLOB / RTDS / Chainlink information, stale snapshot values, duplicate runtime state, React and hydration warnings, console errors, dead components, broken layouts, lifecycle inconsistencies. No placeholder UI remains.
+Resource correctness first: memory leaks, unclosed WebSockets, scheduler duplication, duplicate polling, zombie timers, duplicate event listeners and full resource cleanup after STOP.
+
+Then UI: missing runtime bindings, placeholder loading text, empty cards, cards that stop refreshing, incorrect runtime/environment labels, broken V1/V2 display, missing provider / CLOB / RTDS / Chainlink information, stale snapshot values, duplicate runtime state, React and hydration warnings, console errors, dead components, broken layouts, lifecycle inconsistencies. No placeholder UI remains.
 
 ## Technical notes
 
