@@ -6,6 +6,7 @@ import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { MarketPanel } from "../components/space/market-panel";
 import { ProductionPanel } from "../components/space/production-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
+import { RuntimeDiagnostics } from "../components/space/runtime-diagnostics";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
 import { ExecutionPanel } from "../components/space/execution-panel";
 import { BotPredictionPanel, StrategyPanel } from "../components/space/strategy-panel";
@@ -141,9 +142,13 @@ function Diagnostics() {
       subtitle="Read-only instrumentation. Everything shown here comes from the running engine; this page owns nothing and changes nothing."
     >
       {!data ? (
-        <p className="font-mono text-sm text-muted-foreground">connecting…</p>
+        <p className="text-label text-muted-foreground">
+          Waiting for the first diagnostics snapshot from the engine process.
+        </p>
       ) : (
         <>
+          <RuntimeDiagnostics />
+
           <Panel title="Runtime">
             <RuntimePanel scheduler={data.engine.scheduler} feeds={data.engine.feeds} />
           </Panel>
