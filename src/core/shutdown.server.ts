@@ -8,6 +8,8 @@ import { resetPolymarketAdapter } from "./execution/polymarket.server";
 import { resetWallet } from "./execution/wallet.server";
 import { resetProviderRegistry } from "./twap/registry.server";
 import { resetMarketState } from "./market/state";
+import { stopClobMarketFeed } from "./market/clob-ws.server";
+import { resetPaperVenue } from "./execution/paper.server";
 import { resetOperations } from "./config/operations.server";
 import { clearHealthChecks } from "./health/registry";
 import { resetConnections } from "./runtime/connections.server";
@@ -55,6 +57,8 @@ export async function teardownRuntime(reason: string): Promise<RuntimeResourceAu
 
     // Venue, wallet and provider singletons hold sockets and signers.
     resetPolymarketAdapter();
+    resetPaperVenue();
+    stopClobMarketFeed();
     resetWallet();
     resetProviderRegistry();
 

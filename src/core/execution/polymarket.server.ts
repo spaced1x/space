@@ -21,15 +21,17 @@ import type {
 // Polymarket CLOB adapter.
 //
 // Authentication is L1 (wallet signature) + L2 (API key / secret / passphrase),
-// all loaded from .env — never from the dashboard. V1 talks to the staging CLOB
-// on Amoy, V2 to the production CLOB on Polygon. Same code both ways.
+// all loaded from .env — never from the dashboard.
+//
+// Polymarket documents exactly one CLOB host: https://clob.polymarket.com on
+// Polygon (chain 137). There is no official staging or testnet CLOB, so this
+// adapter is only ever used by V2_MAINNET; V1 trades through the paper venue
+// against the same live public order book. The host stays configurable through
+// POLYMARKET_CLOB_URL.
 
 const log = createLogger("polymarket-clob");
 
-const DEFAULT_HOSTS = {
-  V1_TESTNET: "https://clob-staging.polymarket.com",
-  V2_MAINNET: "https://clob.polymarket.com",
-} as const;
+const DEFAULT_CLOB_HOST = "https://clob.polymarket.com";
 
 interface AdapterState {
   client: ClobClient | null;
@@ -49,7 +51,7 @@ function init(): AdapterState {
   if (state) return state;
   const env = loadEnv();
   const wallet = walletStatus();
-  const host = env.POLYMARKET_CLOB_URL ?? DEFAULT_HOSTS[env.SPACE_ENVIRONMENT];
+  const host = env.POLYMARKET_CLOB_URL ?? DEFAULT_CLOB_HOST;
   const base: AdapterState = {
     client: null,
     host,

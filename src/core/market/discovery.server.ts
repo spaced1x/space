@@ -1,6 +1,11 @@
 import { clock } from "../clock/clock.service";
 import { loadEnv } from "../config/env.server";
 import { replayRepository } from "../db/repositories/replay.repository";
+import {
+  noteRateLimitWarning,
+  RateLimitError,
+  withRateLimit,
+} from "../execution/rate-limit.server";
 import { createLogger } from "../logging/logger";
 import type { HealthResult } from "../health/types";
 import { applyDiscovery } from "./state";
@@ -8,6 +13,12 @@ import type { DiscoveredMarket, DiscoveryStats, MarketHorizon, MarketStatus } fr
 
 // Automatic discovery of the official active BTC up/down markets. Discovery
 // only: no selection prompt, no trading decision, no order data.
+//
+// Gamma runtime contract: requests respect the documented budget, only
+// transient failures are retried, a circuit breaker opens after repeated
+// failures and closes on the first successful recovery probe, and the last
+// successful discovery is always retained — a Gamma outage never clears the
+// current market.
 
 const log = createLogger("market-discovery");
 const STALE_MS = 180_000;
@@ -102,6 +113,43 @@ const stats: DiscoveryStats = {
 
 let enabled = true;
 
+/** Circuit breaker state for the Gamma endpoint. */
+let consecutiveFailures = 0;
+let breakerOpenUntilMs = 0;
+let breakerOpens = 0;
+let lastCachedAt: string | null = null;
+let transientRetries = 0;
+
+interface GammaFailure {
+  transient: boolean;
+  reason: string;
+}
+
+function classifyFailure(error: unknown): GammaFailure {
+  if (error instanceof RateLimitError) {
+    return { transient: true, reason: error.message };
+  }
+  const reason = error instanceof Error ? error.message : String(error);
+  const statusMatch = /gamma (\d{3})/.exec(reason);
+  if (statusMatch) {
+    const status = Number(statusMatch[1]);
+    // 429 and 5xx are transient; other 4xx are contract errors that retrying
+    // cannot fix, so they fail fast with the exact reason.
+    return { transient: status === 429 || status >= 500, reason };
+  }
+  // Network-level failures (DNS, reset, timeout) are transient by nature.
+  return { transient: true, reason };
+}
+
+async function fetchGamma(url: URL): Promise<Response> {
+  const response = await withRateLimit("gamma_discovery", () =>
+    fetch(url, { headers: { accept: "application/json" } }),
+  );
+  noteRateLimitWarning("gamma_discovery", response.headers);
+  if (!response.ok) throw new Error(`gamma ${response.status}`);
+  return response;
+}
+
 export function setDiscoveryEnabled(next: boolean): void {
   enabled = next;
 }
@@ -110,6 +158,11 @@ export async function refreshMarkets(): Promise<void> {
   if (!enabled) return;
   const env = loadEnv();
   const nowMs = clock().now();
+  if (breakerOpenUntilMs > nowMs) {
+    // Breaker open: skip the call entirely, keep the cached market, and let the
+    // recovery probe run when the window expires.
+    return;
+  }
   const startedAt = nowMs;
   stats.refreshes += 1;
   stats.lastRefreshAt = new Date(nowMs).toISOString();
@@ -121,8 +174,18 @@ export async function refreshMarkets(): Promise<void> {
     url.searchParams.set("order", "endDate");
     url.searchParams.set("ascending", "true");
 
-    const response = await fetch(url, { headers: { accept: "application/json" } });
-    if (!response.ok) throw new Error(`gamma ${response.status}`);
+    let response: Response;
+    try {
+      response = await fetchGamma(url);
+    } catch (error) {
+      const failure = classifyFailure(error);
+      if (!failure.transient) throw error;
+      // One immediate retry for transient failures; anything beyond that is
+      // the breaker's job, not a retry storm.
+      transientRetries += 1;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      response = await fetchGamma(url);
+    }
     const body = (await response.json()) as GammaMarket[] | { data?: GammaMarket[] };
     const candidates = Array.isArray(body) ? body : (body.data ?? []);
     stats.candidatesSeen = candidates.length;
@@ -168,24 +231,79 @@ export async function refreshMarkets(): Promise<void> {
     stats.latencyMs = clock().now() - startedAt;
     stats.lastSuccessAt = new Date(clock().now()).toISOString();
     stats.lastError = null;
+    consecutiveFailures = 0;
+    breakerOpenUntilMs = 0;
+    lastCachedAt = stats.lastSuccessAt;
     applyDiscovery(picked, { ...stats });
     // Replay reconstructs markets from persisted rows only, so discovery
     // itself must be durable. Best effort: a runtime without SQLite still
     // trades, it simply cannot replay afterwards.
     await persistDiscovery(picked);
   } catch (error) {
+    const failure = classifyFailure(error);
     stats.errors += 1;
-    stats.lastError = error instanceof Error ? error.message : String(error);
+    stats.lastError = failure.reason;
     stats.latencyMs = clock().now() - startedAt;
+    consecutiveFailures += 1;
+    if (consecutiveFailures >= env.GAMMA_FAILURE_THRESHOLD) {
+      breakerOpenUntilMs = clock().now() + env.GAMMA_RECOVERY_MS;
+      breakerOpens += 1;
+      log.error("gamma circuit breaker opened", {
+        consecutiveFailures,
+        recoveryMs: env.GAMMA_RECOVERY_MS,
+        reason: failure.reason,
+      });
+    }
+    // The cached market is deliberately preserved: applyDiscovery is called
+    // with no market patch, so discovery health degrades while the current
+    // market keeps trading.
     applyDiscovery({}, { ...stats });
-    log.warn("discovery refresh failed", { reason: stats.lastError });
+    log.warn("discovery refresh failed", {
+      reason: stats.lastError,
+      transient: failure.transient,
+      consecutiveFailures,
+    });
   }
 }
 
+export interface GammaBreakerStatus {
+  open: boolean;
+  opens: number;
+  consecutiveFailures: number;
+  reopensInMs: number | null;
+  transientRetries: number;
+  cachedAt: string | null;
+}
+
+export function gammaBreakerStatus(): GammaBreakerStatus {
+  const now = clock().now();
+  return {
+    open: breakerOpenUntilMs > now,
+    opens: breakerOpens,
+    consecutiveFailures,
+    reopensInMs: breakerOpenUntilMs > now ? breakerOpenUntilMs - now : null,
+    transientRetries,
+    cachedAt: lastCachedAt,
+  };
+}
+
+export function resetDiscoveryBreaker(): void {
+  consecutiveFailures = 0;
+  breakerOpenUntilMs = 0;
+}
+
 export function discoveryHealth(): HealthResult {
-  const details = { ...stats, enabled };
+  const breaker = gammaBreakerStatus();
+  const details = { ...stats, enabled, ...breaker };
   if (!enabled) {
     return { state: "DISABLED", message: "discovery switched off by operator", details };
+  }
+  if (breaker.open) {
+    return {
+      state: "DEGRADED",
+      message: `Gamma circuit breaker open after ${breaker.consecutiveFailures} failures; last market retained`,
+      details,
+    };
   }
   if (!stats.lastSuccessAt) {
     return {

@@ -13,6 +13,7 @@ export const HEALTH_COMPONENTS = [
   "engine",
   "scheduler",
   "market_discovery",
+  "clob_market_feed",
   "settlement_twap",
   "strategy",
   "window_5m",

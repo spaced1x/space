@@ -8,6 +8,7 @@ import { systemClock } from "../shared/clock";
 import { telegramInboundResources } from "../telegram/inbound.server";
 import { telegramForwardingResources } from "../telegram/telegram.service";
 import { twapResources } from "../twap/service.server";
+import { clobMarketResources } from "../market/clob-ws.server";
 
 // Runtime resource audit.
 //
@@ -73,6 +74,7 @@ export function auditRuntimeResources(
   const db = databaseResources();
   const lock = lockResources();
   const twap = twapResources();
+  const clobMarket = clobMarketResources();
   const inbound = telegramInboundResources();
   const forwarding = telegramForwardingResources();
   const bus = eventBus.stats();
@@ -92,6 +94,12 @@ export function auditRuntimeResources(
     check("feed.binance", engine.binanceFeeds, running ? 1 : 0, "one Binance socket"),
     check("feed.chainlink", engine.chainlinkFeeds, running ? 1 : 0, "one Chainlink poller"),
     check("twap.service", twap.services, running ? 1 : 0, "one TWAP service"),
+    check(
+      "feed.clob_market",
+      clobMarket.sockets,
+      running ? 1 : 0,
+      "one CLOB market data socket",
+    ),
     {
       resource: "database",
       expected: running ? "1" : "0",

@@ -17,14 +17,22 @@ export interface PriceSample {
   latencyMs: number | null;
 }
 
+/** Runtime state machine shared by every streaming feed. */
+export type FeedState = "IDLE" | "CONNECTING" | "CONNECTED" | "STALE" | "RECONNECTING" | "FAILED";
+
 export interface FeedStats {
   connected: boolean;
+  state: FeedState;
   samples: number;
   errors: number;
   reconnects: number;
   lastError: string | null;
   lastSampleAt: string | null;
   latencyMs: number | null;
+  /** Provider update id / event time of the last accepted message. */
+  lastSequence: number | null;
+  lastUpdateAt: string | null;
+  endpoint: string | null;
 }
 
 /** A price feed. Push feeds stream; pull feeds are polled by the scheduler. */

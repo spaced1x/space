@@ -4,10 +4,12 @@
 // above the service (strategy, execution, replay, statistics, UI) knows which
 // provider is active — the registry owns that decision.
 
-export type TwapProviderId = "rtds" | "chainlink";
+export type TwapProviderId = "rtds_twap_30" | "rtds_twap_60" | "chainlink_streams";
 
 export type TwapProviderState =
   | "CONNECTED"
+  | "STALE"
+  | "RECONNECTING"
   | "WAITING"
   | "NOT_CONFIGURED"
   | "DISABLED"
@@ -34,6 +36,12 @@ export interface TwapProviderStatus {
   id: TwapProviderId;
   label: string;
   state: TwapProviderState;
+  /** Operator switch: a disabled provider is never started and never promotable. */
+  enabled: boolean;
+  /** True for the one provider currently feeding the TWAP service. */
+  active: boolean;
+  /** Settlement TWAP window in seconds, when the provider defines one. */
+  windowSeconds: number | null;
   /** Operator-language explanation of the current state. */
   reason: string;
   /** What the operator must do, or null when nothing is required. */
