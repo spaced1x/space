@@ -1,4 +1,4 @@
-import { loadEnv } from "../config/env.server";
+import { loadEnv, resolveDbPath } from "../config/env.server";
 import { databaseHealth } from "../db/database.server";
 import { chainCheck, walletStatus } from "../execution/wallet.server";
 import { polymarketAdapter } from "../execution/polymarket.server";
