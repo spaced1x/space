@@ -111,6 +111,7 @@ export function computeStatistics(input: StatisticsInput): StatisticsSnapshot {
   }
 
   const terminal = (state: string) => ["FILLED", "CANCELLED", "EXPIRED", "FAILED"].includes(state);
+  void terminal;
   const counts = {
     trades: input.orders.length,
     filled: input.orders.filter((order) => order.state === "FILLED").length,
@@ -181,7 +182,7 @@ export function computeStatistics(input: StatisticsInput): StatisticsSnapshot {
     dailyMap.set(key, entry);
   }
   for (const position of settled) {
-    const key = day(position.updatedAt ?? input.now);
+    const key = day(position.lastFillAt ?? input.now);
     const entry = dailyMap.get(key) ?? { day: key, trades: 0, filled: 0, realizedPnl: 0 };
     entry.realizedPnl += realizedPnl(position);
     dailyMap.set(key, entry);
@@ -235,5 +236,4 @@ export function computeStatistics(input: StatisticsInput): StatisticsSnapshot {
       realizedPnl: realized,
     },
   };
-  void terminal;
 }
