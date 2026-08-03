@@ -479,11 +479,12 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
           continue;
         }
 
-        if (!LIVE_ORDER_STATES.includes(order.state) || !order.venueOrderId) continue;
+        const venueOrderId = order.venueOrderId;
+        if (!LIVE_ORDER_STATES.includes(order.state) || !venueOrderId) continue;
 
         let current = order;
         try {
-          current = await ingestTrades(current, await ports.venue.trades(current.venueOrderId));
+          current = await ingestTrades(current, await ports.venue.trades(venueOrderId));
         } catch (error) {
           current = Object.freeze({
             ...current,
@@ -495,7 +496,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
 
         let status = null;
         try {
-          status = await ports.venue.status(current.venueOrderId!);
+          status = await ports.venue.status(venueOrderId);
         } catch {
           status = null;
         }
