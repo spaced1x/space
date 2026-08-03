@@ -101,10 +101,21 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("window_5m", () => windowHealth("fiveMinute", "BTC 5 minute"));
   registerHealthCheck("window_15m", () => windowHealth("fifteenMinute", "BTC 15 minute"));
 
+  registerHealthCheck("telegram", telegramServiceHealth);
+  registerHealthCheck("backup", backupServiceHealth);
+
   // Timers exist only after the scheduler is up, and the engine loop registers
   // its tasks with that one scheduler rather than owning timers of its own.
   await startScheduler();
   registerAutoDisarmTask();
+  registerTelegramEventForwarding();
+  registerTask({
+    name: "scheduled-backup",
+    intervalMs: 24 * 60 * 60 * 1000,
+    run: async () => {
+      await performBackup("SCHEDULED");
+    },
+  });
   await startEngineLoop();
 
   if (getRuntimeState().engineStatus === "BOOTING") {
