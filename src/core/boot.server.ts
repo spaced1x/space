@@ -11,6 +11,9 @@ import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
 import { discoveryHealth } from "./market/discovery.server";
 import { schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
 import { settlementTwapHealth, strategyHealth } from "./strategy/strategy.server";
+import { executionHealth, riskHealth } from "./execution/execution.server";
+import { polymarketAdapter } from "./execution/polymarket.server";
+import { walletHealth } from "./execution/wallet.server";
 
 // Startup sequence (specification §13), milestone 2 slice:
 // Boot -> Env -> Logging -> DB -> Clock -> Health -> Scheduler -> Engine loop
@@ -67,6 +70,10 @@ async function runBoot(): Promise<void> {
   registerHealthCheck("market_discovery", discoveryHealth);
   registerHealthCheck("settlement_twap", settlementTwapHealth);
   registerHealthCheck("strategy", strategyHealth);
+  registerHealthCheck("wallet", walletHealth);
+  registerHealthCheck("polymarket_clob", () => polymarketAdapter.health());
+  registerHealthCheck("risk", riskHealth);
+  registerHealthCheck("execution", executionHealth);
   registerHealthCheck("binance", () => feedHealth("binance"));
   registerHealthCheck("chainlink", () => feedHealth("chainlink"));
 
