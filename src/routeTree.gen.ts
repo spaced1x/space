@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ManualRouteImport } from './routes/manual'
 import { Route as OperationsRouteImport } from './routes/operations'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 
 const IndexRoute = IndexRouteImport.update({
@@ -18,9 +20,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ManualRoute = ManualRouteImport.update({
+  id: '/manual',
+  path: '/manual',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OperationsRoute = OperationsRouteImport.update({
   id: '/operations',
   path: '/operations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
@@ -31,31 +43,45 @@ const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/manual': typeof ManualRoute
   '/operations': typeof OperationsRoute
+  '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/manual': typeof ManualRoute
   '/operations': typeof OperationsRoute
+  '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/manual': typeof ManualRoute
   '/operations': typeof OperationsRoute
+  '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/operations' | '/api/public/health'
+  fullPaths: '/' | '/manual' | '/operations' | '/stats' | '/api/public/health'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/operations' | '/api/public/health'
-  id: '__root__' | '/' | '/operations' | '/api/public/health'
+  to: '/' | '/manual' | '/operations' | '/stats' | '/api/public/health'
+  id:
+    | '__root__'
+    | '/'
+    | '/manual'
+    | '/operations'
+    | '/stats'
+    | '/api/public/health'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ManualRoute: typeof ManualRoute
   OperationsRoute: typeof OperationsRoute
+  StatsRoute: typeof StatsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
 }
 
@@ -68,11 +94,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/manual': {
+      id: '/manual'
+      path: '/manual'
+      fullPath: '/manual'
+      preLoaderRoute: typeof ManualRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/operations': {
       id: '/operations'
       path: '/operations'
       fullPath: '/operations'
       preLoaderRoute: typeof OperationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/health': {
@@ -87,7 +127,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ManualRoute: ManualRoute,
   OperationsRoute: OperationsRoute,
+  StatsRoute: StatsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
 }
 export const routeTree = rootRouteImport
