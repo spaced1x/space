@@ -1,3 +1,4 @@
+import type { TwapProviderState } from "../../core/twap/provider";
 import type { TwapServiceSnapshot } from "../../core/twap/service.server";
 import { EmptyState } from "./empty-state";
 import { StatusDot } from "./status-dot";
@@ -14,6 +15,22 @@ function ago(iso: string | null): string {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
   return new Date(iso).toLocaleTimeString();
+}
+
+function projectHealth(state: TwapProviderState): "OK" | "DEGRADED" | "FAILED" | "DISABLED" | "NOT_INITIALIZED" {
+  switch (state) {
+    case "CONNECTED":
+      return "OK";
+    case "FAILED":
+      return "FAILED";
+    case "NOT_CONFIGURED":
+      return "DISABLED";
+    case "DISABLED":
+      return "DISABLED";
+    case "WAITING":
+    default:
+      return "DEGRADED";
+  }
 }
 
 /**
@@ -39,7 +56,7 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
   return (
     <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <StatusDot state={active?.state === "OK" ? "OK" : active?.state === "FAILED" ? "FAILED" : "DEGRADED"} />
+        <StatusDot state={active ? projectHealth(active.state) : "NOT_INITIALIZED"} />
         <h3 className="text-card-title font-semibold text-card-foreground">
           TWAP provider — {active?.label ?? twap.activeProviderId}
         </h3>
@@ -54,13 +71,16 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
 
       <dl className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
         <Field label="Active provider" value={active?.label ?? twap.activeProviderId} />
-        <Field label="Settlement price" value={price(active?.latestPrice ?? null)} />
+        <Field label="Settlement price" value={price(active?.price ?? null)} />
+        <Field label="Freshness" value={active?.freshnessMs === null ? "—" : `${active.freshnessMs} ms`} />
         <Field label="Latency" value={active?.latencyMs === null ? "—" : `${active.latencyMs} ms`} />
         <Field label="Samples" value={String(active?.samples ?? 0)} />
+        <Field label="Errors" value={String(active?.errors ?? 0)} />
         <Field label="Published" value={String(twap.published)} />
         <Field label="Last publish" value={ago(twap.lastPublishedAt)} />
-        <Field label="Window start" value={active?.windowStart ? new Date(active.windowStart).toLocaleTimeString() : "—"} />
-        <Field label="Window end" value={active?.windowEnd ? new Date(active.windowEnd).toLocaleTimeString() : "—"} />
+        <Field label="Endpoint" value={active?.endpoint ?? "—"} mono />
+        <Field label="Symbol" value={active?.symbol ?? "—"} />
+        <Field label="Transport" value={active?.transport ?? "—"} />
         <Field label="Standby providers" value={twap.providers.length <= 1 ? "none" : String(twap.providers.length - 1)} />
       </dl>
 
@@ -76,7 +96,7 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
                   className="rounded-md border border-border bg-muted/40 p-3"
                 >
                   <div className="flex items-center gap-2">
-                    <StatusDot state={provider.state === "OK" ? "OK" : provider.state === "FAILED" ? "FAILED" : "DEGRADED"} />
+                    <StatusDot state={projectHealth(provider.state)} />
                     <span className="font-medium text-foreground">{provider.label}</span>
                     <span className="ml-auto font-mono text-status uppercase">{provider.state.replace(/_/g, " ")}</span>
                   </div>
@@ -90,11 +110,11 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="min-w-0">
       <dt className="text-label text-muted-foreground">{label}</dt>
-      <dd className="truncate text-value text-foreground" title={value}>
+      <dd className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`} title={value}>
         {value}
       </dd>
     </div>
