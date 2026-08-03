@@ -58,11 +58,7 @@ function OperatorConsole() {
   const fetchSnapshot = useServerFn(getSystemSnapshot);
   const dispatch = useServerFn(sendCommand);
 
-  const snapshot = useQuery({
-    queryKey: ["system-snapshot"],
-    queryFn: () => fetchSnapshot(),
-    refetchInterval: 5000,
-  });
+  const snapshot = useRuntimeSnapshot();
 
   const runtimeCommand = useMutation({
     mutationFn: (input: Command) => dispatch({ data: input }),
@@ -82,22 +78,18 @@ function OperatorConsole() {
       {!snapshot.data ? (
         <div className="rounded-lg border border-border bg-card p-5">
           <p className="text-section-title font-semibold text-card-foreground">
-            {snapshot.isError ? "Runtime snapshot unavailable" : "Reading runtime snapshot"}
+            {snapshot.error ? "Runtime snapshot unavailable" : "Reading runtime snapshot"}
           </p>
           <dl className="mt-4 grid gap-2">
             <EmptyLine term="What" detail="Mission Control is waiting for the first runtime snapshot" />
             <EmptyLine
               term="Why"
-              detail={
-                snapshot.isError
-                  ? "The dashboard could not reach the SPACE process"
-                  : "The engine boots before it answers; nothing is displayed until real values arrive"
-              }
+              detail={snapshot.reason}
             />
             <EmptyLine
               term="Action"
               detail={
-                snapshot.isError
+                snapshot.error
                   ? "Check the process with pm2 status and review the logs"
                   : "Wait for the boot sequence to complete (STARTING → VALIDATING → READY)"
               }
@@ -105,7 +97,7 @@ function OperatorConsole() {
             <EmptyLine term="Blocked" detail="Dashboard only — trading is unaffected by this page" />
             <EmptyLine
               term="Recovery"
-              detail="Automatic once the runtime reports; if it persists, inspect the boot trace in the logs"
+              detail="Automatic — the terminal keeps polling and recovers without a refresh"
             />
           </dl>
         </div>
