@@ -29,6 +29,17 @@ export const envSchema = z.object({
   WALLET_ADDRESS: optionalSecret,
   POLYGON_RPC_URL: optionalSecret,
   BINANCE_WS_URL: z.string().trim().url().default("wss://stream.binance.com:9443/ws"),
+  BINANCE_SYMBOL: z.string().trim().min(3).default("BTCUSDT"),
+
+  // Chainlink BTC/USD aggregator on Polygon, read through POLYGON_RPC_URL.
+  CHAINLINK_BTC_USD_FEED: z
+    .string()
+    .trim()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .default("0xc907E116054Ad103354f2D350FD2514433D57F6f"),
+
+  // Polymarket public metadata API used for market discovery.
+  POLYMARKET_GAMMA_URL: z.string().trim().url().default("https://gamma-api.polymarket.com"),
 
   TELEGRAM_BOT_TOKEN: optionalSecret,
   TELEGRAM_CHAT_ID: optionalSecret,
