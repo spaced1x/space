@@ -121,11 +121,14 @@ export function applyOperationsPatch(
   patch: OperationsPatch,
   at: string,
 ): OperationsConfig {
+  const defined = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as OperationsPatch;
   return lockOperations({
     ...current,
-    ...patch,
-    markets: { ...current.markets, ...(patch.markets ?? {}) },
-    windows: patch.windows ?? current.windows,
+    ...defined,
+    markets: { ...current.markets, ...(defined.markets ?? {}) },
+    windows: defined.windows ?? current.windows,
     version: current.version + 1,
     updatedAt: at,
   });
