@@ -1,6 +1,6 @@
 export class SpaceError extends Error {
   readonly code: string;
-  readonly details?: Record<string, unknown>;
+  readonly details: Record<string, unknown> | undefined;
 
   constructor(code: string, message: string, details?: Record<string, unknown>) {
     super(message);
