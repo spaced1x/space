@@ -45,8 +45,9 @@ export function MissionControl({
       </Section>
 
       <p className="mt-auto text-[11px] leading-relaxed text-muted-foreground">
-        Market data, TWAP, PnL and positions attach to this panel in later milestones. Nothing here
-        is simulated.
+        Operational status only. Market data, TWAP, PnL and positions attach here in later
+        milestones; configuration always lives in the Operations Desk, never in this panel. Nothing
+        here is simulated.
       </p>
     </aside>
   );
