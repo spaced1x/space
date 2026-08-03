@@ -282,11 +282,12 @@ A permanent operator panel on every page, rendered from one engine snapshot subs
 | Group | Items |
 |---|---|
 | Engine | Engine status · Observe / Armed · Manual Mode · Strategy Mode |
-| Markets | BTC 5m · BTC 15m |
+| Engine (cont.) | Current Engine Mode · Current Session (id, start time, uptime) |
+| Markets | Active Market (auto-discovered id/slug) · Market Countdown to settlement · Current Execution Window · BTC 5m · BTC 15m |
 | Money | Wallet balance · Today's PnL · Active trades |
 | Dependencies | Binance status · Polymarket status · TWAP status · Database status · Telegram status |
 
-Each dependency renders as a health tone (healthy / degraded / unavailable) with last-seen age. It replaces STONE's `StatusBar` and absorbs the seven duplicated telemetry pages into one always-visible surface.
+Each dependency renders as a health tone (healthy / degraded / unavailable) with last-seen age. It replaces STONE's `StatusBar` and absorbs the seven duplicated telemetry pages into one always-visible surface. This is the operator's primary status panel: every value comes from one engine snapshot subscription, so no two panels can disagree.
 
 ## E. Statistics
 
@@ -295,6 +296,8 @@ A dedicated section computed by the engine from the ledger and order log — nev
 - today's trades
 - win rate
 - PnL (realised, and open mark-to-market)
+- largest win · largest loss
+- average daily PnL
 - best execution window (by win rate and by PnL)
 - best buffer
 - fill percentage
@@ -322,6 +325,20 @@ Two surfaces, one page.
 - Settlement result (WIN / LOSS / SCRATCH, payout, PnL, balance after)
 
 Everything is read from stored evidence. Replay never recomputes from live data and never re-executes.
+
+**Every completed window is explainable, including windows that never traded.** A window closes with exactly one terminal outcome code, persisted with its evidence:
+
+| Outcome | Meaning |
+|---|---|
+| `FILLED` | trigger hit, risk passed, order filled, settled |
+| `NO_TRIGGER` | window expired without the live settlement TWAP reaching the frozen trigger |
+| `QUOTA_EXHAUSTED` | trades-per-market budget already consumed by earlier windows |
+| `RISK_REJECTED` | trigger hit, risk engine vetoed — with the failing check named |
+| `LIMIT_TIMEOUT` | limit order not filled before deadline and fallback disabled or also unfilled |
+| `MARKET_DISABLED` | the market was disabled in the Operations Desk |
+| `WINDOW_DISABLED` | this execution window was disabled in the Operations Desk |
+
+Skipped windows still record Opening TWAP, PTB, direction, buffer and frozen trigger, so a no-trade decision is as auditable as a trade.
 
 **Event-sourced determinism replay** stays as STONE built it: reconstruct projections from the event log, verify the six invariants, compare digests, flag divergence.
 
@@ -358,7 +375,19 @@ Write commands are confirmed, rate-limited and audited. Alerts (risk breach, kil
 
 > **Only values that cannot be configured through the dashboard belong in `.env.example`. Every operational setting lives inside SPACE.**
 
-`.env.example` is therefore limited to: node/runtime basics (`NODE_ENV`, `PORT`, `HOST`), `DB_PATH`, wallet and CLOB credentials, RPC/host endpoints, dashboard login and session secret, and Telegram bot token plus chat id. Windows, buffers, sizes, quotas, retries, order types, market toggles, risk limits and mode all live in the database and are edited in the Operations Desk. One template, no environment-specific variants.
+These values **always** live in `.env.example` and are **never** editable through the dashboard:
+
+- Wallet Private Key
+- Funder Address
+- CLOB API Key
+- CLOB Secret
+- CLOB Passphrase
+- RPC Endpoints
+- Telegram Token
+- Telegram Chat ID
+- Session Secret
+
+Plus the minimum runtime basics: `NODE_ENV`, `PORT`, `HOST`, `DB_PATH`, and the operator password hash. Nothing else. Windows, buffers, sizes, quotas, retries, order types, market toggles, risk limits and mode all live in the database and are edited in the Operations Desk. One template, no environment-specific variants. Secrets are never rendered, logged, returned by an API, or included in a backup.
 
 ## J. Documentation policy
 
