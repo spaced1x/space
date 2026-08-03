@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import nodePath from "node:path";
-import { loadEnv, type SpaceEnv } from "../config/env.server";
+import { loadEnv } from "../config/env.server";
+import type { SpaceEnv } from "../config/env.schema";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 
