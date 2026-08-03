@@ -75,6 +75,10 @@ function Statistics() {
                 label="Best window"
                 value={stats.best.window != null ? `${stats.best.window}s` : "—"}
               />
+              <Metric
+                label="Best buffer"
+                value={stats.best.buffer != null ? stats.best.buffer.toString() : "—"}
+              />
             </div>
           </Panel>
 
