@@ -1,5 +1,6 @@
 import { clock } from "../clock/clock.service";
 import { loadEnv } from "../config/env.server";
+import { replayRepository } from "../db/repositories/replay.repository";
 import { createLogger } from "../logging/logger";
 import type { HealthResult } from "../health/types";
 import { applyDiscovery } from "./state";
@@ -139,6 +140,10 @@ export async function refreshMarkets(): Promise<void> {
     stats.lastSuccessAt = new Date(clock().now()).toISOString();
     stats.lastError = null;
     applyDiscovery(picked, { ...stats });
+    // Replay reconstructs markets from persisted rows only, so discovery
+    // itself must be durable. Best effort: a runtime without SQLite still
+    // trades, it simply cannot replay afterwards.
+    await persistDiscovery(picked);
   } catch (error) {
     stats.errors += 1;
     stats.lastError = error instanceof Error ? error.message : String(error);
