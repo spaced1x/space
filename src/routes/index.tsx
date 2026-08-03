@@ -18,7 +18,8 @@ import { StatusDot, stateLabel } from "../components/space/status-dot";
 import { StrategyPanel } from "../components/space/strategy-panel";
 import type { EventSeverity } from "../core/bus/events";
 import type { Command } from "../core/bus/commands";
-import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
+import { useRuntimeSnapshot } from "../lib/use-runtime-snapshot";
+import { sendCommand } from "../lib/system.functions";
 
 const SEVERITY_TONE: Record<EventSeverity, string> = {
   INFO: "text-muted-foreground",
@@ -55,7 +56,6 @@ export const Route = createFileRoute("/")({
 
 function OperatorConsole() {
   const queryClient = useQueryClient();
-  const fetchSnapshot = useServerFn(getSystemSnapshot);
   const dispatch = useServerFn(sendCommand);
 
   const snapshot = useRuntimeSnapshot();
