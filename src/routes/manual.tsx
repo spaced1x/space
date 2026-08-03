@@ -79,7 +79,7 @@ function ManualTrading() {
       title="Manual Trading"
       subtitle="Manual mode is isolated: while it is ON the strategy never submits an order. Manual orders still pass the Risk Engine and the Execution Engine unchanged."
     >
-      <Panel title="Mode" hint={data ? `engine mode: ${data.mode}` : undefined}>
+      <Panel title="Mode" hint={`engine mode: ${data?.mode ?? "—"}`}>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={mode.isPending} onClick={() => mode.mutate("MANUAL")}>
             Switch to MANUAL
@@ -171,10 +171,14 @@ function ManualTrading() {
       {order.data?.risk && (
         <Panel title="Last risk decision">
           <div className="rounded-lg border border-border bg-card p-4 font-mono text-[11px] text-muted-foreground">
-            <p className={order.data.risk.approved ? "text-ok" : "text-fail"}>
-              {order.data.risk.approved ? "APPROVED" : "REJECTED"} — {order.data.risk.reason}
+            <p
+              className={order.data.risk.status === "APPROVED" ? "text-ok" : "text-fail"}
+            >
+              {order.data.risk.status} — {order.data.risk.reason}
             </p>
-            <p className="mt-1">{order.data.risk.checks.map((check) => check.code).join(" · ")}</p>
+            <p className="mt-1">
+              {order.data.risk.code} · {new Date(order.data.risk.at).toLocaleTimeString()}
+            </p>
           </div>
         </Panel>
       )}

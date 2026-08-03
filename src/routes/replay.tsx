@@ -144,7 +144,7 @@ function Replay() {
                     <p className="mt-2 font-mono text-[10px] text-muted-foreground">
                       risk:{" "}
                       {window.risk
-                        .map((decision) => `${decision.approved ? "APPROVED" : "REJECTED"} — ${decision.reason}`)
+                        .map((decision) => `${decision.status} — ${decision.reason}`)
                         .join(" | ")}
                     </p>
                   )}
