@@ -83,6 +83,8 @@ export interface ExecutionIntent {
   frozenTrigger: number;
   triggerTime: string;
   reason: string;
+  /** Operations Desk configuration version that produced this intent. */
+  configVersion?: number | null;
 }
 
 export interface WindowTimelineEntry {
