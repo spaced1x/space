@@ -5,6 +5,7 @@ import { dispatchCommand } from "../core/bus/command-bus.server";
 import { commandSchema } from "../core/bus/commands";
 import { eventBus } from "../core/bus/events";
 import { collectHealth } from "../core/health/registry";
+import { engineRuntimeSnapshot } from "../core/engine/loop.server";
 import { getRuntimeState } from "../core/state/store";
 
 // Single read surface: Mission Control, Overview and Statistics all subscribe
@@ -15,6 +16,7 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
     runtime: getRuntimeState(),
     health: await collectHealth(),
     events: eventBus.recent(12),
+    engine: engineRuntimeSnapshot(),
   };
 });
 

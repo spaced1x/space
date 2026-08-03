@@ -11,6 +11,8 @@ export const HEALTH_COMPONENTS = [
   "logging",
   "dashboard",
   "engine",
+  "scheduler",
+  "market_discovery",
   "window_5m",
   "window_15m",
   "binance",

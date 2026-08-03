@@ -5,6 +5,8 @@ import { toast } from "sonner";
 
 import { CommandDeck } from "../components/space/command-deck";
 import { MissionControl } from "../components/space/mission-control";
+import { MarketPanel } from "../components/space/market-panel";
+import { RuntimePanel } from "../components/space/runtime-panel";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
 import type { Command } from "../core/bus/commands";
 import type { EventSeverity } from "../core/bus/events";
@@ -24,17 +26,20 @@ function severityTone(severity: EventSeverity): string {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "SPACE — Operator Console" },
+      { title: "SPACE — Mission Control" },
       {
         name: "description",
         content:
-          "SPACE operator console: engine status, dependency health, command bus and runtime event log for the single-process trading application.",
+          "SPACE Mission Control: engine status, market discovery, Binance and Chainlink feeds, scheduler tasks and dependency health for the single-process trading runtime.",
       },
-      { property: "og:title", content: "SPACE — Operator Console" },
+      { property: "og:title", content: "SPACE — Mission Control" },
       {
         property: "og:description",
-        content: "Engine status, dependency health and command bus for the SPACE trading system.",
+        content:
+          "Engine status, unified market state, feeds and dependency health for the SPACE trading runtime.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: OperatorConsole,
@@ -71,33 +76,46 @@ function OperatorConsole() {
     );
   }
 
-  const { runtime, health, events } = snapshot.data;
+  const { runtime, health, events, engine } = snapshot.data;
 
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
-      <MissionControl runtime={runtime} health={health} />
+      <MissionControl runtime={runtime} health={health} market={engine.market} />
 
       <main className="flex-1 space-y-8 p-6 lg:p-10">
         <header className="space-y-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Foundation Console
+              Mission Control
             </h1>
-            <span className="rounded border border-warn/40 bg-warn/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-warn">
-              temporary — milestone 1
+            <span className="rounded border border-primary/30 bg-accent px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-accent-foreground">
+              milestone 2 — runtime services
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Milestone 1: configuration, clock, SQLite, logging, health, command bus, event bus and
-            state store. Trading modules report NOT_INITIALIZED until their milestone lands. This
-            layout is scaffolding only and is replaced by the approved Mission Control layout in a
-            later milestone.
+            Scheduler, market discovery, Binance and Chainlink feeds and the serialized engine loop
+            are live. No TWAP, no windows, no risk and no orders — those attach in later milestones
+            and report NOT_INITIALIZED until then.
           </p>
           <p className="text-xs text-muted-foreground">
             Engine boots into OBSERVE. ARMED is only ever reached by an explicit operator ARM
             command.
           </p>
         </header>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Unified market state
+          </h2>
+          <MarketPanel market={engine.market} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Runtime
+          </h2>
+          <RuntimePanel scheduler={engine.scheduler} feeds={engine.feeds} />
+        </section>
 
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -118,7 +136,7 @@ function OperatorConsole() {
             {health.components.map((entry) => (
               <article
                 key={entry.component}
-                className="rounded-md border border-border bg-card p-4"
+                className="rounded-lg border border-border bg-card p-4 shadow-sm"
               >
                 <div className="flex items-center gap-2">
                   <StatusDot state={entry.state} />

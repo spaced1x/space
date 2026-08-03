@@ -7,10 +7,14 @@ import { eventBus } from "./bus/events";
 import { getRuntimeState, updateRuntimeState } from "./state/store";
 import { correlationId } from "./shared/ids";
 import { registerClockService } from "./clock/clock.service";
+import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
+import { discoveryHealth } from "./market/discovery.server";
+import { schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
 
-// Startup sequence (specification §13), foundation slice:
-// Boot -> Env -> Logging -> DB -> Health -> OBSERVE.
-// Discovery, feeds, wallet, Telegram and recovery attach in later milestones.
+// Startup sequence (specification §13), milestone 2 slice:
+// Boot -> Env -> Logging -> DB -> Clock -> Health -> Scheduler -> Engine loop
+// (feeds + discovery) -> OBSERVE.
+// Wallet, Telegram and recovery attach in later milestones.
 let bootPromise: Promise<void> | undefined;
 
 export async function boot(): Promise<void> {
@@ -57,10 +61,21 @@ async function runBoot(): Promise<void> {
     message: "serving mission control",
   }));
 
+  registerHealthCheck("scheduler", schedulerHealth);
+  registerHealthCheck("engine", engineHealth);
+  registerHealthCheck("market_discovery", discoveryHealth);
+  registerHealthCheck("binance", () => feedHealth("binance"));
+  registerHealthCheck("chainlink", () => feedHealth("chainlink"));
+
   // Windows are implemented switches, so they report DISABLED (not
   // NOT_INITIALIZED) whenever the operator turns them off.
   registerHealthCheck("window_5m", () => windowHealth("fiveMinute", "BTC 5 minute"));
   registerHealthCheck("window_15m", () => windowHealth("fifteenMinute", "BTC 15 minute"));
+
+  // Timers exist only after the scheduler is up, and the engine loop registers
+  // its tasks with that one scheduler rather than owning timers of its own.
+  await startScheduler();
+  await startEngineLoop();
 
   if (getRuntimeState().engineStatus === "BOOTING") {
     // Never auto-arm. OBSERVE is the only safe post-boot state.
@@ -75,6 +90,17 @@ async function runBoot(): Promise<void> {
     payload: { environment: env.SPACE_ENVIRONMENT },
   });
   log.info("SPACE ready in OBSERVE");
+}
+
+function feedHealth(name: "binance" | "chainlink") {
+  const feed = feeds()[name];
+  if (!feed) {
+    return {
+      state: "NOT_INITIALIZED" as const,
+      message: "feed adapter not constructed yet",
+    };
+  }
+  return feed.health();
 }
 
 function windowHealth(key: "fiveMinute" | "fifteenMinute", label: string) {

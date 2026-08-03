@@ -1,4 +1,5 @@
 import type { HealthReport } from "../../core/health/types";
+import type { MarketState } from "../../core/market/types";
 import type { RuntimeState } from "../../core/state/store";
 import { StatusDot, stateLabel } from "./status-dot";
 
@@ -7,14 +8,16 @@ import { StatusDot, stateLabel } from "./status-dot";
 export function MissionControl({
   runtime,
   health,
+  market,
 }: {
   runtime: RuntimeState;
   health: HealthReport;
+  market: MarketState;
 }) {
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:h-screen lg:w-72 lg:overflow-y-auto">
+    <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:overflow-y-auto">
       <div>
-        <p className="font-mono text-xs tracking-[0.35em] text-primary">S P A C E</p>
+        <p className="font-mono text-xs font-semibold tracking-[0.35em] text-primary">S P A C E</p>
         <p className="mt-1 text-xs text-muted-foreground">Mission Control</p>
       </div>
 
@@ -23,6 +26,18 @@ export function MissionControl({
         <Row label="Mode" value={runtime.mode} />
         <Row label="5m window" value={runtime.windows.fiveMinute ? "enabled" : "disabled"} />
         <Row label="15m window" value={runtime.windows.fifteenMinute ? "enabled" : "disabled"} />
+      </Section>
+
+      <Section title="Market">
+        <Row
+          label="BTC (Binance)"
+          value={market.binance ? market.binance.price.toFixed(2) : "—"}
+          accent
+        />
+        <Row label="BTC (Chainlink)" value={market.chainlink ? market.chainlink.price.toFixed(2) : "—"} />
+        <Row label="5m market" value={market.markets.FIVE_MINUTE?.status ?? "none"} />
+        <Row label="15m market" value={market.markets.FIFTEEN_MINUTE?.status ?? "none"} />
+        <Row label="State ver." value={`v${market.version}`} />
       </Section>
 
       <Section title="Session">
@@ -45,7 +60,7 @@ export function MissionControl({
       </Section>
 
       <p className="mt-auto text-[11px] leading-relaxed text-muted-foreground">
-        Operational status only. Market data, TWAP, PnL and positions attach here in later
+        Operational status only. Wallet, TWAP, PnL and positions attach here in later
         milestones; configuration always lives in the Operations Desk, never in this panel. Nothing
         here is simulated.
       </p>
