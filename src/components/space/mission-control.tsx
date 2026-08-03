@@ -43,8 +43,6 @@ export function MissionControl({
         <Row label="State ver." value={`v${market.version}`} />
       </Section>
 
-      <Section title="Session">
-
       <Section title="Strategy">
         <Row label="Market" value={strategy.market.horizon ?? "—"} accent />
         <Row label="PTB" value={strategy.market.ptb?.toFixed(2) ?? "—"} />
