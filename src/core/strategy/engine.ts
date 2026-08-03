@@ -57,7 +57,9 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
   const twap: SettlementTwapEngine = createSettlementTwap(config);
   const plans = new Map<MarketHorizon, MarketPlan>();
   let timeline: StrategyEvent[] = [];
-  let lastBinanceObservedAt: string | null = null;
+  // Identity of the last settlement sample ingested, so a republished market
+  // state cannot double-count the same observation.
+  let lastSettlementAtMs: number | null = null;
   let previousTwapValue: number | null = null;
   let lastTwapValue: number | null = null;
 
@@ -322,17 +324,19 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
     reset() {
       plans.clear();
       timeline = [];
-      lastBinanceObservedAt = null;
+      lastSettlementAtMs = null;
       twap.reset();
     },
 
     evaluate(nowMs, market, enabled) {
       const events: StrategyEvent[] = [];
       // Strategy consumes the unified market state only — never a provider.
-      const sample = market.binance;
-      if (sample && sample.observedAt !== lastBinanceObservedAt) {
-        lastBinanceObservedAt = sample.observedAt;
-        twap.ingest(sample.price, Date.parse(sample.observedAt));
+      // The settlement sample is published by the TWAP service from the active
+      // provider; there is no fallback to the Binance display feed.
+      const sample = market.settlement;
+      if (sample && sample.atMs !== lastSettlementAtMs) {
+        lastSettlementAtMs = sample.atMs;
+        twap.ingest(sample.price, sample.atMs);
       }
       for (const horizon of HORIZONS) {
         const plan = planFor(horizon, market, events);
