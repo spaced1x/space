@@ -307,12 +307,17 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
 
   /** The order carries every immutable field of its intent, so retries need no lookup. */
   function intentOf(order: OrderRecord): ExecutionIntent {
-    return intents.get(order.intentId) ?? placeholderIntent(order);
+    return intents.get(order.intentId) ?? recoveredIntent(order);
   }
 
   const intents = new Map<string, ExecutionIntent>();
 
-  function placeholderIntent(order: OrderRecord): ExecutionIntent {
+  /**
+   * An order adopted after a restart has no in-memory intent. Its immutable
+   * fields are reconstructed from the order itself; strategy-only fields stay
+   * zero and the reason marks the row as recovered rather than triggered.
+   */
+  function recoveredIntent(order: OrderRecord): ExecutionIntent {
     return {
       id: order.intentId,
       createdAt: order.createdAt,

@@ -112,10 +112,45 @@ export const strategyRepository = {
 
   async recentIntents(limit = 20): Promise<ExecutionIntent[]> {
     const driver = await requireDriver();
-    const rows = driver.all<Record<string, never>>(
+    interface IntentRow {
+      id: string;
+      created_at: string;
+      condition_id: string;
+      slug: string;
+      horizon: string;
+      window_seconds: number;
+      direction: string;
+      opening_twap: number;
+      settlement_twap: number;
+      ptb: number;
+      buffer: number;
+      frozen_trigger: number;
+      trigger_time: string;
+      reason: string | null;
+      config_version: number | null;
+    }
+    const rows = driver.all<IntentRow>(
       `SELECT * FROM execution_intents ORDER BY created_at DESC LIMIT ?`,
       [limit],
     );
-    return rows as unknown as ExecutionIntent[];
+    // Rows are snake_case; the domain type is camelCase. Mapping here is what
+    // keeps per-window statistics and trigger→fill latency correct.
+    return rows.map((row) => ({
+      id: String(row.id),
+      createdAt: String(row.created_at),
+      conditionId: String(row.condition_id),
+      slug: String(row.slug),
+      horizon: row.horizon as ExecutionIntent["horizon"],
+      windowSeconds: Number(row.window_seconds),
+      direction: row.direction as ExecutionIntent["direction"],
+      openingTwap: Number(row.opening_twap),
+      settlementTwap: Number(row.settlement_twap),
+      ptb: Number(row.ptb),
+      buffer: Number(row.buffer),
+      frozenTrigger: Number(row.frozen_trigger),
+      triggerTime: String(row.trigger_time),
+      reason: String(row.reason ?? ""),
+      configVersion: row.config_version == null ? null : Number(row.config_version),
+    }));
   },
 };

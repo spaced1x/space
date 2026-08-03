@@ -117,6 +117,23 @@ function Statistics() {
               empty="no trading days recorded yet"
             />
           </Panel>
+
+          <Panel
+            title="PnL by configuration version"
+            hint="each intent is stamped with the Operations Desk version that produced it"
+          >
+            <Table
+              head={["day", "config version", "trades", "filled", "pnl"]}
+              rows={stats.byConfigVersion.map((entry) => [
+                entry.day,
+                entry.configVersion != null ? `v${entry.configVersion}` : "unstamped",
+                String(entry.trades),
+                String(entry.filled),
+                money(entry.realizedPnl),
+              ])}
+              empty="no configuration-attributed trades recorded yet"
+            />
+          </Panel>
         </>
       )}
     </ConsoleShell>
