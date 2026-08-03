@@ -21,7 +21,7 @@ One enum replaces every visible engine state. OBSERVE is removed from the UI ent
 
 ## 3. START / STOP
 
-START does not immediately enable trading. It persists the selected runtime target, gracefully shuts down any active runtime (persist state, flush logs, close Scheduler, Binance, RTDS, Chainlink, Gamma, CLOB, Telegram, SQLite, release locks), then exits for supervisor restart and boots the selected runtime.
+START does not immediately enable trading. It persists the selected runtime target, gracefully shuts down any active runtime (persist state, flush logs, close Scheduler, Binance, RTDS, Chainlink, Gamma, CLOB, Telegram, SQLite, release locks), then exits for supervisor restart and boots the selected runtime. START only starts the runtime lifecycle. Strategy execution may begin only after the runtime reaches RUNNING, all mandatory runtime dependencies remain healthy, and the emergency stop is clear. Runtime startup never bypasses existing safety checks.
 
 Boot order: STARTING -> Database -> Runtime -> Scheduler -> Wallet -> Polygon RPC -> Gamma -> Binance -> TWAP Provider -> CLOB -> Telegram -> Market Discovery -> Runtime Validation -> READY -> RUNNING.
 
