@@ -100,6 +100,10 @@ function OperatorConsole() {
             />
           </Panel>
 
+          <Panel title="TWAP provider" hint="active settlement provider and standby peers">
+            <TwapProviderCard twap={snapshot.data.engine.twap} />
+          </Panel>
+
           <Panel title="Runtime connections" hint="every external dependency, as observed">
             <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {snapshot.data.connections.map((record) => (
