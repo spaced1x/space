@@ -23,6 +23,19 @@ export interface DailySummary {
   realizedPnl: number;
 }
 
+/**
+ * Daily PnL attributed to the Operations Desk configuration version that was
+ * active when the intent was produced. Without this a PnL number cannot be
+ * tied back to the configuration that produced it.
+ */
+export interface ConfigVersionSummary {
+  configVersion: number | null;
+  day: string;
+  trades: number;
+  filled: number;
+  realizedPnl: number;
+}
+
 export interface StatisticsSnapshot {
   generatedAt: string;
   today: {
@@ -57,6 +70,7 @@ export interface StatisticsSnapshot {
   best: { window: number | null; buffer: number | null };
   windows: WindowPerformance[];
   daily: DailySummary[];
+  byConfigVersion: ConfigVersionSummary[];
   session: {
     startedAt: string | null;
     trades: number;
@@ -189,6 +203,30 @@ export function computeStatistics(input: StatisticsInput): StatisticsSnapshot {
   }
   const daily = [...dailyMap.values()].sort((a, b) => b.day.localeCompare(a.day)).slice(0, 14);
 
+  // Daily PnL grouped by the configuration version each order's intent carried.
+  const versionMap = new Map<string, ConfigVersionSummary>();
+  for (const order of input.orders) {
+    const intent = intentById.get(order.intentId);
+    const version = intent?.configVersion ?? null;
+    const key = `${day(order.createdAt)}|${version ?? "unknown"}`;
+    const entry = versionMap.get(key) ?? {
+      configVersion: version,
+      day: day(order.createdAt),
+      trades: 0,
+      filled: 0,
+      realizedPnl: 0,
+    };
+    entry.trades += 1;
+    if (order.state === "FILLED") entry.filled += 1;
+    entry.realizedPnl += settled
+      .filter((position) => position.tokenId === order.tokenId)
+      .reduce((sum, position) => sum + realizedPnl(position), 0);
+    versionMap.set(key, entry);
+  }
+  const byConfigVersion = [...versionMap.values()]
+    .sort((a, b) => b.day.localeCompare(a.day) || (b.configVersion ?? 0) - (a.configVersion ?? 0))
+    .slice(0, 30);
+
   const todayOrders = input.orders.filter((order) => day(order.createdAt) === today);
   const sessionOrders = input.sessionStartedAt
     ? input.orders.filter((order) => order.createdAt >= input.sessionStartedAt!)
@@ -229,6 +267,7 @@ export function computeStatistics(input: StatisticsInput): StatisticsSnapshot {
     best: { window: bestWindow?.seconds ?? null, buffer: bestWindow?.buffer ?? null },
     windows,
     daily,
+    byConfigVersion,
     session: {
       startedAt: input.sessionStartedAt,
       trades: sessionOrders.length,
