@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { boot } from "../core/boot.server";
+import { boot, bootTimes, getBootTrace } from "../core/boot.server";
 import { dispatchCommand } from "../core/bus/command-bus.server";
 import { commandSchema } from "../core/bus/commands";
 import { eventBus } from "../core/bus/events";
@@ -15,16 +15,46 @@ import { engineRuntimeSnapshot } from "../core/engine/loop.server";
 import { getRuntimeState } from "../core/state/store";
 import { runStartupValidation } from "../core/startup/validation.server";
 import { generateReleaseReport } from "../core/release/report.server";
+import {
+  connectionTimeline,
+  environmentLabel,
+  environmentResolution,
+  listConnections,
+} from "../core/runtime/connections.server";
+import { syncConnections } from "../core/runtime/connection-sync.server";
+import { databaseHealth } from "../core/db/database.server";
 
 // Single read surface: Mission Control, Overview and Statistics all subscribe
 // to this one snapshot so no two panels can disagree.
 export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async () => {
   await boot();
+  // Refresh every connection from its live adapter before answering, so no two
+  // panels can disagree and nothing is ever a stale guess.
+  await syncConnections();
+  const db = await databaseHealth();
+  const times = bootTimes();
   return {
     runtime: getRuntimeState(),
     health: await collectHealth(),
     events: eventBus.recent(12),
     engine: engineRuntimeSnapshot(),
+    environment: environmentLabel(),
+    connections: listConnections(),
+    timeline: connectionTimeline(),
+    envResolution: environmentResolution(),
+    boot: {
+      trace: getBootTrace(),
+      startedAt: times.startedAt,
+      completedAt: times.completedAt,
+    },
+    process: {
+      uptimeSeconds: Math.round(process.uptime()),
+      bootTime: times.completedAt ?? times.startedAt,
+      buildVersion: process.env["SPACE_BUILD_VERSION"] ?? "1.0.0",
+      gitCommit: process.env["SPACE_GIT_COMMIT"] ?? "unknown",
+      schemaVersion:
+        ((db.details as { schemaVersion?: number | null } | undefined)?.schemaVersion ?? null),
+    },
   };
 });
 
