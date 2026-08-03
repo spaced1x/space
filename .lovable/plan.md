@@ -79,6 +79,31 @@ Diagnostics are environment-aware: viewing V1 shows only V1 history, viewing V2 
 - UI: generalise `runtime-panel.tsx` / `mission-control.tsx` into an environment-parameterised panel rendered twice. No redesign, no removed fields, no simplified cards; existing components (`connection-card`, `connection-history`, `twap-provider-card`, `trading-target-card`, `empty-state`) are reused per environment.
 - Diagnostics route gains an environment selector bound to the same two snapshots.
 
+## Runtime resource audit
+
+Every START, STOP and SWITCH must produce a runtime resource audit before the lifecycle is considered complete.
+
+The audit must verify:
+
+- Engine loop instances = 1 when RUNNING, 0 when STOPPED
+- Scheduler instances = 1 when RUNNING, 0 when STOPPED
+- SQLite connections = exactly 1 active database
+- SQLite locks = exactly one lock for the active environment
+- Binance WebSocket = exactly one
+- RTDS WebSocket = exactly one
+- Chainlink provider = at most one
+- Gamma polling task = exactly one
+- Polymarket CLOB client = exactly one
+- Telegram client = at most one
+- Event listeners = no duplicates
+- Polling intervals = no duplicates
+- Timers = no orphaned timers
+- Memory usage stable after repeated runtime switches
+
+If any resource count is incorrect, the runtime enters FAILED and the audit report is exposed on Diagnostics with the exact failing resource.
+
+No runtime may transition to READY or RUNNING until the resource audit passes.
+
 ## Verification
 
 PASS only if ALL are true:
