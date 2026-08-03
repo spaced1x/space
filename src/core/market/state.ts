@@ -1,7 +1,13 @@
 import { eventBus } from "../bus/events";
 import { systemClock } from "../shared/clock";
 import type { PriceSample } from "../feeds/types";
-import type { DiscoveredMarket, DiscoveryStats, MarketHorizon, MarketState } from "./types";
+import type {
+  DiscoveredMarket,
+  DiscoveryStats,
+  MarketHorizon,
+  MarketState,
+  SettlementSample,
+} from "./types";
 
 // Single owner of market truth. Pure and immutable: each publish produces a new
 // frozen object with a monotonic version, so consumers can compare by version.
@@ -26,6 +32,7 @@ function initial(): MarketState {
     >,
     binance: null,
     chainlink: null,
+    settlement: null,
     discovery: { ...emptyDiscovery },
   });
 }
@@ -62,6 +69,14 @@ function publish(next: Omit<MarketState, "version" | "publishedAt">, reason: str
 export function applyPriceSample(sample: PriceSample): MarketState {
   const key = sample.source === "BINANCE" ? "binance" : "chainlink";
   return publish({ ...state, [key]: sample }, "");
+}
+
+/**
+ * Publishes a settlement price observed by the active TWAP provider. This is
+ * the only settlement source the strategy engine reads — there is no fallback.
+ */
+export function applySettlementSample(sample: SettlementSample): MarketState {
+  return publish({ ...state, settlement: sample }, "");
 }
 
 export function applyDiscovery(
