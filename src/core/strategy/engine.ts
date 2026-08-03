@@ -42,16 +42,23 @@ export interface StrategyEngine {
   snapshot(nowMs: number, market: MarketState): StrategySnapshot;
   reset(): void;
   config(): StrategyConfig;
+  /**
+   * Swap the configuration version. A market already in flight is unaffected:
+   * every MarketPlan captures its configuration at plan creation and never
+   * re-reads it, so a new document only reaches the next planned market.
+   */
+  setConfig(next: StrategyConfig): void;
 }
 
 const HORIZONS: MarketHorizon[] = ["FIVE_MINUTE", "FIFTEEN_MINUTE"];
 
 export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
-  const config = lockConfig(input);
+  let config = lockConfig(input);
   const twap: SettlementTwapEngine = createSettlementTwap(config);
   const plans = new Map<MarketHorizon, MarketPlan>();
   let timeline: StrategyEvent[] = [];
   let lastBinanceObservedAt: string | null = null;
+  let previousTwapValue: number | null = null;
 
   function emit(event: StrategyEvent, sink: StrategyEvent[]): void {
     sink.push(event);
@@ -298,6 +305,9 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
 
   return {
     config: () => config,
+    setConfig: (next: StrategyConfig) => {
+      config = lockConfig(next);
+    },
 
     ingestPrice(price, atMs) {
       twap.ingest(price, atMs);
