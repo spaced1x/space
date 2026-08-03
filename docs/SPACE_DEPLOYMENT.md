@@ -38,3 +38,19 @@ Terminate TLS at Nginx, proxy to `127.0.0.1:$PORT`, and never expose the app por
 ## 5. Backup
 
 The database is one file plus its WAL. Back up with `sqlite3 $DB_PATH ".backup space-backup.db"` or copy after a checkpoint. Secrets are never included in a backup; restore `.env` separately. Clone -> restore file -> run.
+
+## 6. Rollback procedure
+
+Every production deployment must have a deterministic rollback path. If any release gate fails after deployment:
+
+1. Stop the SPACE process: `pm2 stop ecosystem.config.cjs`.
+2. Restore the most recent verified SQLite backup.
+3. Restore the previous `.env`.
+4. Deploy the previous tagged release.
+5. Start PM2: `pm2 start ecosystem.config.cjs`.
+6. Verify startup validation via `/api/public/health`.
+7. Verify reconciliation reports no divergences.
+8. Verify Replay, Statistics and Diagnostics render correctly.
+9. Record the rollback reason in the production report.
+
+A rollback must never require manual database editing or recovery scripts. Every release is recorded in `release_artifacts` with `version`, `rollback_version`, `deployed_at`, `rollback_timestamp` (if applicable), `operator`, and `reason`.

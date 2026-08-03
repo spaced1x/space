@@ -11,6 +11,14 @@ export interface TelegramOutboxRecord {
   error: string | null;
 }
 
+export interface TelegramInboundRecord {
+  id: number;
+  created_at: string;
+  chat_id: string;
+  username: string;
+  text: string;
+}
+
 export const telegramRepository = {
   async insert(chatId: string, type: string, text: string): Promise<number> {
     const driver = await requireDriver();
@@ -43,6 +51,27 @@ export const telegramRepository = {
     return driver.all<TelegramOutboxRecord>(
       `SELECT id, created_at, chat_id, type, text, sent, error
        FROM telegram_outbox
+       ORDER BY id DESC
+       LIMIT ?`,
+      [limit],
+    );
+  },
+
+  async insertInbound(chatId: string, username: string, text: string): Promise<number> {
+    const driver = await requireDriver();
+    const result = driver.run(
+      `INSERT INTO telegram_inbound (created_at, chat_id, username, text)
+       VALUES (?, ?, ?, ?)`,
+      [systemClock.iso(), chatId, username, text],
+    );
+    return Number(result.lastInsertRowid);
+  },
+
+  async recentInbound(limit = 50): Promise<TelegramInboundRecord[]> {
+    const driver = await requireDriver();
+    return driver.all<TelegramInboundRecord>(
+      `SELECT id, created_at, chat_id, username, text
+       FROM telegram_inbound
        ORDER BY id DESC
        LIMIT ?`,
       [limit],

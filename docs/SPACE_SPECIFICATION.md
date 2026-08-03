@@ -2,6 +2,8 @@
 
 Status: **LOCKED**. Version 1.0. This document is the single source of truth for SPACE. Where any other document, comment, ticket or conversation disagrees with this file, this file wins. Changes require an explicit specification revision, not an implementation decision.
 
+**v1.0 feature freeze:** no new trading venues, no multi-market support, no portfolio management, no AI-assisted features, and no application-level authentication are in scope for v1.0. Those capabilities are reserved for v1.1+ so that v1.0 can be frozen, audited and released.
+
 > **Simple systems survive. Complex systems fail.**
 >
 > When a decision is uncertain, choose the option that is simpler, easier to maintain, easier to deploy, easier to recover, easier to understand, and more reliable. Reliability outranks new features, always.
@@ -416,15 +418,13 @@ Write commands are confirmed, rate-limited and audited. Alerts (risk breach, kil
 
 ## 17. Local authentication
 
-SPACE is a **single-operator application**. No signup, no roles, no permissions matrix, no invitations, no password-reset flow, no user table.
+SPACE v1.0 does **not** implement an in-application login layer. The single-operator security boundary is the VPS itself: SSH key access, a host firewall, and Nginx IP allow-listing / basic auth if desired. Application-level authentication is deferred to a post-v1.0 milestone so that v1.0 ships with the smallest possible attack surface.
 
-- One operator credential: a username and an Argon2id password hash in `.env`, plus `SESSION_SECRET`.
-- Login issues a signed, httpOnly, SameSite=strict session cookie with an idle timeout; `secure` when served over TLS.
-- Every route except the login page and the health endpoint requires that session, enforced server-side in one place.
-- Rate-limited login attempts, audited logins, and a documented rotation procedure (edit `.env`, restart).
-- Nginx terminates TLS and may add an IP allow-list; that is deployment hardening, not application logic.
-
-If a second operator is ever genuinely needed, the answer is a second credential — not a user-management subsystem.
+- No signup, no roles, no permissions matrix, no invitations, no password-reset flow, no user table.
+- No `OPERATOR_PASSWORD_HASH` or `SESSION_SECRET` in `.env`.
+- The dashboard is reachable only by those who can reach the VPS; treat network access as the operator credential.
+- Telegram inbound commands are gated by `TELEGRAM_CHAT_ID` and a configurable permission mode (`READ_ONLY`, `SAFE_CONTROLS`, `FULL_OPERATOR`).
+- If a future release adds an application login, it will be a single credential stored in `.env`, not a user-management subsystem.
 
 ---
 
@@ -464,9 +464,7 @@ These always live in `.env.example` and are **never** editable through the dashb
 - RPC Endpoints
 - Telegram Token
 - Telegram Chat ID
-- Session Secret
-
-Plus the minimum runtime basics: `NODE_ENV`, `PORT`, `HOST`, `DB_PATH`, and the operator username and password hash. Nothing else.
+Plus the minimum runtime basics: `NODE_ENV`, `PORT`, `HOST`, `DB_PATH`. Nothing else.
 
 Windows, buffers, sizes, quotas, retries, order types, market toggles, risk limits and mode all live in the database and are edited in the Operations Desk. One template, no environment-specific variants. Secrets are never rendered, logged, returned by an API, or included in a backup.
 

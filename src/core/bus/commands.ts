@@ -13,6 +13,10 @@ export const commandSchema = z.discriminatedUnion("kind", [
   // Manual Trading is an operating mode, not a second engine: switching to
   // MANUAL disables automatic strategy execution.
   z.object({ kind: z.literal("SET_MODE"), mode: z.enum(["STRATEGY", "MANUAL"]) }),
+  // Latched kill switch. Stops new orders; existing orders remain in flight.
+  z.object({ kind: z.literal("EMERGENCY_STOP"), reason: z.string().max(256).optional() }),
+  // Reset the emergency stop latch after the operator has resolved the fault.
+  z.object({ kind: z.literal("RESET_EMERGENCY_STOP") }),
   z.object({
     kind: z.literal("BACKUP"),
     label: z.string().max(64).optional(),
@@ -38,6 +42,8 @@ export const COMMAND_KINDS: CommandKind[] = [
   "ENABLE_5M",
   "ENABLE_15M",
   "SET_MODE",
+  "EMERGENCY_STOP",
+  "RESET_EMERGENCY_STOP",
   "BACKUP",
   "RESTORE",
   "TELEGRAM_BROADCAST",

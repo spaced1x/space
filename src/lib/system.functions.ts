@@ -8,8 +8,13 @@ import { eventBus } from "../core/bus/events";
 import { collectHealth } from "../core/health/registry";
 import { backupRepository } from "../core/db/repositories/backup.repository";
 import { telegramRepository } from "../core/db/repositories/telegram.repository";
+import { metricsRepository } from "../core/db/repositories/metrics.repository";
+import { snapshotRepository } from "../core/db/repositories/snapshot.repository";
+import { releaseRepository } from "../core/db/repositories/release.repository";
 import { engineRuntimeSnapshot } from "../core/engine/loop.server";
 import { getRuntimeState } from "../core/state/store";
+import { runStartupValidation } from "../core/startup/validation.server";
+import { generateReleaseReport } from "../core/release/report.server";
 
 // Single read surface: Mission Control, Overview and Statistics all subscribe
 // to this one snapshot so no two panels can disagree.
@@ -50,4 +55,41 @@ export const sendTelegramBroadcast = createServerFn({ method: "POST" })
       { kind: "TELEGRAM_BROADCAST", message: data.message },
       { actor: "operator", source: "dashboard" },
     );
+  });
+
+export const getTelegramInbound = createServerFn({ method: "GET" }).handler(async () => {
+  await boot();
+  return telegramRepository.recentInbound(20);
+});
+
+export const getRuntimeMetrics = createServerFn({ method: "GET" }).handler(async () => {
+  await boot();
+  return {
+    latest: await metricsRepository.latest(),
+    history: await metricsRepository.recent(100),
+  };
+});
+
+export const getConfigSnapshots = createServerFn({ method: "GET" }).handler(async () => {
+  await boot();
+  return snapshotRepository.recent(20);
+});
+
+export const getStartupValidation = createServerFn({ method: "GET" }).handler(async () => {
+  await boot();
+  return runStartupValidation();
+});
+
+export const getReleaseArtifact = createServerFn({ method: "GET" }).handler(async () => {
+  await boot();
+  return releaseRepository.latest();
+});
+
+const releaseReportSchema = z.object({ version: z.string().min(1) });
+
+export const runReleaseGate = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => releaseReportSchema.parse(data))
+  .handler(async ({ data }) => {
+    await boot();
+    return generateReleaseReport(data.version);
   });

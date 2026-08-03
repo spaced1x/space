@@ -1,11 +1,20 @@
 import { auditRepository } from "../db/repositories/audit.repository";
 import { performBackup, restoreBackup } from "../backup/backup.service";
+import { snapshotActiveConfig } from "../config/snapshots.server";
 import { executionRecoveryStatus } from "../execution/execution.server";
 import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import { correlationId as newCorrelationId } from "../shared/ids";
 import { sendTelegramMessage } from "../telegram/telegram.service";
-import { ARM_REASON, getRuntimeState, updateRuntimeState, type RuntimeState } from "../state/store";
+import {
+  ARM_REASON,
+  getRuntimeState,
+  latchEmergencyStop,
+  resetEmergencyStop,
+  updateRuntimeState,
+  type RuntimeState,
+} from "../state/store";
+import { runStartupValidation } from "../startup/validation.server";
 import { eventBus } from "./events";
 import { commandSchema, type Command, type CommandContext, type Verdict } from "./commands";
 
@@ -61,6 +70,16 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       if (recovery.state === "FAILED") {
         return reject(`reconciliation failed: ${recovery.message}`);
       }
+      if (state.emergencyStop) {
+        return reject(`emergency stop is latched: ${state.emergencyStopReason}`);
+      }
+      const validation = await runStartupValidation();
+      if (!validation.valid) {
+        return reject(`pre-arm validation failed: ${validation.blockers.join("; ")}`);
+      }
+      // Snapshot the active configuration so every trade generated while ARMED
+      // is explainable against the exact live configuration.
+      await snapshotActiveConfig("ARM command", context.correlationId);
       return accept(ARM_REASON, { engineStatus: "ARMED" });
     }
     case "DISARM":
@@ -80,12 +99,31 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       return accept(`15m window ${command.enabled ? "enabled" : "disabled"}`, {
         windows: { ...state.windows, fifteenMinute: command.enabled },
       });
-    case "SET_MODE":
+    case "SET_MODE": {
       if (state.mode === command.mode) return reject(`engine is already in ${command.mode} mode`);
       if (state.engineStatus === "ARMED") {
         return reject("disarm before switching operating mode");
       }
-      return accept(`operating mode set to ${command.mode}`, { mode: command.mode });
+      const result = accept(`operating mode set to ${command.mode}`, { mode: command.mode });
+      await snapshotActiveConfig(`mode switch to ${command.mode}`, context.correlationId);
+      return result;
+    }
+    case "EMERGENCY_STOP": {
+      if (state.emergencyStop) return reject("emergency stop is already latched");
+      const reason = command.reason ?? "operator emergency stop";
+      latchEmergencyStop(reason, context.correlationId);
+      return verdict("ACCEPTED", `emergency stop latched: ${reason}`, command.kind, context.correlationId);
+    }
+    case "RESET_EMERGENCY_STOP": {
+      if (!state.emergencyStop) return reject("emergency stop is not latched");
+      resetEmergencyStop(context.correlationId);
+      return verdict(
+        "ACCEPTED",
+        "emergency stop latch reset; re-run pre-arm validation before ARM",
+        command.kind,
+        context.correlationId,
+      );
+    }
     case "BACKUP": {
       const result = await performBackup("MANUAL", command.label);
       return result.success

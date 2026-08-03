@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { MarketPanel } from "../components/space/market-panel";
+import { ProductionPanel } from "../components/space/production-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
 import { ExecutionPanel } from "../components/space/execution-panel";
@@ -108,6 +109,8 @@ function Diagnostics() {
               ))}
             </div>
           </Panel>
+
+          <ProductionPanel />
 
           <Panel title="Warnings and errors" hint={`${data.errors.length} recent`}>
             <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
