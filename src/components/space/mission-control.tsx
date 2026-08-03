@@ -1,4 +1,5 @@
 import type { HealthReport } from "../../core/health/types";
+import type { ExecutionSnapshot } from "../../core/execution/types";
 import type { MarketState } from "../../core/market/types";
 import type { RuntimeState } from "../../core/state/store";
 import type { StrategySnapshot } from "../../core/strategy/types";
@@ -11,11 +12,13 @@ export function MissionControl({
   health,
   market,
   strategy,
+  execution,
 }: {
   runtime: RuntimeState;
   health: HealthReport;
   market: MarketState;
   strategy: StrategySnapshot;
+  execution: ExecutionSnapshot;
 }) {
   return (
     <aside className="flex w-full shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:overflow-y-auto">
@@ -61,6 +64,8 @@ export function MissionControl({
       </Section>
 
       <Section title="Session">
+        <Row label="—" value="" />
+      </Section>
         <Row label="Started" value={new Date(runtime.sessionStartedAt).toLocaleTimeString()} />
         <Row label="Last change" value={new Date(runtime.lastTransitionAt).toLocaleTimeString()} />
         <Row label="Reason" value={runtime.lastTransitionReason} />
