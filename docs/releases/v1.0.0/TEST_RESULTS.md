@@ -21,7 +21,7 @@ Result at release: **9 files, 52 tests, all passing.**
 ## Build
 
 - `bun run build` — production build succeeds.
-- VPS build uses `NITRO_PRESET=node_server bun run build`, producing
+- VPS build uses `NITRO_PRESET=node-server bun run build`, producing
   `dist/server/index.mjs`, which is what `ecosystem.config.cjs` runs.
 
 ## Runtime verification
