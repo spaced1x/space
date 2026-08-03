@@ -120,11 +120,46 @@ The shutdown sequence, in order: stop accepting commands, finish in-flight persi
 
 On completion of Milestone 7, architecture, database schema, Command Bus contracts, and strategy, risk, execution and replay behaviour are frozen for v1.0. Subsequent functional changes belong to v1.1 or later; the freeze is recorded in the specification and the production report.
 
+## 14. Pre-ARM validation gate
+
+Startup validation is not enough when the engine has been observing for hours. Every ARM transition re-runs a final validation of: database health, wallet configuration, Telegram configuration, Binance connectivity, Chainlink connectivity, Polymarket connectivity, single-instance lock ownership, and environment consistency.
+
+Any required check that fails rejects ARM with a deterministic, named reason, audits the rejection through the Command Bus, and leaves the engine in OBSERVE. The Command Deck shows the failing check so the operator knows exactly what to fix.
+
+## 15. Emergency stop (kill switch)
+
+A dedicated operator kill switch, separate from auto-disarm, that immediately:
+
+- Cancels all scheduler execution tasks.
+- Rejects new strategy intents.
+- Blocks manual order placement.
+- Leaves replay, diagnostics and statistics fully available.
+- Persists the reason and timestamp.
+- Latches until an explicit operator recovery command clears it; ARM stays rejected while latched.
+
+Available from the Command Deck and from Telegram in `FULL_OPERATOR` mode (and as a safe control, since it only reduces risk). Health reports the emergency-stop state prominently.
+
+## 16. Versioned release artifacts
+
+Release evidence is immutable and versioned under `docs/releases/v1.0.0/`:
+
+```text
+docs/releases/
+  v1.0.0/
+    SPACE_PRODUCTION_REPORT.md
+    SPACE_FINAL_ARCHITECTURE_AUDIT.md
+    RELEASE_GATE.md
+    TEST_RESULTS.md
+```
+
+The working documents in `docs/` remain the live copies; the versioned folder is a frozen snapshot taken at release and never edited afterwards.
+
 ## Technical notes
 
 - New migration adds the Telegram permission mode to the operations configuration; no existing table changes.
 - A further migration adds `config_snapshots` and `runtime_metrics`, plus a snapshot-version reference on execution intents and orders.
 - Telegram receiver lives in `src/core/telegram/`, dispatching through `src/core/bus/command-bus.server.ts` only.
-- Metrics collection registers as a scheduler task; startup validation registers as a boot step and health component ahead of the OBSERVE transition.
+- Metrics collection registers as a scheduler task; startup validation registers as a boot step and health component ahead of the OBSERVE transition, and the same validators are reused by the pre-ARM gate.
+- Emergency stop lives in runtime state, persists across restarts, and is enforced in the Command Bus, execution engine and manual trading paths.
 - Lock implemented in `src/core/db/` and registered in the boot and shutdown sequences.
 - Milestones 1–5 remain frozen; the only edits outside Milestone 6 files are the env-schema and documentation removals for authentication.
