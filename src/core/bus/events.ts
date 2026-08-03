@@ -5,9 +5,15 @@ import { systemClock } from "../shared/clock";
 // without another format change.
 import type { JsonObject } from "../shared/json";
 
+// Every event carries a severity so the runtime log, Telegram and Replay can
+// filter and colour-code without parsing event type strings.
+export const EVENT_SEVERITIES = ["INFO", "SUCCESS", "WARNING", "ERROR"] as const;
+export type EventSeverity = (typeof EVENT_SEVERITIES)[number];
+
 export interface EventEnvelope<T extends JsonObject = JsonObject> {
   type: string;
   occurredAt: string;
+  severity: EventSeverity;
   correlationId: string;
   source: string;
   payload: T;
@@ -22,8 +28,17 @@ const recent: EventEnvelope[] = [];
 const RECENT_LIMIT = 200;
 
 export const eventBus = {
-  publish(event: Omit<EventEnvelope, "occurredAt"> & { occurredAt?: string }): EventEnvelope {
-    const envelope: EventEnvelope = { ...event, occurredAt: event.occurredAt ?? systemClock.iso() };
+  publish(
+    event: Omit<EventEnvelope, "occurredAt" | "severity"> & {
+      occurredAt?: string;
+      severity?: EventSeverity;
+    },
+  ): EventEnvelope {
+    const envelope: EventEnvelope = {
+      ...event,
+      severity: event.severity ?? "INFO",
+      occurredAt: event.occurredAt ?? systemClock.iso(),
+    };
     recent.push(envelope);
     if (recent.length > RECENT_LIMIT) recent.shift();
     for (const handler of [...(handlers.get(envelope.type) ?? []), ...wildcard]) {
