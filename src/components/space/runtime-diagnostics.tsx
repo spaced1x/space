@@ -95,6 +95,47 @@ export function RuntimeDiagnostics() {
         </table>
       </Panel>
 
+      <Panel
+        title="Runtime resource audit"
+        hint="every START, STOP and SWITCH must prove the previous runtime was destroyed"
+      >
+        {data.resourceAudits.length === 0 ? (
+          <p className="rounded-md border border-border bg-card p-4 text-label text-muted-foreground">
+            No runtime transition has been audited yet. An audit is recorded the moment the runtime
+            is started, stopped or switched.
+          </p>
+        ) : (
+          <table className="w-full overflow-hidden rounded-md border border-border bg-card text-table">
+            <thead className="bg-muted/60 text-label text-muted-foreground">
+              <tr>
+                <Th>Time</Th>
+                <Th>Phase</Th>
+                <Th>Expected</Th>
+                <Th>Verdict</Th>
+                <Th>Counts</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {data.resourceAudits.map((audit, index) => (
+                <tr key={`${audit.at}-${index}`}>
+                  <Td mono>{new Date(audit.at).toLocaleTimeString()}</Td>
+                  <Td mono>{audit.phase}</Td>
+                  <Td mono>{audit.expectation}</Td>
+                  <Td className={audit.passed ? "text-ok" : "text-fail"}>
+                    {audit.passed ? "PASS" : `FAIL — ${audit.failures.join("; ")}`}
+                  </Td>
+                  <Td mono>
+                    {audit.checks
+                      .map((entry) => `${entry.resource}=${entry.observed}`)
+                      .join("  ")}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
       <Panel title="Connection history" hint="every state change since process start">
         {data.timeline.length === 0 ? (
           <p className="rounded-md border border-border bg-card p-4 text-label text-muted-foreground">

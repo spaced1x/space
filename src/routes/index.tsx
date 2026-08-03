@@ -1,11 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 
 import { ConsoleShell, Panel } from "../components/space/console-shell";
 import { ConnectionCard } from "../components/space/connection-card";
 import { ConnectionHistory } from "../components/space/connection-history";
 import { RuntimeBanner } from "../components/space/runtime-banner";
+import { RuntimeEnvironments } from "../components/space/runtime-environments";
 import { SummaryRow } from "../components/space/summary-row";
 import { TradingTargetCard } from "../components/space/trading-target-card";
 import { TwapProviderCard } from "../components/space/twap-provider-card";
@@ -15,7 +17,8 @@ import { RuntimePanel } from "../components/space/runtime-panel";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
 import { StrategyPanel } from "../components/space/strategy-panel";
 import type { EventSeverity } from "../core/bus/events";
-import { getSystemSnapshot } from "../lib/system.functions";
+import type { Command } from "../core/bus/commands";
+import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
 
 const SEVERITY_TONE: Record<EventSeverity, string> = {
   INFO: "text-muted-foreground",
@@ -51,12 +54,24 @@ export const Route = createFileRoute("/")({
 });
 
 function OperatorConsole() {
+  const queryClient = useQueryClient();
   const fetchSnapshot = useServerFn(getSystemSnapshot);
+  const dispatch = useServerFn(sendCommand);
 
   const snapshot = useQuery({
     queryKey: ["system-snapshot"],
     queryFn: () => fetchSnapshot(),
     refetchInterval: 5000,
+  });
+
+  const runtimeCommand = useMutation({
+    mutationFn: (input: Command) => dispatch({ data: input }),
+    onSuccess: (verdict) => {
+      if (verdict.status === "ACCEPTED") toast.success(`${verdict.command}: ${verdict.reason}`);
+      else toast.error(`${verdict.command} rejected — ${verdict.reason}`);
+      void queryClient.invalidateQueries({ queryKey: ["system-snapshot"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   return (
@@ -108,6 +123,33 @@ function OperatorConsole() {
             health={snapshot.data.health}
             connections={snapshot.data.connections}
           />
+
+          <Panel
+            title="Runtimes"
+            hint="both environments, always visible — one process runs exactly one of them"
+          >
+            <RuntimeEnvironments
+              activeEnvironment={snapshot.data.activeEnvironment}
+              runtime={snapshot.data.runtime}
+              connections={snapshot.data.connections}
+              twap={snapshot.data.engine.twap}
+              audit={snapshot.data.resourceAudit}
+              inactive={snapshot.data.inactive}
+              pending={runtimeCommand.isPending}
+              onStart={(environment) =>
+                runtimeCommand.mutate({
+                  kind: "RUNTIME_START",
+                  environment: environment as "V1_TESTNET" | "V2_MAINNET",
+                })
+              }
+              onStop={(environment) =>
+                runtimeCommand.mutate({
+                  kind: "RUNTIME_STOP",
+                  environment: environment as "V1_TESTNET" | "V2_MAINNET",
+                })
+              }
+            />
+          </Panel>
 
           <Panel title="Current trading target" hint="the market SPACE is pointed at right now">
             <TradingTargetCard

@@ -220,3 +220,16 @@ export function engineRuntimeSnapshot() {
     },
   };
 }
+
+/** Live resource counts for the runtime resource audit. */
+export function engineResources(): {
+  loops: number;
+  binanceFeeds: number;
+  chainlinkFeeds: number;
+} {
+  return {
+    loops: started ? 1 : 0,
+    binanceFeeds: binance ? 1 : 0,
+    chainlinkFeeds: chainlink ? 1 : 0,
+  };
+}

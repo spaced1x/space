@@ -70,4 +70,20 @@ export const eventBus = {
   recent(limit = 50): EventEnvelope[] {
     return recent.slice(-limit).reverse();
   },
+
+  /** Live subscriber counts — used by the runtime resource audit. */
+  stats(): { types: number; handlers: number; wildcard: number } {
+    let total = 0;
+    for (const set of handlers.values()) total += set.size;
+    return { types: handlers.size, handlers: total + wildcard.size, wildcard: wildcard.size };
+  },
+
+  /**
+   * Drop every subscriber. Called only by the runtime teardown so a restart or
+   * environment switch cannot leave a second generation of listeners attached.
+   */
+  clearSubscribers(): void {
+    handlers.clear();
+    wildcard.clear();
+  },
 };

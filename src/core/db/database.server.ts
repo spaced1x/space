@@ -176,15 +176,33 @@ export async function databaseHealth(): Promise<HealthResult> {
 
 // Graceful shutdown: checkpoint WAL and release the file handle exactly once.
 export async function closeDatabase(): Promise<void> {
-  const current = await initDatabase();
-  if (!current.driver) return;
+  // Never re-open on the way out: if nothing is attached there is nothing to
+  // close, and awaiting initDatabase() here would open a handle during teardown.
+  const driver = state.driver;
+  if (!driver) {
+    initPromise = undefined;
+    state.appliedMigrations = [];
+    delete state.error;
+    delete state.environmentStamp;
+    delete state.stampMismatch;
+    return;
+  }
   try {
-    current.driver.exec("PRAGMA wal_checkpoint(TRUNCATE);");
-    current.driver.close();
+    driver.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+    driver.close();
     log.info("database closed");
   } finally {
     delete state.driver;
     delete state.openedAt;
+    delete state.environmentStamp;
+    delete state.stampMismatch;
+    delete state.error;
+    state.appliedMigrations = [];
     initPromise = undefined;
   }
+}
+
+/** Live resource counts for the runtime resource audit. */
+export function databaseResources(): { connections: number; path: string | null } {
+  return { connections: state.driver ? 1 : 0, path: state.driver?.location ?? null };
 }

@@ -64,12 +64,27 @@ export async function sendTelegramMessage(text: string, type = "broadcast"): Pro
   }
 }
 
+// Exactly one forwarding subscription may exist at a time. A runtime restart or
+// environment switch re-registers, so the previous one is always detached first.
+let unsubscribeForwarding: (() => void) | undefined;
+
 export function registerTelegramEventForwarding(): void {
   // Forward ERROR and WARNING events to Telegram so the operator is notified
   // of critical runtime conditions even when away from the dashboard.
-  eventBus.subscribeAll((event) => {
+  stopTelegramEventForwarding();
+  unsubscribeForwarding = eventBus.subscribeAll((event) => {
     if (event.severity !== "ERROR" && event.severity !== "WARNING") return;
     const text = `<b>[${event.severity}] ${event.source}</b>\n${event.type}\n${event.correlationId ?? ""}`;
     void sendTelegramMessage(text, "event");
   });
+}
+
+export function stopTelegramEventForwarding(): void {
+  unsubscribeForwarding?.();
+  unsubscribeForwarding = undefined;
+}
+
+/** Live resource counts for the runtime resource audit. */
+export function telegramForwardingResources(): { forwarders: number } {
+  return { forwarders: unsubscribeForwarding ? 1 : 0 };
 }
