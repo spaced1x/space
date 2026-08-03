@@ -10,10 +10,21 @@ export function buildPrediction(
   twap: TwapReading,
   ptb: number | null,
   activeWindow: WindowRecord | null,
+  /** Optional previous TWAP reading, used only to describe the trend. */
+  previousTwap: number | null = null,
 ): BotPrediction {
   const settlementTwap = twap.value;
   const frozen = activeWindow?.frozen ?? null;
   const buffer = activeWindow?.buffer ?? null;
+
+  const trend: BotPrediction["trend"] =
+    settlementTwap === null || previousTwap === null
+      ? null
+      : settlementTwap > previousTwap
+        ? "RISING"
+        : settlementTwap < previousTwap
+          ? "FALLING"
+          : "FLAT";
 
   if (settlementTwap === null || ptb === null) {
     return {
@@ -25,6 +36,8 @@ export function buildPrediction(
       frozenTrigger: frozen?.frozenTrigger ?? null,
       suggestion: "NONE",
       note: settlementTwap === null ? "settlement TWAP unavailable" : "no validated PTB",
+      confidence: null,
+      trend,
     };
   }
 
@@ -41,5 +54,8 @@ export function buildPrediction(
     note: frozen
       ? "advisory view; the active window trades its frozen trigger"
       : "advisory view; no window is open",
+    confidence:
+      buffer && buffer > 0 ? Math.min(1, Math.abs(difference) / buffer) : difference === 0 ? 0 : 1,
+    trend,
   };
 }
