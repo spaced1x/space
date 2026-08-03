@@ -5,9 +5,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { ConsoleShell, Panel } from "../components/space/console-shell";
+import { CommandDeck } from "../components/space/command-deck";
 import { Button } from "../components/ui/button";
 import type { OperationsConfig } from "../core/config/operations";
+import type { Command } from "../core/bus/commands";
 import { getOperations, updateOperations } from "../lib/operations.functions";
+import { getSystemSnapshot, sendCommand } from "../lib/system.functions";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -36,7 +39,25 @@ function OperationsDesk() {
   const queryClient = useQueryClient();
   const fetchOperations = useServerFn(getOperations);
   const stage = useServerFn(updateOperations);
+  const fetchSnapshot = useServerFn(getSystemSnapshot);
+  const dispatch = useServerFn(sendCommand);
   const [draft, setDraft] = useState<OperationsConfig | null>(null);
+
+  const snapshot = useQuery({
+    queryKey: ["system-snapshot"],
+    queryFn: () => fetchSnapshot(),
+    refetchInterval: 5000,
+  });
+
+  const command = useMutation({
+    mutationFn: (input: Command) => dispatch({ data: input }),
+    onSuccess: (verdict) => {
+      if (verdict.status === "ACCEPTED") toast.success(`${verdict.command}: ${verdict.reason}`);
+      else toast.error(`${verdict.command} rejected — ${verdict.reason}`);
+      void queryClient.invalidateQueries({ queryKey: ["system-snapshot"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const operations = useQuery({
     queryKey: ["operations"],
@@ -85,6 +106,16 @@ function OperationsDesk() {
         <p className="font-mono text-sm text-muted-foreground">loading configuration…</p>
       ) : (
         <>
+          {snapshot.data && (
+            <Panel title="Engine" hint="ARMED is only ever reached by an explicit operator command">
+              <CommandDeck
+                runtime={snapshot.data.runtime}
+                pending={command.isPending}
+                onCommand={(input) => command.mutate(input)}
+              />
+            </Panel>
+          )}
+
           <Panel
             title="Configuration version"
             hint={`staged v${draft.version} · active v${operations.data.active.version}`}
