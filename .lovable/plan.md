@@ -103,11 +103,81 @@ Confirmed: `getSystemSnapshot` is the single source of truth for runtime state. 
 
 ## Corrective work before Phase 2
 
-1. **Runtime owns boot.** Move `boot()` to process start (server entry). Server functions become pure readers; if the runtime is not booted they return a `NOT_BOOTED` snapshot rather than starting it. Remove all 24 in-handler `boot()` calls.
-2. **One poller.** Delete the duplicate snapshot query in `runtime-diagnostics.tsx` and feed it from `useRuntimeSnapshot`. Fold `production-panel.tsx`'s five polls and diagnostics' snapshot-derived fields into the snapshot. Keep separate queries only for replay, statistics and the manual desk, on explicit refresh or a single slow interval.
-3. **Clock parity.** Compute relative times from a snapshot-supplied `generatedAt` and render them client-side only, so SSR and hydration agree.
-4. **Restart-durable history.** Persist connection state changes, resource audits and events to SQLite so the timeline survives PM2 restart, environment switch and reboot.
-5. **Remote-capable read path.** Expose the frozen snapshot at `/api/runtime/snapshot` and have the dashboard read from a configured runtime base URL (defaulting to same-origin), so a browser can point at a VPS runtime unchanged.
-6. **Four-way verification.** Playwright over all 7 pages in Lovable Preview, Preview URL, local `bun run build && bun run start`, and VPS — identical values, zero console errors, no fabricated data.
+### 1. Runtime startup contract — the runtime is fully independent of the dashboard
+
+PM2 starts SPACE. SPACE boots itself. The runtime reaches READY on its own and begins operating. The dashboard may connect at any time afterwards, or never.
+
+- Opening a browser must NOT start the runtime.
+- Closing every browser tab must NOT stop the runtime.
+- Refreshing the browser must NOT restart the runtime.
+- If no dashboard ever opens, the runtime keeps trading.
+
+`boot()` moves to the process entry point and is invoked exactly once there. All 24 in-handler `boot()` calls are removed. A read that arrives before READY returns the current lifecycle state (including `NOT_BOOTED`) — it never triggers a boot.
+
+### 2. The snapshot API is the only runtime API
+
+Two endpoints, and nothing else, may be read by any page:
+
+- `GET /api/runtime/snapshot` — the frozen snapshot
+- `GET /api/runtime/health` — machine-readable health
+
+Enforced rules:
+
+- No page may import a runtime module.
+- No page may import or read runtime in-process state.
+- No page may call `boot()`.
+- No page may touch SQLite.
+- Every runtime value on every screen is derived from those two responses.
+
+Existing per-page server functions that read runtime state are deleted or reduced to non-runtime data (replay reconstruction, statistics aggregation, manual desk book). Commands remain a separate write path through the command bus. An import guard (lint rule / import-boundary check) keeps pages from reaching into `src/core` again.
+
+### 3. Snapshot versioning and ordering
+
+Every snapshot carries: `snapshotVersion`, `runtimeVersion`, `buildVersion`, `environment`, `generatedAt`, `sequence`.
+
+- A snapshot with an unknown or older `snapshotVersion` is rejected, not rendered.
+- A snapshot whose `sequence` is lower than the one already held is discarded.
+- The browser only ever renders the newest accepted snapshot.
+
+### 4. Abstract transport (future-proofing)
+
+The dashboard reads through a single transport interface — subscribe to snapshots, receive snapshots. Today it is implemented by polling. Tomorrow a WebSocket snapshot stream replaces the implementation with no change to any page or panel.
+
+### 5. No runtime logic in React
+
+React renders. It never computes strategy, risk, health, validation, execution outcomes, connection state, provider selection, or runtime status. Every such value arrives already decided by the runtime. Any derived field a panel wants is added to the snapshot, not calculated in a component.
+
+### 6. Time originates in the runtime
+
+Every timestamp, age, countdown and duration is produced by the runtime and shipped in the snapshot. The browser formats strings only. No `Date.now()` for runtime values, no runtime state derived from browser time. This removes the SSR/hydration mismatch in `connection-card.tsx`, `connection-history.tsx`, `twap-provider-card.tsx`, `trading-target-card.tsx` and `index.tsx`.
+
+### 7. Runtime history persistence
+
+Persist to SQLite so Diagnostics survives every restart: runtime lifecycle transitions, boot timeline, connection history, resource audits, runtime validation results, provider switches, environment switches, TWAP provider changes, runtime failures, runtime recoveries.
+
+### 8. VPS deployment requirement
+
+Identical behaviour on Lovable Preview, the Preview URL, `bun run build`, PM2 on the VPS, behind an Nginx reverse proxy, and behind Cloudflare later. No environment-specific code, no preview-only behaviour, no localhost assumptions, no hot-reload assumptions, no embedded-runtime assumptions. The dashboard reaches the runtime through a configured base URL defaulting to same-origin, so it can also view a remote VPS runtime unchanged.
+
+### 9. Acceptance criteria
+
+Phase 2 is not complete until all of these hold:
+
+- Runtime starts without a browser.
+- Browser reconnects instantly.
+- Browser refresh loses nothing.
+- Runtime survives browser close.
+- Runtime survives PM2 restart.
+- Runtime survives V1/V2 switching.
+- Snapshot API remains the single source of truth.
+- Zero duplicate polling.
+- Zero duplicate runtime state.
+- Zero dashboard-owned runtime logic.
+- Zero browser-owned runtime state.
+- Production build identical to Preview.
+- VPS identical to Preview.
+- No React warnings, no hydration warnings, no console errors.
+
+Verified by Playwright across all 7 operator pages in Lovable Preview, the Preview URL, local `bun run build && bun run start`, and the VPS.
 
 Nothing here adds product features; it removes the ways the dashboard has started behaving like an application instead of a thin operator view.
