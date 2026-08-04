@@ -20,6 +20,16 @@ Automated + manual sweep, results captured in a report:
 - Remaining `console.*` in runtime paths routed through the structured logger (`src/lib/error-capture.ts`, `src/server.ts`, `src/core/logging/logger.ts`, `src/start.ts`, `src/routes/__root.tsx`, `src/lib/system.functions.ts` reviewed individually; boot-before-logger sites keep a documented exception).
 - Zero TODO/FIXME confirmed and enforced by a lint rule so it stays zero.
 
+Audit third-party dependencies. Identify:
+
+- unused packages
+- duplicate packages
+- outdated packages
+- vulnerable packages
+- abandoned packages
+
+Remove anything unused and document any package intentionally retained.
+
 ## Step B — Long-running stability instrumentation
 
 Extend `src/core/metrics/metrics.server.ts` and the snapshot with a `stability` block:
@@ -30,6 +40,28 @@ Extend `src/core/metrics/metrics.server.ts` and the snapshot with a `stability` 
 - Per-connection reconnect counts and uptime ratio, snapshot generation count + p50/p95 duration, CPU time delta.
 
 Leak detection turns growth into a health signal (WARN/FAIL thresholds), surfaced in Diagnostics and included in the Resource Audit verdict.
+
+## Step B.5 — Real VPS Soak Verification
+
+The accelerated soak harness validates runtime behaviour before deployment, but the final release candidate additionally requires one uninterrupted real VPS paper-trading soak.
+
+Acceptance criteria:
+
+- Runtime remains continuously available.
+- No memory leak.
+- No increasing heap trend.
+- No duplicated timers.
+- No duplicated schedulers.
+- No duplicated WebSockets.
+- No duplicated event listeners.
+- No SQLite corruption.
+- No runtime restart unless intentionally triggered.
+- Replay and Statistics remain consistent.
+- Resource Audit remains PASS throughout.
+- Snapshot generation remains deterministic.
+- All runtime connections recover automatically where expected.
+
+The release report must distinguish Accelerated Soak results from Real VPS Soak results.
 
 ## Step C — Fault injection and recovery verification
 
@@ -60,13 +92,78 @@ Measure and record: boot time by stage, snapshot generation, scheduler/TWAP/disc
 
 Verify graceful shutdown/restart, crash recovery, cold boot, warm restart, simulated reboot (fresh process against existing data dir), database recovery, runtime-target recovery, environment recovery, snapshot and connection recovery — all with zero operator intervention. Documented as a reproducible checklist plus the exact PM2 commands.
 
+Also verify unexpected termination scenarios:
+
+- SIGTERM
+- SIGINT
+- uncaught exception
+- unhandled promise rejection
+- PM2 restart
+- PM2 reload
+- host reboot
+
+Each must leave SQLite consistent, release locks correctly, and restore the runtime automatically on restart.
+
+## Step H.5 — Runtime Ownership Verification
+
+Verify there is exactly one owner for:
+
+- Runtime lifecycle
+- Boot
+- Shutdown
+- Scheduler
+- Engine loop
+- Runtime snapshot
+- Connection registry
+- Resource Audit
+- Runtime Validation
+- Provider Registry
+- Venue Selector
+
+No module may assume ownership already held by another runtime component.
+
 ## Step I — Documentation and release artifacts
 
 Update `docs/` to final state (runtime, trading, execution, venue, TWAP, snapshot, replay, statistics architecture; DB schema; connection, boot, recovery lifecycles; resource audit; validation; environment switching; V1 paper / V2 live; deployment, PM2, backup, restore, release, troubleshooting, known limitations) and publish `docs/releases/v1.0.0-rc/` with all 22 deliverables, including the five diagrams, state machine, changed-file list, migration list, env-var list, runtime commands, external dependencies, and the explicit production-readiness confirmations.
 
+The final report must explicitly state one of:
+
+PRODUCTION READY
+
+or
+
+NOT PRODUCTION READY
+
+If NOT PRODUCTION READY, every blocking issue must be listed together with its runtime impact and required remediation.
+
+## Step I.5 — Release Candidate Freeze
+
+After Phase 4 passes:
+
+- No new features.
+- No architecture changes.
+- No UI redesign.
+- No new runtime services.
+- Only production bug fixes are permitted.
+
+Any future functional change requires a new release cycle.
+
 ## Step J — Release gate
 
 Encode the Step 15 checklist as an executable gate (`bun run release:gate`) that runs typecheck, lint, tests, production build, resource audit, runtime validation, snapshot determinism, leak thresholds and secret-redaction checks. The release is PASS only if the gate exits clean; any item that cannot be machine-verified is listed as an operator-signed manual item rather than silently marked pass.
+
+The release gate must fail immediately if any of the following are detected:
+
+- duplicate runtime ownership
+- resource audit failure
+- runtime validation failure
+- replay/statistics mismatch
+- parity failure between V1 and V2
+- secret leakage
+- snapshot version mismatch
+- schema migration failure
+- unexpected database mutation
+- failing stress harness
 
 ## Technical notes
 
