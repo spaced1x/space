@@ -3,6 +3,7 @@ import { loadEnv } from "../config/env.server";
 import { createLogger } from "../logging/logger";
 import type { HealthResult } from "../health/types";
 import type { FeedStats, PriceFeed, PriceSample } from "./types";
+import { spaceFetch } from "../shared/http.server";
 
 // Chainlink adapter: latest answer, its on-chain timestamp and the round-trip
 // latency. Pull feed — the scheduler decides when it runs. No strategy here.
@@ -35,7 +36,7 @@ export function createChainlinkFeed(onSample: (sample: PriceSample) => void): Pr
 
   async function read(): Promise<void> {
     const startedAt = clock().now();
-    const response = await fetch(rpcUrl, {
+    const { response } = await spaceFetch("chainlink", rpcUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
