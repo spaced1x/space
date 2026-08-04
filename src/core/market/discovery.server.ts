@@ -47,6 +47,26 @@ interface GammaMarket {
   umaResolutionStatus?: string;
 }
 
+interface GammaEvent {
+  slug?: string;
+  closed?: boolean;
+  markets?: GammaMarket[];
+}
+
+/**
+ * Official BTC up/down series slug: `btc-updown-<5m|15m>-<window start epoch>`.
+ * The slug is the only reliable horizon signal — `startDate` on these markets
+ * is the row's creation time, not the window open, so a duration derived from
+ * start/end is meaningless and previously matched nothing.
+ */
+const BTC_UPDOWN_SLUG = /^btc-updown-(5m|15m)-\d+$/;
+
+function horizonFromSlug(slug: string | undefined): MarketHorizon | null {
+  const match = BTC_UPDOWN_SLUG.exec(slug ?? "");
+  if (!match) return null;
+  return match[1] === "5m" ? "FIVE_MINUTE" : "FIFTEEN_MINUTE";
+}
+
 function asArray(value: string | string[] | undefined): string[] {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string") return [];
@@ -63,25 +83,6 @@ function asNumber(value: string | number | undefined): number | null {
   if (value === undefined || value === null || value === "") return null;
   const parsed = typeof value === "number" ? value : Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-// Horizon is derived from the market's own start/end metadata, never guessed
-// from the title alone.
-function classify(market: GammaMarket): MarketHorizon | null {
-  const start = Date.parse(market.startDate ?? market.gameStartTime ?? "");
-  const end = Date.parse(market.endDate ?? "");
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  const minutes = Math.round((end - start) / 60_000);
-  if (minutes === 5) return "FIVE_MINUTE";
-  if (minutes === 15) return "FIFTEEN_MINUTE";
-  return null;
-}
-
-function isBitcoinUpDown(market: GammaMarket): boolean {
-  const text = `${market.slug ?? ""} ${market.question ?? ""}`.toLowerCase();
-  const bitcoin = text.includes("bitcoin") || /\bbtc\b/.test(text);
-  const updown = text.includes("up or down") || text.includes("up-or-down");
-  return bitcoin && updown;
 }
 
 // PTB comes from official metadata when present; otherwise the strike embedded
