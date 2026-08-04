@@ -119,8 +119,11 @@ function positionLifecycle(execution: ReturnType<typeof executionSnapshot>): Pos
   const positions = execution.positions;
   if (!positions.length) return "WAITING";
   const latest = positions.at(-1)!;
-  if (latest.status === "SETTLED") return "SETTLED";
-  if (latest.status === "CLOSED") return "CLOSED";
+  if (latest.status === "CLOSED") {
+    return latest.settlementValue === null || latest.settlementValue === undefined
+      ? "CLOSED"
+      : "SETTLED";
+  }
   if (latest.status === "ACTIVE") {
     const opening = execution.activeOrders.some(
       (order) => order.conditionId === latest.conditionId,
@@ -251,7 +254,7 @@ export function pipelineSnapshot(): PipelineSnapshot {
     {
       id: "strategy",
       label: "Strategy",
-      state: reading.state === "READY" ? "OK" : "WAITING",
+      state: reading.state === "OK" ? "OK" : reading.state === "STALE" ? "DEGRADED" : "WAITING",
       input: `settlement TWAP ${reading.samples} sample(s)`,
       output: openWindow
         ? `window ${openWindow.id} · ${strategy.prediction.direction ?? "no direction"}`
@@ -260,7 +263,7 @@ export function pipelineSnapshot(): PipelineSnapshot {
       lastSuccessAt: reading.lastUpdateAt,
       lastFailureAt: null,
       lastError: null,
-      waitingReason: reading.state === "READY" ? null : reading.message,
+      waitingReason: reading.state === "OK" ? null : reading.message,
       recovery: "Automatic — the frozen window reopens on the next settlement cycle",
     },
     {
