@@ -47,3 +47,40 @@ describe("runtime scheduler", () => {
     expect(schedulerHealth().state).toBe("DISABLED");
   });
 });
+describe("scheduler jitter and duplicate detection", () => {
+  beforeEach(() => {
+    resetSchedulerForTests();
+  });
+
+  it("records jitter for every run", async () => {
+    registerTask({ name: "jitter", intervalMs: 100, runOnStart: true, run: () => {} });
+    await runDueTasksForTests();
+    const task = schedulerStatus().tasks[0]!;
+    expect(task.lastJitterMs).not.toBeNull();
+    expect(task.maxJitterMs).toBeGreaterThanOrEqual(0);
+    expect(task.avgJitterMs).not.toBeNull();
+  });
+
+  it("counts a duplicate registration and reports it as degraded", async () => {
+    registerTask({ name: "dup", intervalMs: 100, runOnStart: true, run: () => {} });
+    registerTask({ name: "dup", intervalMs: 100, runOnStart: true, run: () => {} });
+    const status = schedulerStatus();
+    expect(status.tasks).toHaveLength(1);
+    expect(status.duplicateRegistrations).toBe(1);
+    await runDueTasksForTests();
+    expect(schedulerHealth().state).toBe("DEGRADED");
+  });
+
+  it("counts missed slots when a run overruns its interval", async () => {
+    registerTask({
+      name: "slow",
+      intervalMs: 100,
+      runOnStart: true,
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 260));
+      },
+    });
+    await runDueTasksForTests();
+    expect(schedulerStatus().tasks[0]!.missedRuns).toBeGreaterThan(0);
+  });
+});
