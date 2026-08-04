@@ -4,13 +4,7 @@ import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 
 export type RuntimeLifecycle =
-  | "STOPPED"
-  | "STARTING"
-  | "VALIDATING"
-  | "READY"
-  | "RUNNING"
-  | "STOPPING"
-  | "FAILED";
+  "STOPPED" | "STARTING" | "VALIDATING" | "READY" | "RUNNING" | "STOPPING" | "FAILED";
 
 export type OperatingMode = "STRATEGY" | "MANUAL";
 

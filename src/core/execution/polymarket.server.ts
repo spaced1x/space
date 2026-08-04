@@ -184,8 +184,7 @@ export const polymarketAdapter: VenueAdapter = {
             tokenID: request.tokenId,
             side,
             // BUY market orders are denominated in collateral, SELL in shares.
-            amount:
-              request.side === "BUY" ? request.size * (request.price ?? 1) : request.size,
+            amount: request.side === "BUY" ? request.size * (request.price ?? 1) : request.size,
             ...(request.price !== null ? { price: request.price } : {}),
           });
           return client.postOrder(signed, OrderType.FOK);
@@ -219,7 +218,9 @@ export const polymarketAdapter: VenueAdapter = {
 
   async cancel(venueOrderId: string): Promise<void> {
     const { client } = require_();
-    await withRateLimit("clob_submit", () => track(() => client.cancelOrder({ orderID: venueOrderId })));
+    await withRateLimit("clob_submit", () =>
+      track(() => client.cancelOrder({ orderID: venueOrderId })),
+    );
   },
 
   async status(venueOrderId: string): Promise<VenueOrderStatus | null> {
@@ -254,7 +255,9 @@ export const polymarketAdapter: VenueAdapter = {
       tokenId: String(trade.asset_id),
       size: num(trade.size),
       price: num(trade.price),
-      at: trade.match_time ? new Date(num(trade.match_time) * 1000).toISOString() : systemClock.iso(),
+      at: trade.match_time
+        ? new Date(num(trade.match_time) * 1000).toISOString()
+        : systemClock.iso(),
       status: String(trade.status ?? "UNKNOWN"),
     }));
   },

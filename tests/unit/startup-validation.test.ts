@@ -29,7 +29,9 @@ const mockOperations = {
 };
 
 const mockLock = { instanceLockHeld: vi.fn(() => true) };
-const mockRecovery = { executionRecoveryStatus: vi.fn(() => ({ state: "OK", message: "recovered" })) };
+const mockRecovery = {
+  executionRecoveryStatus: vi.fn(() => ({ state: "OK", message: "recovered" })),
+};
 
 let runtimeState = {
   engineStatus: "OBSERVE",

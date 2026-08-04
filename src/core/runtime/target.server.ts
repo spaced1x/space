@@ -88,7 +88,11 @@ export function requestEnvironmentSwitch(
     requestedBy,
   };
   writeRuntimeTarget(next);
-  log.info("environment switch requested", { from: current.environment, to: environment, requestedBy });
+  log.info("environment switch requested", {
+    from: current.environment,
+    to: environment,
+    requestedBy,
+  });
   return next;
 }
 

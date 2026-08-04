@@ -40,51 +40,51 @@ export function RuntimeDiagnostics() {
           </p>
         ) : null}
         <div className="overflow-x-auto rounded-md border border-border bg-card">
-        <table className="w-full min-w-[64rem] text-table">
-          <thead className="bg-muted/60 text-label text-muted-foreground">
-            <tr>
-              <Th>Stage</Th>
-              <Th>State</Th>
-              <Th>Input</Th>
-              <Th>Output</Th>
-              <Th>Latency</Th>
-              <Th>Last success</Th>
-              <Th>Waiting / error</Th>
-              <Th>Recovery</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {data.pipeline.stages.map((stage) => (
-              <tr key={stage.id}>
-                <Td>{stage.label}</Td>
-                <Td
-                  mono
-                  className={
-                    stage.state === "OK"
-                      ? "text-ok"
-                      : stage.state === "FAILED"
-                        ? "text-fail"
-                        : stage.state === "DISABLED"
-                          ? "text-muted-foreground"
-                          : "text-warn"
-                  }
-                >
-                  {stage.state}
-                </Td>
-                <Td mono>{stage.input}</Td>
-                <Td mono>{stage.output}</Td>
-                <Td mono>{stage.latencyMs === null ? "—" : `${stage.latencyMs} ms`}</Td>
-                <Td mono>
-                  {stage.lastSuccessAt ? new Date(stage.lastSuccessAt).toLocaleTimeString() : "—"}
-                </Td>
-                <Td className={stage.lastError ? "text-fail" : ""}>
-                  {stage.lastError ?? stage.waitingReason ?? "—"}
-                </Td>
-                <Td>{stage.recovery}</Td>
+          <table className="w-full min-w-[64rem] text-table">
+            <thead className="bg-muted/60 text-label text-muted-foreground">
+              <tr>
+                <Th>Stage</Th>
+                <Th>State</Th>
+                <Th>Input</Th>
+                <Th>Output</Th>
+                <Th>Latency</Th>
+                <Th>Last success</Th>
+                <Th>Waiting / error</Th>
+                <Th>Recovery</Th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {data.pipeline.stages.map((stage) => (
+                <tr key={stage.id}>
+                  <Td>{stage.label}</Td>
+                  <Td
+                    mono
+                    className={
+                      stage.state === "OK"
+                        ? "text-ok"
+                        : stage.state === "FAILED"
+                          ? "text-fail"
+                          : stage.state === "DISABLED"
+                            ? "text-muted-foreground"
+                            : "text-warn"
+                    }
+                  >
+                    {stage.state}
+                  </Td>
+                  <Td mono>{stage.input}</Td>
+                  <Td mono>{stage.output}</Td>
+                  <Td mono>{stage.latencyMs === null ? "—" : `${stage.latencyMs} ms`}</Td>
+                  <Td mono>
+                    {stage.lastSuccessAt ? new Date(stage.lastSuccessAt).toLocaleTimeString() : "—"}
+                  </Td>
+                  <Td className={stage.lastError ? "text-fail" : ""}>
+                    {stage.lastError ?? stage.waitingReason ?? "—"}
+                  </Td>
+                  <Td>{stage.recovery}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Panel>
 
@@ -192,9 +192,7 @@ export function RuntimeDiagnostics() {
                     {audit.passed ? "PASS" : `FAIL — ${audit.failures.join("; ")}`}
                   </Td>
                   <Td mono>
-                    {audit.checks
-                      .map((entry) => `${entry.resource}=${entry.observed}`)
-                      .join("  ")}
+                    {audit.checks.map((entry) => `${entry.resource}=${entry.observed}`).join("  ")}
                   </Td>
                 </tr>
               ))}

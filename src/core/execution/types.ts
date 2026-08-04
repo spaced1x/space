@@ -87,7 +87,10 @@ const ORDER_LIFECYCLE: Record<OrderState, OrderLifecycleState> = {
   FAILED: "FAILED",
 };
 
-export function orderLifecycleOf(state: OrderState, venueOrderId?: string | null): OrderLifecycleState {
+export function orderLifecycleOf(
+  state: OrderState,
+  venueOrderId?: string | null,
+): OrderLifecycleState {
   const lifecycle = ORDER_LIFECYCLE[state];
   if (lifecycle === "SUBMITTED" && venueOrderId) return "ACKNOWLEDGED";
   return lifecycle;
@@ -110,13 +113,7 @@ export interface OrderTransitionRecord {
 }
 
 export type PositionTransitionKind =
-  | "OPENING"
-  | "OPENED"
-  | "INCREASING"
-  | "REDUCING"
-  | "PARTIALLY_CLOSED"
-  | "CLOSED"
-  | "SETTLED";
+  "OPENING" | "OPENED" | "INCREASING" | "REDUCING" | "PARTIALLY_CLOSED" | "CLOSED" | "SETTLED";
 
 /** One append-only row per derived position lifecycle change. */
 export interface PositionTransitionRecord {
@@ -134,11 +131,7 @@ export interface PositionTransitionRecord {
 
 /** The single sizing decision every trading path consumes. */
 export type SizingCap =
-  | "NONE"
-  | "WINDOW_SIZE"
-  | "MANUAL_REQUEST"
-  | "MAX_POSITIONS"
-  | "TRADING_DISABLED";
+  "NONE" | "WINDOW_SIZE" | "MANUAL_REQUEST" | "MAX_POSITIONS" | "TRADING_DISABLED";
 
 export interface SizingDecision {
   intentId: string;

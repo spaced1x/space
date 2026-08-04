@@ -95,7 +95,12 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
           ? await startRuntime(`operator start (${context.actor})`)
           : await switchRuntimeEnvironment(command.environment, context.actor);
       return {
-        ...verdict(result.ok ? "ACCEPTED" : "REJECTED", result.reason, command.kind, context.correlationId),
+        ...verdict(
+          result.ok ? "ACCEPTED" : "REJECTED",
+          result.reason,
+          command.kind,
+          context.correlationId,
+        ),
         details: {
           environment: result.environment,
           auditPassed: result.audit.passed,
@@ -111,7 +116,12 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       }
       const result = await stopRuntime(`operator stop (${context.actor})`);
       return {
-        ...verdict(result.ok ? "ACCEPTED" : "REJECTED", result.reason, command.kind, context.correlationId),
+        ...verdict(
+          result.ok ? "ACCEPTED" : "REJECTED",
+          result.reason,
+          command.kind,
+          context.correlationId,
+        ),
         details: {
           environment: result.environment,
           auditPassed: result.audit.passed,
@@ -172,7 +182,12 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
       if (state.emergencyStop) return reject("emergency stop is already latched");
       const reason = command.reason ?? "operator emergency stop";
       latchEmergencyStop(reason, context.correlationId);
-      return verdict("ACCEPTED", `emergency stop latched: ${reason}`, command.kind, context.correlationId);
+      return verdict(
+        "ACCEPTED",
+        `emergency stop latched: ${reason}`,
+        command.kind,
+        context.correlationId,
+      );
     }
     case "RESET_EMERGENCY_STOP": {
       if (!state.emergencyStop) return reject("emergency stop is not latched");
@@ -202,7 +217,12 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
     }
     case "TELEGRAM_BROADCAST": {
       await sendTelegramMessage(command.message, "operator");
-      return verdict("ACCEPTED", "message queued for Telegram", command.kind, context.correlationId);
+      return verdict(
+        "ACCEPTED",
+        "message queued for Telegram",
+        command.kind,
+        context.correlationId,
+      );
     }
     case "STAGE_OPERATIONS": {
       // Imported lazily so the command bus stays free of configuration and
@@ -225,12 +245,7 @@ async function defaultHandler(command: Command, context: CommandContext): Promis
         size: command.size,
       });
       return {
-        ...verdict(
-          result.status,
-          result.reason,
-          command.kind,
-          context.correlationId,
-        ),
+        ...verdict(result.status, result.reason, command.kind, context.correlationId),
         details: {
           orderId: result.order?.id ?? null,
           intentId: result.order?.intentId ?? null,

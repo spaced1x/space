@@ -79,7 +79,10 @@ export function ProductionPanel() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="RSS" value={`${(metrics.latest.memory_rss_mb ?? 0).toFixed(1)} MB`} />
             <Metric label="Heap" value={`${(metrics.latest.memory_heap_mb ?? 0).toFixed(1)} MB`} />
-            <Metric label="DB size" value={`${((metrics.latest.db_size_bytes ?? 0) / 1024 / 1024).toFixed(2)} MB`} />
+            <Metric
+              label="DB size"
+              value={`${((metrics.latest.db_size_bytes ?? 0) / 1024 / 1024).toFixed(2)} MB`}
+            />
             <Metric label="Tick drift" value={`${metrics.latest.scheduler_drift_ms ?? 0} ms`} />
           </div>
         ) : (

@@ -178,7 +178,10 @@ export const paperAdapter: VenueAdapter = {
       rejections += 1;
       throw new Error(`paper venue rejected the order: size ${request.size} below venue minimum`);
     }
-    if (request.kind === "LIMIT" && (request.price === null || request.price <= 0 || request.price >= 1)) {
+    if (
+      request.kind === "LIMIT" &&
+      (request.price === null || request.price <= 0 || request.price >= 1)
+    ) {
       rejections += 1;
       throw new Error(`paper venue rejected the order: invalid limit price ${request.price}`);
     }
@@ -226,7 +229,12 @@ export const paperAdapter: VenueAdapter = {
         venueOrderId,
         status: "MATCHED",
         filledSize: order.filledSize,
-        raw: { simulated: true, averagePrice, levelsTouched: result.levelsTouched, liquidity: "book" },
+        raw: {
+          simulated: true,
+          averagePrice,
+          levelsTouched: result.levelsTouched,
+          liquidity: "book",
+        },
       };
     }
 

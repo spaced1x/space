@@ -53,9 +53,6 @@ export const releaseRepository = {
 
   async recordRollback(version: string, reason: string): Promise<void> {
     const driver = await requireDriver();
-    driver.run(
-      `UPDATE release_artifacts SET reason = ? WHERE version = ?`,
-      [reason, version],
-    );
+    driver.run(`UPDATE release_artifacts SET reason = ? WHERE version = ?`, [reason, version]);
   },
 };

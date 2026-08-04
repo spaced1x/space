@@ -177,7 +177,7 @@ export function createChainlinkStreamsProvider(): TwapProvider {
       const env = loadEnv();
       client = createWsClient({
         name: "chainlink-streams",
-    faultTarget: "chainlink",
+        faultTarget: "chainlink",
         url: () => {
           const url = new URL(config.wsUrl);
           url.pathname = url.pathname === "/" ? "/api/v1/ws" : url.pathname;

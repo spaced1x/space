@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { FAULT_TARGETS, FAULT_TARGET_LABELS } from "../../src/core/validation/failure-simulation.server";
+import {
+  FAULT_TARGETS,
+  FAULT_TARGET_LABELS,
+} from "../../src/core/validation/failure-simulation.server";
 
 function sourceFiles(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

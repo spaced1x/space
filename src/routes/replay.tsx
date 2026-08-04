@@ -99,9 +99,8 @@ function Replay() {
             <div className="rounded-lg border border-border bg-card p-4 font-mono text-[11px] text-muted-foreground">
               <p className="text-foreground">{market.data.settlement.note}</p>
               <p className="mt-1">
-                status {market.data.settlement.status} · filled{" "}
-                {market.data.settlement.filledSize} · cost $
-                {market.data.settlement.cost.toFixed(2)} · avg{" "}
+                status {market.data.settlement.status} · filled {market.data.settlement.filledSize}{" "}
+                · cost ${market.data.settlement.cost.toFixed(2)} · avg{" "}
                 {market.data.settlement.avgPrice?.toFixed(4) ?? "—"}
               </p>
             </div>
@@ -127,8 +126,7 @@ function Replay() {
                   <p className="mt-2 font-mono text-[11px] text-muted-foreground">
                     opening TWAP {window.openingTwap?.toFixed(2) ?? "—"} · PTB{" "}
                     {window.ptb?.toFixed(2) ?? "—"} · trigger{" "}
-                    {window.frozenTrigger?.toFixed(2) ?? "—"} · direction{" "}
-                    {window.direction ?? "—"}
+                    {window.frozenTrigger?.toFixed(2) ?? "—"} · direction {window.direction ?? "—"}
                   </p>
                   {window.transitions.length > 0 && (
                     <ul className="mt-2 space-y-1 font-mono text-[10px] text-muted-foreground">

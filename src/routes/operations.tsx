@@ -151,16 +151,12 @@ function OperationsDesk() {
               <Toggle
                 label="BTC 5 minute market"
                 value={draft.markets.fiveMinute}
-                onChange={(value) =>
-                  patch({ markets: { ...draft.markets, fiveMinute: value } })
-                }
+                onChange={(value) => patch({ markets: { ...draft.markets, fiveMinute: value } })}
               />
               <Toggle
                 label="BTC 15 minute market"
                 value={draft.markets.fifteenMinute}
-                onChange={(value) =>
-                  patch({ markets: { ...draft.markets, fifteenMinute: value } })
-                }
+                onChange={(value) => patch({ markets: { ...draft.markets, fifteenMinute: value } })}
               />
             </div>
           </Panel>

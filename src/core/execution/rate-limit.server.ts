@@ -107,7 +107,11 @@ class EndpointLimiter {
     const jitter = Math.random() * 0.3 * base;
     const backoff = Math.min(base + jitter, this.config.maxBackoffMs);
     this.backoffUntil = this.now() + backoff;
-    log.warn("rate limit hit", { endpoint: this.endpoint, backoffMs: backoff, total429: this.total429 });
+    log.warn("rate limit hit", {
+      endpoint: this.endpoint,
+      backoffMs: backoff,
+      total429: this.total429,
+    });
     return backoff;
   }
 
@@ -150,7 +154,13 @@ const limiters = new Map<string, EndpointLimiter>();
 export function getRateLimiter(endpoint: string, config?: RateLimitConfig): EndpointLimiter {
   const existing = limiters.get(endpoint);
   if (existing) return existing;
-  const cfg = config ?? DEFAULT_RATE_LIMITS[endpoint] ?? { capacity: 60, windowMs: 60_000, baseBackoffMs: 500, maxBackoffMs: 30_000 };
+  const cfg = config ??
+    DEFAULT_RATE_LIMITS[endpoint] ?? {
+      capacity: 60,
+      windowMs: 60_000,
+      baseBackoffMs: 500,
+      maxBackoffMs: 30_000,
+    };
   const created = new EndpointLimiter(endpoint, cfg);
   limiters.set(endpoint, created);
   return created;

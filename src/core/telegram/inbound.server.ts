@@ -104,17 +104,29 @@ async function handleMessage(text: string, username: string): Promise<void> {
       await sendTelegramMessage(`SPACE status: ${JSON.stringify({ mode })}`, "operator");
       return;
     case "arm": {
-      await dispatchCommand({ kind: "ARM" }, { actor: username, source: "telegram", correlationId: cid });
+      await dispatchCommand(
+        { kind: "ARM" },
+        { actor: username, source: "telegram", correlationId: cid },
+      );
       return;
     }
     case "disarm":
-      await dispatchCommand({ kind: "DISARM" }, { actor: username, source: "telegram", correlationId: cid });
+      await dispatchCommand(
+        { kind: "DISARM" },
+        { actor: username, source: "telegram", correlationId: cid },
+      );
       return;
     case "pause":
-      await dispatchCommand({ kind: "PAUSE" }, { actor: username, source: "telegram", correlationId: cid });
+      await dispatchCommand(
+        { kind: "PAUSE" },
+        { actor: username, source: "telegram", correlationId: cid },
+      );
       return;
     case "resume": {
-      await dispatchCommand({ kind: "RESUME" }, { actor: username, source: "telegram", correlationId: cid });
+      await dispatchCommand(
+        { kind: "RESUME" },
+        { actor: username, source: "telegram", correlationId: cid },
+      );
       return;
     }
     case "mode": {
@@ -146,7 +158,10 @@ async function handleMessage(text: string, username: string): Promise<void> {
       );
       return;
     case "backup": {
-      await dispatchCommand({ kind: "BACKUP" }, { actor: username, source: "telegram", correlationId: cid });
+      await dispatchCommand(
+        { kind: "BACKUP" },
+        { actor: username, source: "telegram", correlationId: cid },
+      );
       return;
     }
     case "broadcast": {

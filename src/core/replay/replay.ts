@@ -59,7 +59,8 @@ export function explainWindow(window: ReplayWindow): string {
     case "COMPLETED": {
       if (!window.intent) return `window triggered but produced no intent: ${window.reason}`;
       const rejected = window.risk.find((decision) => decision.status === "REJECTED");
-      if (rejected) return `intent rejected by the Risk Engine — ${rejected.code}: ${rejected.reason}`;
+      if (rejected)
+        return `intent rejected by the Risk Engine — ${rejected.code}: ${rejected.reason}`;
       if (!window.order) return "intent approved but no order chain was opened";
       if (window.order.state === "FILLED") {
         return `filled ${window.order.filledSize} @ ${window.order.avgPrice ?? "—"} (${window.order.kind})`;
@@ -97,7 +98,10 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
   }
   const riskByIntent = new Map<string, RiskRow[]>();
   for (const decision of input.risk) {
-    riskByIntent.set(decision.intent_id, [...(riskByIntent.get(decision.intent_id) ?? []), decision]);
+    riskByIntent.set(decision.intent_id, [
+      ...(riskByIntent.get(decision.intent_id) ?? []),
+      decision,
+    ]);
   }
   const transitionsByWindow = new Map<string, TransitionRow[]>();
   for (const transition of input.transitions) {
@@ -193,8 +197,7 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
         0,
       )
     : null;
-  const tradedDirection =
-    (input.intents[0]?.direction as "UP" | "DOWN" | undefined) ?? null;
+  const tradedDirection = (input.intents[0]?.direction as "UP" | "DOWN" | undefined) ?? null;
 
   return {
     market: {

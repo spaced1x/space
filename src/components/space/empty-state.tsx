@@ -26,7 +26,10 @@ export function EmptyState({
         <Line term="What" detail={subject} />
         <Line term="Why" detail={reason} />
         <Line term="Action" detail={action ?? "None — monitor"} />
-        <Line term="Blocked" detail={blocksTrading ? "Trading is blocked" : "Trading is not blocked"} />
+        <Line
+          term="Blocked"
+          detail={blocksTrading ? "Trading is blocked" : "Trading is not blocked"}
+        />
         <Line term="Recovery" detail={recovery} />
       </dl>
     </div>

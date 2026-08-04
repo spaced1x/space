@@ -55,7 +55,10 @@ export function RuntimeEnvironments({
           ["Runtime", "ACTIVE in this process"],
           ["Lifecycle", runtime.lifecycle],
           ["Mode", runtime.mode],
-          ["Emergency stop", runtime.emergencyStop ? `LATCHED — ${runtime.emergencyStopReason}` : "clear"],
+          [
+            "Emergency stop",
+            runtime.emergencyStop ? `LATCHED — ${runtime.emergencyStopReason}` : "clear",
+          ],
           ["Connections", `${connected}/${connections.length} connected`],
           ["TWAP provider", twap.activeProviderId.toUpperCase()],
           ["Database", "attached to this environment"],

@@ -13,12 +13,7 @@ import {
 // connection timeline, so a recovery that was never observed cannot be
 // reported, and a recovery that happened silently is impossible to hide.
 
-const FAULT_STATES: ConnectionState[] = [
-  "DISCONNECTED",
-  "FAILED",
-  "STALE",
-  "DEGRADED",
-];
+const FAULT_STATES: ConnectionState[] = ["DISCONNECTED", "FAILED", "STALE", "DEGRADED"];
 
 const RECOVERING_STATES: ConnectionState[] = ["RECONNECTING", "CONNECTING", "WAITING"];
 

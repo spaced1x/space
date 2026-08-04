@@ -27,11 +27,7 @@ export function telegramHealth() {
 
 export async function sendTelegramMessage(text: string, type = "broadcast"): Promise<void> {
   const config = readConfig();
-  const recordId = await telegramRepository.insert(
-    config?.chatId ?? "not_configured",
-    type,
-    text,
-  );
+  const recordId = await telegramRepository.insert(config?.chatId ?? "not_configured", type, text);
   if (!config) {
     log.warn("telegram not configured; message queued but not sent", { recordId });
     return;

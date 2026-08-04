@@ -1,12 +1,6 @@
 import type { DiscoveredMarket } from "../market/types";
 import { bufferFor } from "./config";
-import type {
-  Direction,
-  FrozenTrigger,
-  QuotaState,
-  StrategyConfig,
-  WindowRecord,
-} from "./types";
+import type { Direction, FrozenTrigger, QuotaState, StrategyConfig, WindowRecord } from "./types";
 
 // Frozen Window Engine — pure maths and pure planning. No clock, no IO, no
 // state of its own: every function is a deterministic function of its inputs.
@@ -42,9 +36,7 @@ export function planWindows(
       settlementTwapAtTrigger: null,
       intentId: null,
       reason: "waiting for window open",
-      timeline: [
-        { at: new Date().toISOString(), state: "WAITING", reason: "window planned" },
-      ],
+      timeline: [{ at: new Date().toISOString(), state: "WAITING", reason: "window planned" }],
     } satisfies WindowRecord;
   });
 }

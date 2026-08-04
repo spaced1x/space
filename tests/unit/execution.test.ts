@@ -89,7 +89,8 @@ function memoryStore() {
   const events: OrderEventRecord[] = [];
   const risks: RiskDecision[] = [];
   const transitions: import("../../src/core/execution/types").OrderTransitionRecord[] = [];
-  const positionTransitions: import("../../src/core/execution/types").PositionTransitionRecord[] = [];
+  const positionTransitions: import("../../src/core/execution/types").PositionTransitionRecord[] =
+    [];
   const sizings: import("../../src/core/execution/types").SizingDecision[] = [];
 
   const store: ExecutionStore = {
@@ -117,10 +118,13 @@ function memoryStore() {
       let written = 0;
       for (const row of rows) {
         const key = `${row.positionKey}|${row.transition}|${row.at}|${row.fillId ?? ""}`;
-        if (positionTransitions.some(
-          (existing) =>
-            `${existing.positionKey}|${existing.transition}|${existing.at}|${existing.fillId ?? ""}` === key,
-        )) {
+        if (
+          positionTransitions.some(
+            (existing) =>
+              `${existing.positionKey}|${existing.transition}|${existing.at}|${existing.fillId ?? ""}` ===
+              key,
+          )
+        ) {
           continue;
         }
         positionTransitions.push(row);
@@ -234,7 +238,10 @@ function scriptedVenue(): ScriptedVenue {
   return venue;
 }
 
-function harness(configPatch: Partial<ExecutionConfig> = {}, contextPatch: Partial<RiskContext> = {}) {
+function harness(
+  configPatch: Partial<ExecutionConfig> = {},
+  contextPatch: Partial<RiskContext> = {},
+) {
   const memory = memoryStore();
   const venue = scriptedVenue();
   let now = T0;

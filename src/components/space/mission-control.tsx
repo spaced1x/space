@@ -53,7 +53,11 @@ export function MissionControl({
       <WorkspaceNav />
 
       <Section title="Operating cockpit">
-        <Row label="Trading mode" value={runtime.mode === "MANUAL" ? "MANUAL" : "STRATEGY"} accent />
+        <Row
+          label="Trading mode"
+          value={runtime.mode === "MANUAL" ? "MANUAL" : "STRATEGY"}
+          accent
+        />
         <Row label="Engine" value={environment.live ? "LIVE" : "PAPER"} />
         <Row label="Environment" value={environment.code} />
         <Row label="Lifecycle" value={runtime.lifecycle} />
@@ -65,7 +69,10 @@ export function MissionControl({
           value={market.binance ? market.binance.price.toFixed(2) : "—"}
           accent
         />
-        <Row label="BTC (Chainlink)" value={market.chainlink ? market.chainlink.price.toFixed(2) : "—"} />
+        <Row
+          label="BTC (Chainlink)"
+          value={market.chainlink ? market.chainlink.price.toFixed(2) : "—"}
+        />
         <Row
           label="Settlement source"
           value={market.settlement ? market.settlement.providerLabel : "no provider price"}
@@ -85,10 +92,7 @@ export function MissionControl({
         <Row label="Settlement TWAP" value={strategy.twap.value?.toFixed(2) ?? "—"} />
         <Row label="Direction" value={strategy.prediction.direction ?? "—"} />
         <Row label="Active window" value={strategy.activeWindowId?.split(":").pop() ?? "none"} />
-        <Row
-          label="Frozen trigger"
-          value={strategy.prediction.frozenTrigger?.toFixed(2) ?? "—"}
-        />
+        <Row label="Frozen trigger" value={strategy.prediction.frozenTrigger?.toFixed(2) ?? "—"} />
         <Row label="Buffer" value={strategy.prediction.buffer?.toString() ?? "—"} />
         <Row
           label="Quota left"
@@ -127,9 +131,8 @@ export function MissionControl({
       </Section>
 
       <p className="mt-auto text-label leading-relaxed text-muted-foreground">
-        Operational status only. PnL and statistics attach here in a later milestone;
-        configuration always lives in the Operations Desk, never in this panel. Nothing here is
-        simulated.
+        Operational status only. PnL and statistics attach here in a later milestone; configuration
+        always lives in the Operations Desk, never in this panel. Nothing here is simulated.
       </p>
     </aside>
   );
@@ -190,7 +193,9 @@ function LifecycleBadge({
         ? "border-warn bg-warn/10 text-warn"
         : "border-primary bg-primary/10 text-primary";
   return (
-    <span className={`inline-flex rounded-md border px-2 py-1 font-mono text-status font-semibold uppercase ${tone}`}>
+    <span
+      className={`inline-flex rounded-md border px-2 py-1 font-mono text-status font-semibold uppercase ${tone}`}
+    >
       {emergencyStop ? "E-STOP" : lifecycle}
     </span>
   );

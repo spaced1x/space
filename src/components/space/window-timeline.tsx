@@ -75,7 +75,10 @@ export function IntentList({ strategy }: { strategy: StrategySnapshot }) {
   return (
     <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
       {strategy.intents.map((intent) => (
-        <li key={intent.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 p-3 font-mono text-xs">
+        <li
+          key={intent.id}
+          className="flex flex-wrap items-baseline gap-x-3 gap-y-1 p-3 font-mono text-xs"
+        >
           <span className="text-muted-foreground">
             {new Date(intent.createdAt).toLocaleTimeString()}
           </span>

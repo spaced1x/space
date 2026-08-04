@@ -93,7 +93,9 @@ export const operationsPatchSchema = z
     retryCount: z.number().int().min(0).max(20),
     retryDelayMs: z.number().int().min(0).max(60_000),
     limitTimeoutMs: z.number().int().min(0).max(120_000),
-    telegramPermissionMode: z.enum(TELEGRAM_PERMISSION_MODES as [TelegramPermissionMode, ...TelegramPermissionMode[]]),
+    telegramPermissionMode: z.enum(
+      TELEGRAM_PERMISSION_MODES as [TelegramPermissionMode, ...TelegramPermissionMode[]],
+    ),
   })
   .partial();
 
@@ -114,10 +116,13 @@ export function lockOperations(config: OperationsConfig): OperationsConfig {
     throw new Error("operations config: duplicate window seconds");
   }
   for (const window of windows) {
-    if (window.buffer < 0) throw new Error(`operations config: ${window.seconds}s buffer must be >= 0`);
-    if (!(window.size > 0)) throw new Error(`operations config: ${window.seconds}s size must be > 0`);
+    if (window.buffer < 0)
+      throw new Error(`operations config: ${window.seconds}s buffer must be >= 0`);
+    if (!(window.size > 0))
+      throw new Error(`operations config: ${window.seconds}s size must be > 0`);
   }
-  if (config.tradesPerMarket < 0) throw new Error("operations config: tradesPerMarket must be >= 0");
+  if (config.tradesPerMarket < 0)
+    throw new Error("operations config: tradesPerMarket must be >= 0");
   if (config.maxPositions < 0) throw new Error("operations config: maxPositions must be >= 0");
   if (config.retryCount < 0) throw new Error("operations config: retryCount must be >= 0");
   return Object.freeze({

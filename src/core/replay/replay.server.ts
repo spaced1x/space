@@ -90,16 +90,7 @@ export async function listReplayMarkets(limit = 25): Promise<ReplayMarketSummary
 
 export async function replayMarket(conditionId: string): Promise<ReplayMarket | null> {
   try {
-    const [
-      discovery,
-      windows,
-      frozen,
-      transitions,
-      intents,
-      risk,
-      orderEvents,
-      dataset,
-    ] =
+    const [discovery, windows, frozen, transitions, intents, risk, orderEvents, dataset] =
       await Promise.all([
         replayRepository.discovery(conditionId),
         replayRepository.windows(conditionId),
@@ -129,8 +120,7 @@ export async function replayMarket(conditionId: string): Promise<ReplayMarket | 
       orderEvents,
       orderTransitions: dataset.orderTransitions.filter((row) => orderIds.has(row.orderId)),
       fills: dataset.fills.filter((fill) => fill.conditionId === conditionId),
-      settlement:
-        dataset.settlements.find((row) => row.condition_id === conditionId) ?? null,
+      settlement: dataset.settlements.find((row) => row.condition_id === conditionId) ?? null,
     });
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);

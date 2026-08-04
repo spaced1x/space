@@ -57,7 +57,11 @@ export async function syncConnections(): Promise<void> {
 function syncConfiguration(): void {
   const readiness = describeEnvReadiness();
   reportConnection("configuration", {
-    state: !readiness.valid ? "FAILED" : readiness.missingForArmed.length ? "DEGRADED" : "CONNECTED",
+    state: !readiness.valid
+      ? "FAILED"
+      : readiness.missingForArmed.length
+        ? "DEGRADED"
+        : "CONNECTED",
     reason: readiness.message,
     endpoint: ".env + operations document",
     lastError: readiness.valid ? null : readiness.message,
@@ -90,7 +94,8 @@ function syncEnvironment(): void {
     lastError: health.state === "FAILED" ? health.message : null,
     blocksTrading: health.state === "FAILED",
     recovery: "automatic — re-evaluated on every boot and before every ARM",
-    action: health.state === "FAILED" ? "Align .env with the selected environment and restart" : null,
+    action:
+      health.state === "FAILED" ? "Align .env with the selected environment and restart" : null,
     details: { evaluatedAt: String(details["at"] ?? "never") },
   });
 }
@@ -147,9 +152,7 @@ function syncDatabaseLock(): void {
   const held = instanceLockHeld();
   reportConnection("database_lock", {
     state: held ? "CONNECTED" : "FAILED",
-    reason: held
-      ? "single-instance lock held by this process"
-      : "single-instance lock is not held",
+    reason: held ? "single-instance lock held by this process" : "single-instance lock is not held",
     endpoint: lockPath(),
     lastError: held ? null : "lock not acquired",
     blocksTrading: !held,
@@ -281,11 +284,7 @@ function syncChainlinkStreams(): void {
 function syncTwapService(): void {
   const service = twapServiceSnapshot();
   reportConnection("twap_service", {
-    state: !service.started
-      ? "NOT_STARTED"
-      : service.published > 0
-        ? "CONNECTED"
-        : "WAITING",
+    state: !service.started ? "NOT_STARTED" : service.published > 0 ? "CONNECTED" : "WAITING",
     reason: !service.started
       ? "No data observed yet — the TWAP service has not started"
       : service.published > 0
@@ -309,7 +308,8 @@ function syncProviderRegistry(): void {
   const service = twapServiceSnapshot();
   const connected = service.providers.filter((provider) => provider.state === "CONNECTED").length;
   reportConnection("twap_provider_registry", {
-    state: service.providers.length === 0 ? "NOT_STARTED" : connected > 0 ? "CONNECTED" : "DEGRADED",
+    state:
+      service.providers.length === 0 ? "NOT_STARTED" : connected > 0 ? "CONNECTED" : "DEGRADED",
     reason:
       service.providers.length === 0
         ? "No data observed yet — no provider is registered"
@@ -390,9 +390,7 @@ function syncVenues(): void {
 
   reportConnection("paper_venue", {
     state: paper ? (health.state === "OK" ? "CONNECTED" : "DEGRADED") : "DISABLED",
-    reason: paper
-      ? health.message
-      : "paper executor is not selected in this environment",
+    reason: paper ? health.message : "paper executor is not selected in this environment",
     endpoint: paper ? (description.host ?? "in-process simulator") : null,
     blocksTrading: paper && health.state === "FAILED",
     recovery: paper ? "automatic — the simulator matches against the live book" : "n/a",
@@ -702,7 +700,8 @@ function syncClob(): void {
   const apiKeyLoaded = Boolean(
     env.POLYMARKET_API_KEY && env.POLYMARKET_API_SECRET && env.POLYMARKET_API_PASSPHRASE,
   );
-  const environmentMatch = wallet.chainId === (env.SPACE_ENVIRONMENT === "V1_TESTNET" ? 80002 : 137);
+  const environmentMatch =
+    wallet.chainId === (env.SPACE_ENVIRONMENT === "V1_TESTNET" ? 80002 : 137);
 
   reportConnection("clob_trading", {
     state: !apiKeyLoaded

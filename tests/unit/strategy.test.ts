@@ -48,7 +48,10 @@ function market(ptb: number | null, horizon: MarketHorizon = "FIVE_MINUTE"): Mar
   return {
     version: 1,
     publishedAt: new Date(SETTLEMENT - 300_000).toISOString(),
-    markets: { FIVE_MINUTE: horizon === "FIVE_MINUTE" ? discovered : null, FIFTEEN_MINUTE: horizon === "FIFTEEN_MINUTE" ? discovered : null },
+    markets: {
+      FIVE_MINUTE: horizon === "FIVE_MINUTE" ? discovered : null,
+      FIFTEEN_MINUTE: horizon === "FIFTEEN_MINUTE" ? discovered : null,
+    },
     binance: null,
     chainlink: null,
     discovery: {

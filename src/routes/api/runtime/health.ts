@@ -56,11 +56,16 @@ export const Route = createFileRoute("/api/runtime/health")({
             headers: { "cache-control": "no-store" },
           });
         } catch (error) {
+          // A stack trace on a public endpoint can disclose paths and internal
+          // structure; production callers get the reason only.
+          const production = process.env["NODE_ENV"] === "production";
           return Response.json(
             {
               status: "FAILED",
               reason: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? (error.stack ?? null) : null,
+              ...(production
+                ? {}
+                : { stack: error instanceof Error ? (error.stack ?? null) : null }),
             },
             { status: 503, headers: { "cache-control": "no-store" } },
           );

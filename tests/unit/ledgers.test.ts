@@ -10,7 +10,9 @@ import type { FillRecord } from "../../src/core/execution/types";
 
 const AT = "2026-01-01T00:00:00.000Z";
 
-function fill(patch: Partial<FillRecord> & Pick<FillRecord, "id" | "size" | "price" | "filledAt">): FillRecord {
+function fill(
+  patch: Partial<FillRecord> & Pick<FillRecord, "id" | "size" | "price" | "filledAt">,
+): FillRecord {
   return {
     orderId: "order-1",
     intentId: "intent-1",

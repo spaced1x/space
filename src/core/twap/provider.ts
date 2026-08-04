@@ -7,13 +7,7 @@
 export type TwapProviderId = "rtds_twap_30" | "rtds_twap_60" | "chainlink_streams";
 
 export type TwapProviderState =
-  | "CONNECTED"
-  | "STALE"
-  | "RECONNECTING"
-  | "WAITING"
-  | "NOT_CONFIGURED"
-  | "DISABLED"
-  | "FAILED";
+  "CONNECTED" | "STALE" | "RECONNECTING" | "WAITING" | "NOT_CONFIGURED" | "DISABLED" | "FAILED";
 
 /** One observed settlement price. Never synthesised, never interpolated. */
 export interface TwapSample {

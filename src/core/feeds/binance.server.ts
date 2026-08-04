@@ -119,7 +119,11 @@ export function createBinanceFeed(onSample: (sample: PriceSample) => void): Pric
       const stale = isStale();
       return {
         connected: socket?.connected ?? false,
-        state: stopped ? "IDLE" : stale && socket?.state === "CONNECTED" ? "STALE" : (socket?.state ?? "IDLE"),
+        state: stopped
+          ? "IDLE"
+          : stale && socket?.state === "CONNECTED"
+            ? "STALE"
+            : (socket?.state ?? "IDLE"),
         samples,
         errors: (socket?.errors ?? 0) + parseErrors,
         reconnects: socket?.reconnects ?? 0,

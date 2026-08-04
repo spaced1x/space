@@ -32,18 +32,12 @@ export const telegramRepository = {
 
   async markSent(id: number): Promise<void> {
     const driver = await requireDriver();
-    driver.run(
-      `UPDATE telegram_outbox SET sent = 1 WHERE id = ?`,
-      [id],
-    );
+    driver.run(`UPDATE telegram_outbox SET sent = 1 WHERE id = ?`, [id]);
   },
 
   async markFailed(id: number, error: string): Promise<void> {
     const driver = await requireDriver();
-    driver.run(
-      `UPDATE telegram_outbox SET error = ? WHERE id = ?`,
-      [error, id],
-    );
+    driver.run(`UPDATE telegram_outbox SET error = ? WHERE id = ?`, [error, id]);
   },
 
   async recent(limit = 50): Promise<TelegramOutboxRecord[]> {

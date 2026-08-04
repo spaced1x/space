@@ -48,28 +48,13 @@ export type OrderLifecycle =
   | "SETTLED";
 
 export type PositionLifecycle =
-  | "WAITING"
-  | "OPENING"
-  | "OPENED"
-  | "PARTIALLY_CLOSED"
-  | "CLOSED"
-  | "SETTLED";
+  "WAITING" | "OPENING" | "OPENED" | "PARTIALLY_CLOSED" | "CLOSED" | "SETTLED";
 
 export type TwapLifecycle =
-  | "PROVIDER_SELECTED"
-  | "WARMING"
-  | "COLLECTING"
-  | "ACTIVE"
-  | "STALE"
-  | "RECOVERING";
+  "PROVIDER_SELECTED" | "WARMING" | "COLLECTING" | "ACTIVE" | "STALE" | "RECOVERING";
 
 export type VenueLifecycle =
-  | "DISCONNECTED"
-  | "CONNECTING"
-  | "AUTHENTICATED"
-  | "READY"
-  | "DEGRADED"
-  | "RECONNECTING";
+  "DISCONNECTED" | "CONNECTING" | "AUTHENTICATED" | "READY" | "DEGRADED" | "RECONNECTING";
 
 export interface PipelineSnapshot {
   stages: PipelineStage[];
@@ -121,9 +106,7 @@ function positionLifecycle(execution: ReturnType<typeof executionSnapshot>): Pos
   if (!positions.length) return "WAITING";
   const latest = positions.at(-1)!;
   if (latest.status === "CLOSED") {
-    return latest.settledValue === null || latest.settledValue === undefined
-      ? "CLOSED"
-      : "SETTLED";
+    return latest.settledValue === null || latest.settledValue === undefined ? "CLOSED" : "SETTLED";
   }
   if (latest.status === "ACTIVE") {
     const opening = execution.activeOrders.some(
@@ -227,16 +210,21 @@ export function pipelineSnapshot(): PipelineSnapshot {
             : twap.active?.state === "DISABLED" || twap.active?.state === "NOT_CONFIGURED"
               ? "DISABLED"
               : "WAITING",
-      input: twap.active ? `${twap.active.transport} · ${twap.active.symbol}` : "no active provider",
-      output: twap.active?.price === null || twap.active === null
-        ? "no sample"
-        : `${twap.active.price} (${twap.active.samples} samples)`,
+      input: twap.active
+        ? `${twap.active.transport} · ${twap.active.symbol}`
+        : "no active provider",
+      output:
+        twap.active?.price === null || twap.active === null
+          ? "no sample"
+          : `${twap.active.price} (${twap.active.samples} samples)`,
       latencyMs: twap.active?.latencyMs ?? null,
       lastSuccessAt: twap.active?.lastSuccessAt ?? null,
       lastFailureAt: null,
       lastError: twap.active?.lastError ?? null,
-      waitingReason: twap.active?.state === "CONNECTED" ? null : (twap.active?.reason ?? "no provider selected"),
-      recovery: twap.active?.action ?? "Automatic — the shared RTDS socket reconnects and resubscribes",
+      waitingReason:
+        twap.active?.state === "CONNECTED" ? null : (twap.active?.reason ?? "no provider selected"),
+      recovery:
+        twap.active?.action ?? "Automatic — the shared RTDS socket reconnects and resubscribes",
     },
     {
       id: "twap_service",
@@ -385,11 +373,7 @@ export function pipelineSnapshot(): PipelineSnapshot {
     {
       id: "parity",
       label: "V1/V2 parity",
-      state: parity.comparedAt === null
-        ? "WAITING"
-        : parity.divergentPairs > 0
-          ? "DEGRADED"
-          : "OK",
+      state: parity.comparedAt === null ? "WAITING" : parity.divergentPairs > 0 ? "DEGRADED" : "OK",
       input: `${parity.environment} decisions vs the other environment's records`,
       output: parity.message,
       latencyMs: null,
@@ -404,9 +388,9 @@ export function pipelineSnapshot(): PipelineSnapshot {
     },
   ];
 
-  const blocking = stages.find(
-    (stage) => stage.state === "FAILED" || stage.state === "DEGRADED",
-  ) ?? stages.find((stage) => stage.state === "WAITING");
+  const blocking =
+    stages.find((stage) => stage.state === "FAILED" || stage.state === "DEGRADED") ??
+    stages.find((stage) => stage.state === "WAITING");
 
   return {
     stages,

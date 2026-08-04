@@ -95,12 +95,7 @@ export function auditRuntimeResources(
     check("feed.binance", engine.binanceFeeds, running ? 1 : 0, "one Binance socket"),
     check("feed.chainlink", engine.chainlinkFeeds, running ? 1 : 0, "one Chainlink poller"),
     check("twap.service", twap.services, running ? 1 : 0, "one TWAP service"),
-    check(
-      "feed.clob_market",
-      clobMarket.sockets,
-      running ? 1 : 0,
-      "one CLOB market data socket",
-    ),
+    check("feed.clob_market", clobMarket.sockets, running ? 1 : 0, "one CLOB market data socket"),
     {
       resource: "database",
       expected: running ? "1" : "0",
@@ -109,9 +104,7 @@ export function auditRuntimeResources(
       // failure when SQLite is actually attachable in this runtime; an
       // authoring sandbox without the native module reports zero honestly.
       ok: running ? db.connections <= 1 : db.connections === 0,
-      detail: db.path
-        ? `open database: ${db.path}`
-        : "no database handle attached in this runtime",
+      detail: db.path ? `open database: ${db.path}` : "no database handle attached in this runtime",
     },
     check(
       "instance.lock",
@@ -120,7 +113,12 @@ export function auditRuntimeResources(
       lock.path ? `lock file: ${lock.path}` : "no lock held",
     ),
     check("telegram.inbound", inbound.pollers, inbound.pollers, "poller only when configured"),
-    check("telegram.inbound.timer", inbound.timers, running ? inbound.pollers : 0, "one poll timer at most"),
+    check(
+      "telegram.inbound.timer",
+      inbound.timers,
+      running ? inbound.pollers : 0,
+      "one poll timer at most",
+    ),
     check(
       "telegram.forwarder",
       forwarding.forwarders,

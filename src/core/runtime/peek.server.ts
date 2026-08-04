@@ -49,11 +49,7 @@ export function otherEnvironment(active: EnvironmentCode): EnvironmentCode {
 
 const cache = new Map<EnvironmentCode, { at: number; value: RuntimePeek }>();
 
-function unavailable(
-  environment: EnvironmentCode,
-  dbPath: string,
-  reason: string,
-): RuntimePeek {
+function unavailable(environment: EnvironmentCode, dbPath: string, reason: string): RuntimePeek {
   return {
     environment,
     available: false,
@@ -104,7 +100,9 @@ export async function peekEnvironment(environment: EnvironmentCode): Promise<Run
     );
     const kv = (key: string): string | null => {
       if (!tables.has("kv")) return null;
-      return driver!.get<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key])?.value ?? null;
+      return (
+        driver!.get<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key])?.value ?? null
+      );
     };
     const count = (table: string): number | null => {
       if (!tables.has(table)) return null;
@@ -129,11 +127,11 @@ export async function peekEnvironment(environment: EnvironmentCode): Promise<Run
       dbPath,
       sizeBytes: fs.statSync(resolved).size,
       schemaVersion: tables.has("schema_migrations")
-        ? driver.get<{ id: number }>("SELECT MAX(id) AS id FROM schema_migrations")?.id ?? null
+        ? (driver.get<{ id: number }>("SELECT MAX(id) AS id FROM schema_migrations")?.id ?? null)
         : null,
       environmentStamp: tables.has("space_meta")
-        ? driver.get<{ value: string }>("SELECT value FROM space_meta WHERE key = 'environment'")
-            ?.value ?? null
+        ? (driver.get<{ value: string }>("SELECT value FROM space_meta WHERE key = 'environment'")
+            ?.value ?? null)
         : null,
       // A stored lifecycle describes the last session, not this process: an
       // inactive runtime is always STOPPED here and now.
@@ -149,7 +147,8 @@ export async function peekEnvironment(environment: EnvironmentCode): Promise<Run
         settlements: count("settlements"),
       },
       lastOrderAt: tables.has("orders")
-        ? driver.get<{ at: string | null }>("SELECT MAX(created_at) AS at FROM orders")?.at ?? null
+        ? (driver.get<{ at: string | null }>("SELECT MAX(created_at) AS at FROM orders")?.at ??
+          null)
         : null,
       readAt: systemClock.iso(),
     };

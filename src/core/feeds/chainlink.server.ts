@@ -103,13 +103,7 @@ export function createChainlinkFeed(onSample: (sample: PriceSample) => void): Pr
     stats(): FeedStats {
       return {
         connected: configured && lastError === null,
-        state: stopped
-          ? "IDLE"
-          : !configured
-            ? "IDLE"
-            : lastError
-              ? "RECONNECTING"
-              : "CONNECTED",
+        state: stopped ? "IDLE" : !configured ? "IDLE" : lastError ? "RECONNECTING" : "CONNECTED",
         samples: reads,
         errors,
         reconnects: 0,

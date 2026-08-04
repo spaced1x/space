@@ -21,7 +21,9 @@ describe("runtime metrics snapshot", () => {
     process.cpuUsage = () => ({ user: 1_000_000, system: 500_000 });
     schedulerSpy = vi
       .spyOn(scheduler, "schedulerStatus")
-      .mockReturnValue({ maxTickDriftMs: 12, ticks: 123 } as any);
+      .mockReturnValue({ maxTickDriftMs: 12, ticks: 123 } as unknown as ReturnType<
+        typeof scheduler.schedulerStatus
+      >);
   });
 
   afterEach(() => {
