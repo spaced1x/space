@@ -134,6 +134,24 @@ function Statistics() {
               empty="no configuration-attributed trades recorded yet"
             />
           </Panel>
+
+          <Panel
+            title="Append-only ledger"
+            hint={`${stats.ledger.orderTransitions} order transition(s) · ${stats.ledger.positionTransitions} position transition(s)`}
+          >
+            <Table
+              head={["time", "outcome", "transition", "size", "avg", "cost"]}
+              rows={stats.ledger.recentPositionTransitions.map((row) => [
+                new Date(row.at).toLocaleTimeString(),
+                row.outcome,
+                row.transition,
+                String(row.size),
+                row.avgPrice.toFixed(4),
+                money(row.cost),
+              ])}
+              empty="no position transitions recorded yet"
+            />
+          </Panel>
         </>
       )}
     </ConsoleShell>
