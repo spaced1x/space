@@ -29,6 +29,7 @@ import {
   peekEnvironment,
 } from "../core/runtime/peek.server";
 import { lastResourceAudit, resourceAuditHistory } from "../core/runtime/resources.server";
+import { pipelineSnapshot } from "../core/runtime/pipeline.server";
 import { readRuntimeTarget } from "../core/runtime/target.server";
 import { systemClock } from "../core/shared/clock";
 import type { HealthReport } from "../core/health/types";
@@ -41,7 +42,7 @@ import type { HealthReport } from "../core/health/types";
  * Frozen runtime snapshot contract. Every operator page reads this shape and
  * nothing else. Bump `SNAPSHOT_VERSION` only alongside a documented change.
  */
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
 
 let snapshotSequence = 0;
 
@@ -97,6 +98,16 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
     health: await safeAsync("collectHealth", () => collectHealth(), notStartedHealth),
     events: eventBus.recent(12),
     engine: engineRuntimeSnapshot(),
+    pipeline: await safeAsync("pipeline", async () => pipelineSnapshot(), {
+      stages: [],
+      blockedAt: null,
+      lifecycles: {
+        order: "NONE" as const,
+        position: "WAITING" as const,
+        twap: "PROVIDER_SELECTED" as const,
+        venue: "DISCONNECTED" as const,
+      },
+    }),
     environment: environmentLabel(),
     connections: listConnections(),
     timeline: connectionTimeline(),

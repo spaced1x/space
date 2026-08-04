@@ -47,6 +47,26 @@ interface GammaMarket {
   umaResolutionStatus?: string;
 }
 
+interface GammaEvent {
+  slug?: string;
+  closed?: boolean;
+  markets?: GammaMarket[];
+}
+
+/**
+ * Official BTC up/down series slug: `btc-updown-<5m|15m>-<window start epoch>`.
+ * The slug is the only reliable horizon signal — `startDate` on these markets
+ * is the row's creation time, not the window open, so a duration derived from
+ * start/end is meaningless and previously matched nothing.
+ */
+const BTC_UPDOWN_SLUG = /^btc-updown-(5m|15m)-\d+$/;
+
+function horizonFromSlug(slug: string | undefined): MarketHorizon | null {
+  const match = BTC_UPDOWN_SLUG.exec(slug ?? "");
+  if (!match) return null;
+  return match[1] === "5m" ? "FIVE_MINUTE" : "FIFTEEN_MINUTE";
+}
+
 function asArray(value: string | string[] | undefined): string[] {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string") return [];
@@ -63,25 +83,6 @@ function asNumber(value: string | number | undefined): number | null {
   if (value === undefined || value === null || value === "") return null;
   const parsed = typeof value === "number" ? value : Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-// Horizon is derived from the market's own start/end metadata, never guessed
-// from the title alone.
-function classify(market: GammaMarket): MarketHorizon | null {
-  const start = Date.parse(market.startDate ?? market.gameStartTime ?? "");
-  const end = Date.parse(market.endDate ?? "");
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  const minutes = Math.round((end - start) / 60_000);
-  if (minutes === 5) return "FIVE_MINUTE";
-  if (minutes === 15) return "FIFTEEN_MINUTE";
-  return null;
-}
-
-function isBitcoinUpDown(market: GammaMarket): boolean {
-  const text = `${market.slug ?? ""} ${market.question ?? ""}`.toLowerCase();
-  const bitcoin = text.includes("bitcoin") || /\bbtc\b/.test(text);
-  const updown = text.includes("up or down") || text.includes("up-or-down");
-  return bitcoin && updown;
 }
 
 // PTB comes from official metadata when present; otherwise the strike embedded
@@ -168,11 +169,15 @@ export async function refreshMarkets(): Promise<void> {
   stats.lastRefreshAt = new Date(nowMs).toISOString();
 
   try {
-    const url = new URL("/markets", env.POLYMARKET_GAMMA_URL);
+    // The BTC up/down series is published as events, one event per window.
+    // `/markets` caps at 100 rows and, ordered by endDate ascending, returns
+    // long-dated unrelated markets only — the short-horizon crypto windows
+    // never appear in that page. Events ordered by newest start always do.
+    const url = new URL("/events", env.POLYMARKET_GAMMA_URL);
     url.searchParams.set("closed", "false");
-    url.searchParams.set("limit", "200");
-    url.searchParams.set("order", "endDate");
-    url.searchParams.set("ascending", "true");
+    url.searchParams.set("limit", "100");
+    url.searchParams.set("order", "startDate");
+    url.searchParams.set("ascending", "false");
 
     let response: Response;
     try {
@@ -186,8 +191,15 @@ export async function refreshMarkets(): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 500));
       response = await fetchGamma(url);
     }
-    const body = (await response.json()) as GammaMarket[] | { data?: GammaMarket[] };
-    const candidates = Array.isArray(body) ? body : (body.data ?? []);
+    const body = (await response.json()) as GammaEvent[] | { data?: GammaEvent[] };
+    const events = Array.isArray(body) ? body : (body.data ?? []);
+    // One candidate per BTC up/down window, earliest settlement first, so each
+    // horizon selects the next window that has not settled yet.
+    const candidates = events
+      .filter((event) => !event.closed && horizonFromSlug(event.slug) !== null)
+      .flatMap((event) => (event.markets ?? []).slice(0, 1))
+      .filter((market) => horizonFromSlug(market.slug) !== null)
+      .sort((a, b) => Date.parse(a.endDate ?? "") - Date.parse(b.endDate ?? ""));
     stats.candidatesSeen = candidates.length;
 
     const picked: Partial<Record<MarketHorizon, DiscoveredMarket | null>> = {
@@ -196,10 +208,12 @@ export async function refreshMarkets(): Promise<void> {
     };
 
     for (const candidate of candidates) {
-      if (!isBitcoinUpDown(candidate) || !candidate.conditionId) continue;
-      const horizon = classify(candidate);
+      if (!candidate.conditionId) continue;
+      const horizon = horizonFromSlug(candidate.slug);
       if (!horizon || picked[horizon]) continue;
       const endMs = Date.parse(candidate.endDate ?? "");
+      // Never select a window that has already settled.
+      if (!Number.isFinite(endMs) || endMs <= nowMs) continue;
       const tokens = asArray(candidate.clobTokenIds);
       const bestBid = asNumber(candidate.bestBid);
       const bestAsk = asNumber(candidate.bestAsk);

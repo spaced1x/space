@@ -41,10 +41,20 @@ const subscriptions = new Map<string, Subscription>();
 let client: WsClient | undefined;
 let started = false;
 
+/**
+ * Documented RTDS filter form for the Chainlink crypto topics: a compact JSON
+ * string carrying one lowercase symbol, e.g. `{"symbol":"btc/usd"}`. Any other
+ * shape (an array, an upper-case ticker) is accepted by the server but matches
+ * nothing, so the socket stays open and silently never publishes.
+ */
+export function symbolFilter(symbol: string): string {
+  return JSON.stringify({ symbol: symbol.trim().toLowerCase() });
+}
+
 function subscribeFrame(topic: string, symbol: string): string {
   return JSON.stringify({
     action: "subscribe",
-    subscriptions: [{ topic, type: "update", filters: JSON.stringify([symbol]) }],
+    subscriptions: [{ topic, type: "update", filters: symbolFilter(symbol) }],
   });
 }
 
