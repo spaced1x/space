@@ -29,6 +29,8 @@ import {
   peekEnvironment,
 } from "../core/runtime/peek.server";
 import { lastResourceAudit, resourceAuditHistory } from "../core/runtime/resources.server";
+import { recoveryLedger } from "../core/runtime/recovery.server";
+import { measureStability, recordSnapshotGeneration } from "../core/metrics/stability.server";
 import { pipelineSnapshot } from "../core/runtime/pipeline.server";
 import { readRuntimeTarget } from "../core/runtime/target.server";
 import { systemClock } from "../core/shared/clock";
@@ -42,7 +44,7 @@ import type { HealthReport } from "../core/health/types";
  * Frozen runtime snapshot contract. Every operator page reads this shape and
  * nothing else. Bump `SNAPSHOT_VERSION` only alongside a documented change.
  */
-export const SNAPSHOT_VERSION = 2;
+export const SNAPSHOT_VERSION = 3;
 
 let snapshotSequence = 0;
 
@@ -50,7 +52,22 @@ async function safeAsync<T>(label: string, fn: () => Promise<T>, fallback: T): P
   try {
     return await fn();
   } catch (error) {
-    console.warn(`snapshot subsystem ${label} failed:`, error);
+    snapshotLog.warn("snapshot subsystem failed", {
+      subsystem: label,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  }
+}
+
+function safeSync<T>(label: string, fn: () => T, fallback: T): T {
+  try {
+    return fn();
+  } catch (error) {
+    snapshotLog.warn("snapshot subsystem failed", {
+      subsystem: label,
+      reason: error instanceof Error ? error.message : String(error),
+    });
     return fallback;
   }
 }
@@ -64,6 +81,7 @@ const notStartedHealth: HealthReport = {
 export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async () => {
   // The runtime boots independently of the dashboard. A snapshot read never
   // triggers a boot; it reports whatever state currently exists.
+  const startedAtMs = Date.now();
   const bootState = getBootState();
 
   // Refresh every connection from its live adapter before answering, so no two
@@ -114,6 +132,14 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
     envResolution: environmentResolution(),
     resourceAudit: lastResourceAudit(),
     resourceAudits: resourceAuditHistory().slice(-10).reverse(),
+    recovery: safeSync("recovery", () => recoveryLedger(), {
+      records: [],
+      open: 0,
+      recovered: 0,
+      slowestRecoveryMs: null,
+      medianRecoveryMs: null,
+    }),
+    stability: safeSync("stability", () => measureStability(), null),
     metrics,
     validation,
     boot: {
@@ -132,10 +158,13 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
     },
   };
   const generatedAt = systemClock.iso();
+  const generationMs = Date.now() - startedAtMs;
+  recordSnapshotGeneration(generationMs);
   return {
     snapshotVersion: SNAPSHOT_VERSION,
     sequence: ++snapshotSequence,
     generatedAt,
+    generationMs,
     serverNow: systemClock.now(),
     activeEnvironment: environment,
     target: readRuntimeTarget(),
