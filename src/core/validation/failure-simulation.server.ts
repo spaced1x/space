@@ -6,6 +6,42 @@ const log = createLogger("failure-simulation");
 // automated tests and the operator exercise recovery paths without changing
 // production logic. They are only active when explicitly enabled and never
 // alter persisted state.
+//
+// Every dependency SPACE can lose has a named fault target, and every target is
+// wired to a real call site. A target with no call site would make the recovery
+// report a lie, so the catalogue and the wiring are verified by a test.
+
+export const FAULT_TARGETS = [
+  "gamma",
+  "polygon_rpc",
+  "wallet",
+  "telegram",
+  "settlement",
+  "chainlink",
+  "binance",
+  "rtds",
+  "clob_market_ws",
+  "clob_trading",
+  "sqlite",
+  "snapshot",
+] as const;
+
+export type FaultTarget = (typeof FAULT_TARGETS)[number];
+
+export const FAULT_TARGET_LABELS: Record<FaultTarget, string> = {
+  gamma: "Gamma API (market discovery)",
+  polygon_rpc: "Polygon RPC",
+  wallet: "Wallet / balance reads",
+  telegram: "Telegram API",
+  settlement: "Settlement ingestion",
+  chainlink: "Chainlink price feed",
+  binance: "Binance websocket",
+  rtds: "Polymarket RTDS websocket",
+  clob_market_ws: "CLOB market websocket",
+  clob_trading: "CLOB trading API",
+  sqlite: "SQLite (busy / lock contention)",
+  snapshot: "Runtime snapshot generation",
+};
 
 export interface FailureScenario {
   name: string;
