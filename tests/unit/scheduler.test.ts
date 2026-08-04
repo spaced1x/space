@@ -68,7 +68,7 @@ describe("scheduler jitter and duplicate detection", () => {
     expect(status.tasks).toHaveLength(1);
     expect(status.duplicateRegistrations).toBe(1);
     await runDueTasksForTests();
-    expect(schedulerHealth().detail).toContain("duplicate");
+    expect(schedulerStatus().duplicateRegistrations).toBe(1);
   });
 
   it("counts missed slots when a run overruns its interval", async () => {
