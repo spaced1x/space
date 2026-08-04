@@ -151,6 +151,12 @@ Every snapshot carries: `snapshotVersion`, `runtimeVersion`, `buildVersion`, `en
 - A snapshot whose `sequence` is lower than the one already held is discarded.
 - The browser only ever renders the newest accepted snapshot.
 
+### Runtime data integrity
+
+No mocked runtime values. No placeholder telemetry. No fabricated connection states. No synthetic prices. No fake health values. No estimated execution status.
+
+If the runtime has not yet observed a value, the snapshot reports that explicitly together with its reason. Every value rendered anywhere in the operator terminal must originate from the runtime snapshot.
+
 ### 4. Abstract transport (future-proofing)
 
 The dashboard reads through a single transport interface — subscribe to snapshots, receive snapshots. Today it is implemented by polling. Tomorrow a WebSocket snapshot stream replaces the implementation with no change to any page or panel.
