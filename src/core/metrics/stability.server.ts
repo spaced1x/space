@@ -133,11 +133,7 @@ export function countRuntimeResources(): StabilityCounts {
 
   return {
     timers: scheduler.timers + inbound.timers,
-    sockets:
-      engine.binanceFeeds
-      + engine.chainlinkFeeds
-      + clob.sockets
-      + twap.rtdsSockets,
+    sockets: engine.binanceFeeds + engine.chainlinkFeeds + clob.sockets + twap.rtdsSockets,
     databaseHandles: db.connections,
     locks: lock.locks,
     eventListeners: bus.handlers,
@@ -245,9 +241,7 @@ export function measureStability(): StabilityReport {
       maxJitterMs: status
         ? status.tasks.reduce((max, task) => Math.max(max, task.maxJitterMs ?? 0), 0)
         : null,
-      missedRuns: status
-        ? status.tasks.reduce((sum, task) => sum + (task.missedRuns ?? 0), 0)
-        : 0,
+      missedRuns: status ? status.tasks.reduce((sum, task) => sum + (task.missedRuns ?? 0), 0) : 0,
     },
     snapshots: {
       generated: snapshotsGenerated,

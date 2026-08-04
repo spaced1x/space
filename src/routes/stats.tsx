@@ -17,7 +17,8 @@ export const Route = createFileRoute("/stats")({
       { property: "og:title", content: "Statistics — SPACE" },
       {
         property: "og:description",
-        content: "Latencies, fill percentage and daily PnL computed from persisted execution evidence.",
+        content:
+          "Latencies, fill percentage and daily PnL computed from persisted execution evidence.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -169,15 +170,7 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
   );
 }
 
-function Table({
-  head,
-  rows,
-  empty,
-}: {
-  head: string[];
-  rows: string[][];
-  empty: string;
-}) {
+function Table({ head, rows, empty }: { head: string[]; rows: string[][]; empty: string }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <table className="w-full text-left font-mono text-[11px]">

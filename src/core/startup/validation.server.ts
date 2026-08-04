@@ -1,4 +1,5 @@
 import { describeEnvReadiness, loadEnv } from "../config/env.server";
+import { unknownEnvKeys } from "../config/manifest";
 import { activeOperations, operationsHealth } from "../config/operations.server";
 import { evaluateEnvironmentConformance } from "../config/environment.server";
 import { databaseHealth } from "../db/database.server";
@@ -96,9 +97,7 @@ export async function runStartupValidation(): Promise<ValidationReport> {
             ? "DEGRADED"
             : "OK"
         : "NOT_INITIALIZED",
-      message: recovery
-        ? recovery.message
-        : "execution recovery has not run yet",
+      message: recovery ? recovery.message : "execution recovery has not run yet",
     },
     {
       name: "emergency_stop",
@@ -109,6 +108,18 @@ export async function runStartupValidation(): Promise<ValidationReport> {
         : "emergency stop not latched",
     },
   ];
+
+  // Advisory, never an ARM blocker: a misspelled variable silently falls back
+  // to its default, so the operator has to be told rather than stopped.
+  const unknown = unknownEnvKeys(process.env);
+  items.push({
+    name: "configuration_manifest",
+    required: false,
+    state: unknown.length ? "DEGRADED" : "OK",
+    message: unknown.length
+      ? `unrecognised variable(s), ignored by SPACE: ${unknown.join(", ")}`
+      : "every SPACE variable in the environment is declared in the manifest",
+  });
 
   // Add live health for venue-dependent components only when credentials exist.
   const health = await collectHealth();
@@ -124,7 +135,9 @@ export async function runStartupValidation(): Promise<ValidationReport> {
   }
 
   const blockers = items
-    .filter((item) => item.required && (item.state === "FAILED" || item.state === "NOT_INITIALIZED"))
+    .filter(
+      (item) => item.required && (item.state === "FAILED" || item.state === "NOT_INITIALIZED"),
+    )
     .map((item) => `${item.name}: ${item.message}`);
 
   // DEGRADED on a required item is a blocker for ARM.

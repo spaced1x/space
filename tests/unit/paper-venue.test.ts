@@ -80,7 +80,9 @@ describe("paper execution venue", () => {
 
   it("rejects dust, unknown books and invalid limit prices", async () => {
     const base = { tokenId: "t1", side: "BUY", kind: "LIMIT", price: 0.5 } as const;
-    await expect(paperAdapter.submit({ ...base, clientId: "c3", size: 1 })).rejects.toThrow(/minimum/);
+    await expect(paperAdapter.submit({ ...base, clientId: "c3", size: 1 })).rejects.toThrow(
+      /minimum/,
+    );
     await expect(
       paperAdapter.submit({ ...base, clientId: "c4", tokenId: "nope", size: 50 }),
     ).rejects.toThrow(/no live order book/);

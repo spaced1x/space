@@ -154,9 +154,10 @@ export async function stageOperations(patch: unknown): Promise<OperationsUpdate>
 }
 
 function marketKey(state: MarketState): string {
-  return [state.markets.FIVE_MINUTE?.conditionId ?? "-", state.markets.FIFTEEN_MINUTE?.conditionId ?? "-"].join(
-    "|",
-  );
+  return [
+    state.markets.FIVE_MINUTE?.conditionId ?? "-",
+    state.markets.FIFTEEN_MINUTE?.conditionId ?? "-",
+  ].join("|");
 }
 
 /**
@@ -208,7 +209,11 @@ export function operationsHealth(): HealthResult {
     persistenceError,
   };
   if (persistenceError) {
-    return { state: "DEGRADED", message: `configuration not persisted: ${persistenceError}`, details };
+    return {
+      state: "DEGRADED",
+      message: `configuration not persisted: ${persistenceError}`,
+      details,
+    };
   }
   return {
     state: "OK",

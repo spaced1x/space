@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { loadEnv } from "../core/config/env.server";
+import { ENVIRONMENT_MANIFEST, unknownEnvKeys } from "../core/config/manifest";
 import { eventBus } from "../core/bus/events";
 import { engineRuntimeSnapshot } from "../core/engine/loop.server";
 import { executionSnapshot } from "../core/execution/execution.server";
@@ -27,6 +28,30 @@ export const getDiagnostics = createServerFn({ method: "GET" }).handler(async ()
     execution: executionSnapshot(),
     events,
     errors: events.filter((event) => event.severity === "ERROR" || event.severity === "WARNING"),
+  };
+});
+
+/**
+ * The environment contract as the running process sees it. Secret values are
+ * never sent: the operator learns only whether a credential is present.
+ */
+export const getEnvironmentManifest = createServerFn({ method: "GET" }).handler(async () => {
+  return {
+    unknown: unknownEnvKeys(process.env),
+    variables: ENVIRONMENT_MANIFEST.map((entry) => {
+      const raw = process.env[entry.name];
+      const set = raw !== undefined && raw !== "";
+      return {
+        name: entry.name,
+        group: entry.group,
+        secret: entry.secret,
+        requiredForArmed: entry.requiredForArmed,
+        description: entry.description,
+        set,
+        value: entry.secret ? (set ? "••••••••" : "") : (raw ?? ""),
+        usingDefault: !set,
+      };
+    }),
   };
 });
 

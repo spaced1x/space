@@ -100,10 +100,20 @@ export async function placeManualOrder(request: ManualOrderRequest): Promise<Man
   }
   const market = getMarketState().markets[request.horizon];
   if (!market) {
-    return { status: "REJECTED", reason: "no active market for this horizon", order: null, risk: null };
+    return {
+      status: "REJECTED",
+      reason: "no active market for this horizon",
+      order: null,
+      risk: null,
+    };
   }
   if (!(request.size > 0)) {
-    return { status: "REJECTED", reason: "size must be greater than zero", order: null, risk: null };
+    return {
+      status: "REJECTED",
+      reason: "size must be greater than zero",
+      order: null,
+      risk: null,
+    };
   }
 
   const intent = buildManualIntent({
@@ -130,7 +140,12 @@ export async function placeManualOrder(request: ManualOrderRequest): Promise<Man
   const { lastRiskDecision } = await import("./execution.server");
   const risk = lastRiskDecision();
   return order
-    ? { status: "ACCEPTED", reason: `manual ${request.direction} ${request.kind} submitted`, order, risk }
+    ? {
+        status: "ACCEPTED",
+        reason: `manual ${request.direction} ${request.kind} submitted`,
+        order,
+        risk,
+      }
     : {
         status: "REJECTED",
         reason: risk ? `${risk.code}: ${risk.reason}` : "rejected by the Risk Engine",

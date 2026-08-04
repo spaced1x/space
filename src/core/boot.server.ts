@@ -15,11 +15,7 @@ import { replayHealth } from "./replay/replay.server";
 import { statisticsHealth } from "./stats/statistics.server";
 import { engineHealth, feeds, startEngineLoop } from "./engine/loop.server";
 import { discoveryHealth } from "./market/discovery.server";
-import {
-  clobMarketHealth,
-  pollClobMarketFeed,
-  startClobMarketFeed,
-} from "./market/clob-ws.server";
+import { clobMarketHealth, pollClobMarketFeed, startClobMarketFeed } from "./market/clob-ws.server";
 import { registerTask, schedulerHealth, startScheduler } from "./scheduler/scheduler.server";
 import { settlementTwapHealth, strategyHealth } from "./strategy/strategy.server";
 import { executionHealth, riskHealth } from "./execution/execution.server";
@@ -40,7 +36,11 @@ import {
   reportConnection,
 } from "./runtime/connections.server";
 import { syncConnections } from "./runtime/connection-sync.server";
-import { readRuntimeTarget, requestEnvironmentSwitch, targetMatchesEnvironment } from "./runtime/target.server";
+import {
+  readRuntimeTarget,
+  requestEnvironmentSwitch,
+  targetMatchesEnvironment,
+} from "./runtime/target.server";
 import { resetEnvCache } from "./config/env.server";
 import { invalidatePeek, type EnvironmentCode } from "./runtime/peek.server";
 import {
@@ -163,7 +163,10 @@ async function stage<T>(name: string, run: () => T | Promise<T>): Promise<T> {
     entry.recovery =
       "manual — resolve the reported cause and restart SPACE; the boot sequence does not skip stages";
     entry.completedAt = new Date().toISOString();
-    stageLog.error(`boot stage failed: ${name}`, { durationMs: entry.durationMs, reason: entry.error });
+    stageLog.error(`boot stage failed: ${name}`, {
+      durationMs: entry.durationMs,
+      reason: entry.error,
+    });
     throw error;
   }
 }
@@ -222,55 +225,54 @@ async function runBoot(): Promise<void> {
   await stage("clock-service", () => registerClockService());
 
   await stage("health-registry", () => {
+    registerHealthCheck("configuration", () => {
+      const readiness = describeEnvReadiness();
+      return {
+        state: !readiness.valid ? "FAILED" : readiness.missingForArmed.length ? "DEGRADED" : "OK",
+        message: readiness.message,
+        details: { environment: readiness.environment, missingForArmed: readiness.missingForArmed },
+      };
+    });
 
-  registerHealthCheck("configuration", () => {
-    const readiness = describeEnvReadiness();
-    return {
-      state: !readiness.valid ? "FAILED" : readiness.missingForArmed.length ? "DEGRADED" : "OK",
-      message: readiness.message,
-      details: { environment: readiness.environment, missingForArmed: readiness.missingForArmed },
-    };
-  });
+    registerHealthCheck("database", databaseHealth);
 
-  registerHealthCheck("database", databaseHealth);
+    registerHealthCheck("logging", () => ({
+      state: "OK",
+      message: fileSink ? "console + rotating file sink" : "console sink only",
+      details: { level: env.LOG_LEVEL, dir: env.LOG_DIR },
+    }));
 
-  registerHealthCheck("logging", () => ({
-    state: "OK",
-    message: fileSink ? "console + rotating file sink" : "console sink only",
-    details: { level: env.LOG_LEVEL, dir: env.LOG_DIR },
-  }));
+    registerHealthCheck("dashboard", () => ({
+      state: "OK",
+      message: "serving mission control",
+    }));
 
-  registerHealthCheck("dashboard", () => ({
-    state: "OK",
-    message: "serving mission control",
-  }));
+    registerHealthCheck("clock", clockServiceHealth);
+    registerHealthCheck("scheduler", schedulerHealth);
+    registerHealthCheck("engine", engineHealth);
+    registerHealthCheck("market_discovery", discoveryHealth);
+    registerHealthCheck("settlement_twap", settlementTwapHealth);
+    registerHealthCheck("strategy", strategyHealth);
+    registerHealthCheck("wallet", walletHealth);
+    registerHealthCheck("polymarket", () => venueAdapter.health());
+    registerHealthCheck("risk", riskHealth);
+    registerHealthCheck("execution", executionHealth);
+    registerHealthCheck("operations", operationsHealth);
+    registerHealthCheck("replay", replayHealth);
+    registerHealthCheck("statistics", statisticsHealth);
+    registerHealthCheck("binance", () => feedHealth("binance"));
+    registerHealthCheck("clob_market_feed", clobMarketHealth);
+    registerHealthCheck("chainlink", () => feedHealth("chainlink"));
 
-  registerHealthCheck("clock", clockServiceHealth);
-  registerHealthCheck("scheduler", schedulerHealth);
-  registerHealthCheck("engine", engineHealth);
-  registerHealthCheck("market_discovery", discoveryHealth);
-  registerHealthCheck("settlement_twap", settlementTwapHealth);
-  registerHealthCheck("strategy", strategyHealth);
-  registerHealthCheck("wallet", walletHealth);
-  registerHealthCheck("polymarket", () => venueAdapter.health());
-  registerHealthCheck("risk", riskHealth);
-  registerHealthCheck("execution", executionHealth);
-  registerHealthCheck("operations", operationsHealth);
-  registerHealthCheck("replay", replayHealth);
-  registerHealthCheck("statistics", statisticsHealth);
-  registerHealthCheck("binance", () => feedHealth("binance"));
-  registerHealthCheck("clob_market_feed", clobMarketHealth);
-  registerHealthCheck("chainlink", () => feedHealth("chainlink"));
+    // Windows are implemented switches, so they report DISABLED (not
+    // NOT_INITIALIZED) whenever the operator turns them off.
+    registerHealthCheck("window_5m", () => windowHealth("fiveMinute", "BTC 5 minute"));
+    registerHealthCheck("window_15m", () => windowHealth("fifteenMinute", "BTC 15 minute"));
 
-  // Windows are implemented switches, so they report DISABLED (not
-  // NOT_INITIALIZED) whenever the operator turns them off.
-  registerHealthCheck("window_5m", () => windowHealth("fiveMinute", "BTC 5 minute"));
-  registerHealthCheck("window_15m", () => windowHealth("fifteenMinute", "BTC 15 minute"));
-
-  registerHealthCheck("telegram", telegramServiceHealth);
-  registerHealthCheck("backup", backupServiceHealth);
-  registerHealthCheck("settlement", settlementHealth);
-  registerHealthCheck("environment_conformance", conformanceHealth);
+    registerHealthCheck("telegram", telegramServiceHealth);
+    registerHealthCheck("backup", backupServiceHealth);
+    registerHealthCheck("settlement", settlementHealth);
+    registerHealthCheck("environment_conformance", conformanceHealth);
   });
 
   // Boot-time evaluation of the composite environment gate.
@@ -429,10 +431,7 @@ function currentEnvironment(): EnvironmentCode {
   }
 }
 
-async function bootAndAudit(
-  phase: "START" | "SWITCH",
-  cid: string,
-): Promise<RuntimeTransition> {
+async function bootAndAudit(phase: "START" | "SWITCH", cid: string): Promise<RuntimeTransition> {
   const environment = currentEnvironment();
   stoppedByOperator = false;
   try {
@@ -440,7 +439,11 @@ async function bootAndAudit(
     await boot();
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    updateRuntimeState({ lifecycle: "FAILED", shutdownReason: reason }, `boot failed: ${reason}`, cid);
+    updateRuntimeState(
+      { lifecycle: "FAILED", shutdownReason: reason },
+      `boot failed: ${reason}`,
+      cid,
+    );
     return { ok: false, reason, environment, audit: auditRuntimeResources(phase, "RUNNING") };
   }
 

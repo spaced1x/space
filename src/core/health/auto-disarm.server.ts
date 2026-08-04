@@ -15,14 +15,7 @@ const log = createLogger("auto-disarm");
 
 const AUTO_DISARM_INTERVAL_MS = 1000;
 
-const CRITICAL_COMPONENTS = [
-  "database",
-  "scheduler",
-  "execution",
-  "risk",
-  "wallet",
-  "polymarket",
-];
+const CRITICAL_COMPONENTS = ["database", "scheduler", "execution", "risk", "wallet", "polymarket"];
 
 export function registerAutoDisarmTask(): void {
   registerTask({
@@ -34,7 +27,9 @@ export function registerAutoDisarmTask(): void {
 
       const report = await collectHealth();
       const failed = report.components.filter(
-        (entry) => CRITICAL_COMPONENTS.includes(entry.component) && (entry.state === "FAILED" || entry.state === "DEGRADED"),
+        (entry) =>
+          CRITICAL_COMPONENTS.includes(entry.component) &&
+          (entry.state === "FAILED" || entry.state === "DEGRADED"),
       );
       if (!failed.length) return;
 

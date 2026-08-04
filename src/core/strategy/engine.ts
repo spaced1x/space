@@ -158,7 +158,9 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
           plan,
           window,
           "WINDOW_DISABLED",
-          horizonEnabled ? "window disabled in configuration" : "market horizon disabled by operator",
+          horizonEnabled
+            ? "window disabled in configuration"
+            : "market horizon disabled by operator",
           at,
           sink,
         );
@@ -191,7 +193,14 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
       if (window.state === "WAITING") {
         if (nowMs < opensAtMs) continue;
         if (quotaState(plan.windows, plan.config).remaining <= 0) {
-          transition(plan, window, "QUOTA_EXHAUSTED", "trades per market already consumed", at, sink);
+          transition(
+            plan,
+            window,
+            "QUOTA_EXHAUSTED",
+            "trades per market already consumed",
+            at,
+            sink,
+          );
           continue;
         }
         transition(plan, window, "OPEN", "window opened", at, sink);
@@ -242,7 +251,14 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
           continue;
         }
         if (quotaState(plan.windows, plan.config).remaining <= 0) {
-          transition(plan, window, "QUOTA_EXHAUSTED", "trades per market already consumed", at, sink);
+          transition(
+            plan,
+            window,
+            "QUOTA_EXHAUSTED",
+            "trades per market already consumed",
+            at,
+            sink,
+          );
           continue;
         }
         window.triggeredAt = at;
@@ -296,7 +312,8 @@ export function createStrategyEngine(input: StrategyConfig): StrategyEngine {
     let best: MarketPlan | null = null;
     for (const plan of plans.values()) {
       const live = plan.windows.some((w) => !TERMINAL_WINDOW_STATES.includes(w.state));
-      const bestLive = best?.windows.some((w) => !TERMINAL_WINDOW_STATES.includes(w.state)) ?? false;
+      const bestLive =
+        best?.windows.some((w) => !TERMINAL_WINDOW_STATES.includes(w.state)) ?? false;
       if (!best) {
         best = plan;
         continue;

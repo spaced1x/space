@@ -79,7 +79,10 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
   return (
     <div className="min-w-0">
       <dt className="text-label text-muted-foreground">{label}</dt>
-      <dd className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`} title={title}>
+      <dd
+        className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`}
+        title={title}
+      >
         {value}
       </dd>
     </div>

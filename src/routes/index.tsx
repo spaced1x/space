@@ -81,11 +81,11 @@ function OperatorConsole() {
             {snapshot.error ? "Runtime snapshot unavailable" : "Reading runtime snapshot"}
           </p>
           <dl className="mt-4 grid gap-2">
-            <EmptyLine term="What" detail="Mission Control is waiting for the first runtime snapshot" />
             <EmptyLine
-              term="Why"
-              detail={snapshot.reason}
+              term="What"
+              detail="Mission Control is waiting for the first runtime snapshot"
             />
+            <EmptyLine term="Why" detail={snapshot.reason} />
             <EmptyLine
               term="Action"
               detail={
@@ -94,7 +94,10 @@ function OperatorConsole() {
                   : "Wait for the boot sequence to complete (STARTING → VALIDATING → READY)"
               }
             />
-            <EmptyLine term="Blocked" detail="Dashboard only — trading is unaffected by this page" />
+            <EmptyLine
+              term="Blocked"
+              detail="Dashboard only — trading is unaffected by this page"
+            />
             <EmptyLine
               term="Recovery"
               detail="Automatic — the terminal keeps polling and recovers without a refresh"
@@ -260,4 +263,3 @@ function EmptyLine({ term, detail }: { term: string; detail: string }) {
     </div>
   );
 }
-

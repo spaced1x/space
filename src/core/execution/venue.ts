@@ -24,12 +24,7 @@ export interface VenueOrderAck {
 }
 
 export type VenueOrderStatusCode =
-  | "OPEN"
-  | "MATCHED"
-  | "CANCELLED"
-  | "EXPIRED"
-  | "FAILED"
-  | "UNKNOWN";
+  "OPEN" | "MATCHED" | "CANCELLED" | "EXPIRED" | "FAILED" | "UNKNOWN";
 
 export interface VenueOrderStatus {
   venueOrderId: string;

@@ -47,7 +47,7 @@ export function acquireInstanceLock(): LockHandle {
     const code = (error as { code?: string }).code;
     if (code === "EEXIST") {
       const existing = (
-        fs.existsSync(path) ? fs.readFileSync(path, "utf8").split("\n")[0] ?? "" : ""
+        fs.existsSync(path) ? (fs.readFileSync(path, "utf8").split("\n")[0] ?? "") : ""
       ).trim();
       const existingPid = Number.parseInt(existing, 10);
 

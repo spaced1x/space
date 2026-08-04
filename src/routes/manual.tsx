@@ -49,8 +49,7 @@ function ManualTrading() {
   });
 
   const order = useMutation({
-    mutationFn: (direction: "UP" | "DOWN") =>
-      place({ data: { horizon, direction, kind, size } }),
+    mutationFn: (direction: "UP" | "DOWN") => place({ data: { horizon, direction, kind, size } }),
     onSuccess: (result) => {
       if (result.status === "ACCEPTED") toast.success(`Order accepted — ${result.reason}`);
       else toast.error(`Rejected — ${result.reason}`);
@@ -74,9 +73,10 @@ function ManualTrading() {
 
   const data = desk.data;
   // The Command Bus returns a verdict; the risk decision travels in details.
-  const lastRisk = (order.data?.details as
-    | { risk?: { status: string; reason: string; code: string; at: string } | null }
-    | undefined)?.risk;
+  const lastRisk = (
+    order.data?.details as
+      { risk?: { status: string; reason: string; code: string; at: string } | null } | undefined
+  )?.risk;
 
   return (
     <ConsoleShell
@@ -175,9 +175,7 @@ function ManualTrading() {
       {lastRisk && (
         <Panel title="Last risk decision">
           <div className="rounded-lg border border-border bg-card p-4 font-mono text-[11px] text-muted-foreground">
-            <p
-              className={lastRisk.status === "APPROVED" ? "text-ok" : "text-fail"}
-            >
+            <p className={lastRisk.status === "APPROVED" ? "text-ok" : "text-fail"}>
               {lastRisk.status} — {lastRisk.reason}
             </p>
             <p className="mt-1">

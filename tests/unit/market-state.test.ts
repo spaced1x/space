@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { applyDiscovery, applyPriceSample, getMarketState, resetMarketState } from "../../src/core/market/state";
+import {
+  applyDiscovery,
+  applyPriceSample,
+  getMarketState,
+  resetMarketState,
+} from "../../src/core/market/state";
 
 describe("unified market state", () => {
   beforeEach(() => {

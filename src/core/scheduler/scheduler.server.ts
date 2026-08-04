@@ -325,12 +325,17 @@ export function schedulerHealth(): HealthResult {
   }
   const failing = status.tasks.filter((task) => task.lastError !== null);
   const overdue = status.tasks.filter((task) => task.overdueMs > task.intervalMs * 3);
-  if (failing.length || overdue.length || status.overlaps > 0 || status.duplicateRegistrations > 0) {
+  if (
+    failing.length ||
+    overdue.length ||
+    status.overlaps > 0 ||
+    status.duplicateRegistrations > 0
+  ) {
     return {
       state: "DEGRADED",
       message:
-        `${failing.length} failing, ${overdue.length} overdue task(s), `
-        + `${status.overlaps} overlap(s), ${status.duplicateRegistrations} duplicate registration(s)`,
+        `${failing.length} failing, ${overdue.length} overdue task(s), ` +
+        `${status.overlaps} overlap(s), ${status.duplicateRegistrations} duplicate registration(s)`,
       details: { ...status },
     };
   }

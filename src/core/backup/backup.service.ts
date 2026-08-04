@@ -15,7 +15,10 @@ export interface BackupResult {
   message: string;
 }
 
-export async function performBackup(kind: "MANUAL" | "SCHEDULED", label?: string): Promise<BackupResult> {
+export async function performBackup(
+  kind: "MANUAL" | "SCHEDULED",
+  label?: string,
+): Promise<BackupResult> {
   const env = loadEnv();
   const sourcePath = path.resolve(resolveDbPath(env));
   const backupDir = path.join(path.dirname(sourcePath), "backups");
@@ -51,7 +54,8 @@ export async function restoreBackup(backupId: number): Promise<BackupResult> {
   const records = await backupRepository.recent(1000);
   const record = records.find((r) => r.id === backupId);
   if (!record) return { success: false, message: `backup ${backupId} not found` };
-  if (record.state !== "SUCCESS") return { success: false, message: `backup ${backupId} is not verified` };
+  if (record.state !== "SUCCESS")
+    return { success: false, message: `backup ${backupId} is not verified` };
 
   const targetPath = path.resolve(resolveDbPath(env));
   const sourcePath = record.target_path;

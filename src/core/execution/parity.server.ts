@@ -23,7 +23,14 @@ export interface ParityStatus {
   comparedAt: string | null;
   comparablePairs: number;
   divergentPairs: number;
-  failures: { conditionId: string; windowSeconds: number; field: string; v1: string; v2: string; at: string }[];
+  failures: {
+    conditionId: string;
+    windowSeconds: number;
+    field: string;
+    v1: string;
+    v2: string;
+    at: string;
+  }[];
   message: string;
 }
 
@@ -38,19 +45,24 @@ let status: ParityStatus = {
 let lastCompareMs = 0;
 
 /** Build the tuple from the runtime's own values. Nothing here is synthesised. */
-export function currentParityTuple(): { tuple: ParityTuple; conditionId: string; windowSeconds: number } | null {
+export function currentParityTuple(): {
+  tuple: ParityTuple;
+  conditionId: string;
+  windowSeconds: number;
+} | null {
   const strategy = strategySnapshot();
   const execution = executionSnapshot();
   const conditionId = strategy.market.conditionId;
   if (!conditionId) return null;
-  const window = strategy.windows.find((entry) => entry.id === strategy.activeWindowId)
-    ?? strategy.windows.at(-1);
+  const window =
+    strategy.windows.find((entry) => entry.id === strategy.activeWindowId) ??
+    strategy.windows.at(-1);
   if (!window) return null;
 
   const tuple: ParityTuple = {
     discoveredMarket:
-      (strategy.market.horizon ? getMarketState().markets[strategy.market.horizon]?.slug : null)
-      ?? strategy.market.slug,
+      (strategy.market.horizon ? getMarketState().markets[strategy.market.horizon]?.slug : null) ??
+      strategy.market.slug,
     selectedMarket: strategy.market.slug ?? conditionId,
     windowSeconds: window.seconds,
     direction: strategy.prediction.direction,

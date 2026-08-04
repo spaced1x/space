@@ -26,9 +26,8 @@ describe("single-instance lock", () => {
   });
 
   it("acquires the lock and blocks a second process from creating the same lock file", async () => {
-    const { acquireInstanceLock, releaseInstanceLock, instanceLockHeld } = await import(
-      "../../src/core/db/lock.server"
-    );
+    const { acquireInstanceLock, releaseInstanceLock, instanceLockHeld } =
+      await import("../../src/core/db/lock.server");
     const handle = acquireInstanceLock();
     expect(instanceLockHeld()).toBe(true);
     expect(handle.path).toContain("space.db.lock");

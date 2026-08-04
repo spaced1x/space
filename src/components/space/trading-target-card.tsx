@@ -44,7 +44,10 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
 
       <dl className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
         <Field label="Market status" value={market.status} />
-        <Field label="Settlement" value={market.settlementAt ? new Date(market.settlementAt).toLocaleTimeString() : "—"} />
+        <Field
+          label="Settlement"
+          value={market.settlementAt ? new Date(market.settlementAt).toLocaleTimeString() : "—"}
+        />
         <Field label="Countdown" value={<Countdown iso={market.settlementAt} />} accent />
         <Field label="Price to beat" value={market.ptb === null ? "—" : market.ptb.toFixed(2)} />
         <Field label="Probability (UP)" value={price(market.probability)} />
@@ -52,10 +55,16 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
         <Field label="Best ask" value={price(market.bestAsk)} />
         <Field label="Mid price" value={price(market.midPrice)} />
         <Field label="Spread" value={price(market.spread)} />
-        <Field label="Minimum order size" value={market.minOrderSize === null ? "—" : String(market.minOrderSize)} />
+        <Field
+          label="Minimum order size"
+          value={market.minOrderSize === null ? "—" : String(market.minOrderSize)}
+        />
         <Field label="Liquidity" value={money(market.liquidity)} />
         <Field label="Volume" value={money(market.volume)} />
-        <Field label="Resolution source" value={market.resolutionSource ?? "official venue resolution"} />
+        <Field
+          label="Resolution source"
+          value={market.resolutionSource ?? "official venue resolution"}
+        />
         <Field label="Market ID" value={market.slug} mono />
         <Field label="Condition ID" value={market.conditionId} mono />
         <Field label="YES token" value={market.upTokenId ?? "—"} mono />

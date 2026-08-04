@@ -57,10 +57,10 @@ function stampEnvironment(driver: SqlDriver, environment: string): void {
     "SELECT value FROM space_meta WHERE key = 'environment'",
   )?.value;
   if (!existing) {
-    driver.run(
-      "INSERT INTO space_meta (key, value, updated_at) VALUES ('environment', ?, ?)",
-      [environment, systemClock.iso()],
-    );
+    driver.run("INSERT INTO space_meta (key, value, updated_at) VALUES ('environment', ?, ?)", [
+      environment,
+      systemClock.iso(),
+    ]);
     state.environmentStamp = environment;
     return;
   }

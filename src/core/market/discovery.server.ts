@@ -237,7 +237,9 @@ export async function refreshMarkets(): Promise<void> {
         bestBid,
         bestAsk,
         midPrice: bestBid !== null && bestAsk !== null ? (bestBid + bestAsk) / 2 : null,
-        spread: asNumber(candidate.spread) ?? (bestBid !== null && bestAsk !== null ? bestAsk - bestBid : null),
+        spread:
+          asNumber(candidate.spread) ??
+          (bestBid !== null && bestAsk !== null ? bestAsk - bestBid : null),
         minOrderSize: asNumber(candidate.orderMinSize),
         resolutionSource: candidate.resolutionSource ?? candidate.umaResolutionStatus ?? null,
       };

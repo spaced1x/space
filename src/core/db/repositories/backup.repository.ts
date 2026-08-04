@@ -39,10 +39,7 @@ export const backupRepository = {
 
   async markFailed(id: number, message: string): Promise<void> {
     const driver = await requireDriver();
-    driver.run(
-      `UPDATE backups SET state = 'FAILED', message = ? WHERE id = ?`,
-      [message, id],
-    );
+    driver.run(`UPDATE backups SET state = 'FAILED', message = ? WHERE id = ?`, [message, id]);
   },
 
   async recent(limit = 20): Promise<BackupRecord[]> {

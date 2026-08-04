@@ -113,10 +113,7 @@ export interface WindowRecord {
 }
 
 export type StrategyEventType =
-  | "window.transition"
-  | "window.frozen"
-  | "intent.created"
-  | "market.plan.created";
+  "window.transition" | "window.frozen" | "intent.created" | "market.plan.created";
 
 export interface StrategyEvent {
   type: StrategyEventType;

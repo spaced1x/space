@@ -69,7 +69,10 @@ export const settlementRepository = {
    * Markets whose settlement time has passed and which are still missing a
    * final outcome. This is the ingestion work list.
    */
-  async pending(nowIso: string, limit = 20): Promise<
+  async pending(
+    nowIso: string,
+    limit = 20,
+  ): Promise<
     {
       condition_id: string;
       slug: string;

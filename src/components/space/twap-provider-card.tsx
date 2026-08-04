@@ -13,7 +13,9 @@ function Ago({ iso }: { iso: string | null }) {
   return <>{ago}</>;
 }
 
-function projectHealth(state: TwapProviderState): "OK" | "DEGRADED" | "FAILED" | "DISABLED" | "NOT_INITIALIZED" {
+function projectHealth(
+  state: TwapProviderState,
+): "OK" | "DEGRADED" | "FAILED" | "DISABLED" | "NOT_INITIALIZED" {
   switch (state) {
     case "CONNECTED":
       return "OK";
@@ -68,7 +70,10 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
       <dl className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
         <Field label="Active provider" value={active?.label ?? twap.activeProviderId} />
         <Field label="Settlement price" value={price(active?.price ?? null)} />
-        <Field label="Freshness" value={active?.freshnessMs == null ? "—" : `${active.freshnessMs} ms`} />
+        <Field
+          label="Freshness"
+          value={active?.freshnessMs == null ? "—" : `${active.freshnessMs} ms`}
+        />
         <Field label="Latency" value={active?.latencyMs == null ? "—" : `${active.latencyMs} ms`} />
         <Field label="Samples" value={String(active?.samples ?? 0)} />
         <Field label="Errors" value={String(active?.errors ?? 0)} />
@@ -77,24 +82,28 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
         <Field label="Endpoint" value={active?.endpoint ?? "—"} mono />
         <Field label="Symbol" value={active?.symbol ?? "—"} />
         <Field label="Transport" value={active?.transport ?? "—"} />
-        <Field label="Standby providers" value={twap.providers.length <= 1 ? "none" : String(twap.providers.length - 1)} />
+        <Field
+          label="Standby providers"
+          value={twap.providers.length <= 1 ? "none" : String(twap.providers.length - 1)}
+        />
       </dl>
 
       {twap.providers.length > 1 && (
         <div className="mt-4 space-y-2">
-          <h4 className="text-label font-semibold uppercase tracking-wide text-muted-foreground">Standby providers</h4>
+          <h4 className="text-label font-semibold uppercase tracking-wide text-muted-foreground">
+            Standby providers
+          </h4>
           <div className="grid gap-2 sm:grid-cols-2">
             {twap.providers
               .filter((provider) => provider.id !== twap.activeProviderId)
               .map((provider) => (
-                <div
-                  key={provider.id}
-                  className="rounded-md border border-border bg-muted/40 p-3"
-                >
+                <div key={provider.id} className="rounded-md border border-border bg-muted/40 p-3">
                   <div className="flex items-center gap-2">
                     <StatusDot state={projectHealth(provider.state)} />
                     <span className="font-medium text-foreground">{provider.label}</span>
-                    <span className="ml-auto font-mono text-status uppercase">{provider.state.replace(/_/g, " ")}</span>
+                    <span className="ml-auto font-mono text-status uppercase">
+                      {provider.state.replace(/_/g, " ")}
+                    </span>
                   </div>
                   <p className="mt-1 text-status text-muted-foreground">{provider.reason}</p>
                 </div>
@@ -111,7 +120,10 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
   return (
     <div className="min-w-0">
       <dt className="text-label text-muted-foreground">{label}</dt>
-      <dd className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`} title={title}>
+      <dd
+        className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`}
+        title={title}
+      >
         {value}
       </dd>
     </div>

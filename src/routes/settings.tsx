@@ -91,7 +91,10 @@ function Settings() {
         <Row label="Path" value={String(details["path"] ?? info.data?.environment.dbPath ?? "—")} />
         <Row label="Schema version" value={String(details["schemaVersion"] ?? "—")} />
         <Row label="Size (bytes)" value={String(details["sizeBytes"] ?? "—")} />
-        <Row label="Status" value={info.data ? `${info.data.database.state} — ${info.data.database.message}` : "…"} />
+        <Row
+          label="Status"
+          value={info.data ? `${info.data.database.state} — ${info.data.database.message}` : "…"}
+        />
       </Panel>
 
       <Panel title="Backup, export and restore">
@@ -99,8 +102,9 @@ function Settings() {
           <p className="text-xs leading-relaxed text-muted-foreground">
             SPACE is portable by clone → restore → run. Stop the process, copy the SQLite file
             (including <span className="font-mono">-wal</span> and{" "}
-            <span className="font-mono">-shm</span> siblings) plus your <span className="font-mono">.env</span>,
-            then start SPACE on the new host. No cloud service is involved.
+            <span className="font-mono">-shm</span> siblings) plus your{" "}
+            <span className="font-mono">.env</span>, then start SPACE on the new host. No cloud
+            service is involved.
           </p>
           <Button size="sm" variant="outline" onClick={exportSnapshot} disabled={!info.data}>
             Export system information (JSON)

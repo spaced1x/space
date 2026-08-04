@@ -49,7 +49,11 @@ export function decideSize(input: SizingInput): SizingDecision {
     );
   }
   if (!(requested > 0)) {
-    return decide(0, input.source === "MANUAL" ? "MANUAL_REQUEST" : "WINDOW_SIZE", "requested size is not greater than zero");
+    return decide(
+      0,
+      input.source === "MANUAL" ? "MANUAL_REQUEST" : "WINDOW_SIZE",
+      "requested size is not greater than zero",
+    );
   }
   return decide(
     requested,

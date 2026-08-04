@@ -23,11 +23,7 @@ import {
 } from "../core/runtime/connections.server";
 import { syncConnections } from "../core/runtime/connection-sync.server";
 import { databaseHealth } from "../core/db/database.server";
-import {
-  activeEnvironment,
-  otherEnvironment,
-  peekEnvironment,
-} from "../core/runtime/peek.server";
+import { activeEnvironment, otherEnvironment, peekEnvironment } from "../core/runtime/peek.server";
 import { lastResourceAudit, resourceAuditHistory } from "../core/runtime/resources.server";
 import { recoveryLedger } from "../core/runtime/recovery.server";
 import { measureStability, recordSnapshotGeneration } from "../core/metrics/stability.server";
@@ -107,7 +103,10 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
   );
   const metrics = await safeAsync(
     "metrics",
-    async () => ({ latest: await metricsRepository.latest(), history: await metricsRepository.recent(100) }),
+    async () => ({
+      latest: await metricsRepository.latest(),
+      history: await metricsRepository.recent(100),
+    }),
     { latest: null, history: [] },
   );
   const validation = await safeAsync("validation", () => runStartupValidation(), {
@@ -159,7 +158,7 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
       buildVersion: process.env["SPACE_BUILD_VERSION"] ?? "1.0.0",
       gitCommit: process.env["SPACE_GIT_COMMIT"] ?? "unknown",
       schemaVersion:
-        ((db.details as { schemaVersion?: number | null } | undefined)?.schemaVersion ?? null),
+        (db.details as { schemaVersion?: number | null } | undefined)?.schemaVersion ?? null,
     },
   };
   const generatedAt = systemClock.iso();

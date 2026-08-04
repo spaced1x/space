@@ -8,11 +8,16 @@ import { ProductionPanel } from "../components/space/production-panel";
 import { RuntimePanel } from "../components/space/runtime-panel";
 import { RuntimeDiagnostics } from "../components/space/runtime-diagnostics";
 import { StatusDot, stateLabel } from "../components/space/status-dot";
+import { EnvironmentManifestPanel } from "../components/space/environment-manifest-panel";
 import { ExecutionPanel } from "../components/space/execution-panel";
 import { BotPredictionPanel, StrategyPanel } from "../components/space/strategy-panel";
 import { IntentList, WindowTimeline } from "../components/space/window-timeline";
 import type { EventSeverity } from "../core/bus/events";
-import { getDiagnostics, getFailureHarness, setFailureScenario } from "../lib/diagnostics.functions";
+import {
+  getDiagnostics,
+  getFailureHarness,
+  setFailureScenario,
+} from "../lib/diagnostics.functions";
 
 export const Route = createFileRoute("/diagnostics")({
   head: () => ({
@@ -199,6 +204,8 @@ function Diagnostics() {
               ))}
             </div>
           </Panel>
+
+          <EnvironmentManifestPanel />
 
           <ProductionPanel />
 

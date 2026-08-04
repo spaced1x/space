@@ -108,7 +108,14 @@ export const parityRepository = {
   },
 
   async failures(limit = 50): Promise<
-    { conditionId: string; windowSeconds: number; field: string; v1: string; v2: string; at: string }[]
+    {
+      conditionId: string;
+      windowSeconds: number;
+      field: string;
+      v1: string;
+      v2: string;
+      at: string;
+    }[]
   > {
     const driver = await requireDriver();
     return driver

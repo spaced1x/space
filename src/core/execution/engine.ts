@@ -528,10 +528,15 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
         // Market fallback waiting to be built (mode LIMIT_THEN_MARKET).
         if (order.state === "LIMIT_CANCELLED" && order.mode === "LIMIT_THEN_MARKET") {
           const price = await priceFor(intentOf(order), order.tokenId);
-          const rebuilt = await advance(order, "ORDER_BUILD", "market fallback after limit timeout", {
-            kind: "MARKET",
-            limitPrice: price,
-          });
+          const rebuilt = await advance(
+            order,
+            "ORDER_BUILD",
+            "market fallback after limit timeout",
+            {
+              kind: "MARKET",
+              limitPrice: price,
+            },
+          );
           await submit(rebuilt, "MARKET");
           continue;
         }
@@ -584,8 +589,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
       }
     },
 
-    orders: () =>
-      [...orders.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    orders: () => [...orders.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
     fills: () => [...fills.values()].sort((a, b) => (a.filledAt < b.filledAt ? 1 : -1)),
     positions: () => buildPositions([...orders.values()], [...fills.values()]),
     lastRisk: () => last,

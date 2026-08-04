@@ -73,11 +73,7 @@ export async function teardownRuntime(reason: string): Promise<RuntimeResourceAu
     resetStability();
 
     // Persist the final state while storage is still attached.
-    updateRuntimeState(
-      { lifecycle: "STOPPED", shutdownReason: reason },
-      `stopped: ${reason}`,
-      cid,
-    );
+    updateRuntimeState({ lifecycle: "STOPPED", shutdownReason: reason }, `stopped: ${reason}`, cid);
 
     // No listener generation may survive; the next boot re-subscribes.
     eventBus.clearSubscribers();

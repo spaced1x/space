@@ -49,7 +49,9 @@ export function AsyncPanel<T>({
   if (error) {
     return (
       <Shell tone="fail">
-        <p>{label} could not be read — {error.message}</p>
+        <p>
+          {label} could not be read — {error.message}
+        </p>
         <p className="text-caption">
           {action ?? "SPACE keeps retrying automatically; no refresh is required."}
         </p>

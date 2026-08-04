@@ -26,7 +26,9 @@ export function ConnectionHistory({ entries }: { entries: ConnectionTimelineEntr
         <thead className="bg-muted/60 text-muted-foreground">
           <tr>
             <th className="px-5 py-3 text-status font-normal uppercase tracking-wide">Time</th>
-            <th className="px-5 py-3 text-status font-normal uppercase tracking-wide">Connection</th>
+            <th className="px-5 py-3 text-status font-normal uppercase tracking-wide">
+              Connection
+            </th>
             <th className="px-5 py-3 text-status font-normal uppercase tracking-wide">State</th>
             <th className="px-5 py-3 text-status font-normal uppercase tracking-wide">Message</th>
           </tr>
@@ -36,13 +38,17 @@ export function ConnectionHistory({ entries }: { entries: ConnectionTimelineEntr
             <tr key={`${entry.at}-${entry.id}`}>
               <td className="px-5 py-3 font-mono text-status whitespace-nowrap">
                 {new Date(entry.at).toLocaleTimeString()}
-                <span className="ml-2 text-muted-foreground">(<Ago iso={entry.at} />)</span>
+                <span className="ml-2 text-muted-foreground">
+                  (<Ago iso={entry.at} />)
+                </span>
               </td>
               <td className="px-5 py-3 font-medium text-card-foreground">{entry.label}</td>
               <td className="px-5 py-3">
                 <div className="flex items-center gap-2">
                   <StatusDot state={projectHealth(entry.state)} />
-                  <span className="font-mono text-status uppercase">{entry.state.replace(/_/g, " ")}</span>
+                  <span className="font-mono text-status uppercase">
+                    {entry.state.replace(/_/g, " ")}
+                  </span>
                 </div>
               </td>
               <td className="px-5 py-3 text-muted-foreground">{entry.message}</td>
@@ -54,7 +60,9 @@ export function ConnectionHistory({ entries }: { entries: ConnectionTimelineEntr
   );
 }
 
-function projectHealth(state: ConnectionTimelineEntry["state"]): "OK" | "DEGRADED" | "FAILED" | "DISABLED" | "NOT_INITIALIZED" {
+function projectHealth(
+  state: ConnectionTimelineEntry["state"],
+): "OK" | "DEGRADED" | "FAILED" | "DISABLED" | "NOT_INITIALIZED" {
   switch (state) {
     case "CONNECTED":
       return "OK";

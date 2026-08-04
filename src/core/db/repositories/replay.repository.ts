@@ -143,7 +143,9 @@ export const replayRepository = {
     ]);
   },
 
-  async windowConditions(limit = 50): Promise<
+  async windowConditions(
+    limit = 50,
+  ): Promise<
     { condition_id: string; slug: string; horizon: string; opens_at: string; windows: number }[]
   > {
     const driver = await requireDriver();
