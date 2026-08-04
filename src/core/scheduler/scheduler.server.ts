@@ -119,6 +119,39 @@ export function unregisterTask(name: string): void {
 }
 
 /**
+ * Soak-only cadence compression. Divides every registered task interval so an
+ * accelerated harness observes hours of scheduling behaviour in minutes. It
+ * mutates the live definitions in place — it never re-registers a task — so
+ * duplicate-registration accounting stays truthful. `restoreTaskIntervals()`
+ * puts the original cadence back. Nothing in the runtime calls either.
+ */
+const originalIntervals = new Map<string, number>();
+
+export function compressTaskIntervals(divisor: number): { task: string; intervalMs: number }[] {
+  if (!Number.isFinite(divisor) || divisor < 1) throw new Error("divisor must be >= 1");
+  const applied: { task: string; intervalMs: number }[] = [];
+  const now = clock().now();
+  for (const [name, task] of tasks) {
+    if (!originalIntervals.has(name)) originalIntervals.set(name, task.definition.intervalMs);
+    const source = originalIntervals.get(name)!;
+    const next = Math.max(TICK_MS, Math.round(source / divisor));
+    task.definition.intervalMs = next;
+    task.nextDueAt = Math.min(task.nextDueAt, now + next);
+    applied.push({ task: name, intervalMs: next });
+  }
+  log.warn("task intervals compressed", { divisor, tasks: applied.length });
+  return applied;
+}
+
+export function restoreTaskIntervals(): void {
+  for (const [name, intervalMs] of originalIntervals) {
+    const task = tasks.get(name);
+    if (task) task.definition.intervalMs = intervalMs;
+  }
+  originalIntervals.clear();
+}
+
+/**
  * Remove every registration. Teardown only: a restarted runtime re-registers
  * its tasks from scratch, so a stale definition can never survive a switch.
  */
