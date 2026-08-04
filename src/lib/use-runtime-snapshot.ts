@@ -8,7 +8,7 @@ const POLL_MS = 5_000;
 /** A snapshot older than this is shown as STALE, but the last values stay on screen. */
 const STALE_AFTER_MS = 15_000;
 /** Reject snapshots whose schema version does not match what this dashboard expects. */
-export const EXPECTED_SNAPSHOT_VERSION = 1;
+export const EXPECTED_SNAPSHOT_VERSION = 2;
 
 export type SnapshotLifecycle = "CONNECTING" | "WAITING" | "LIVE" | "STALE" | "RECOVERING";
 
