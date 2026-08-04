@@ -120,7 +120,12 @@ export function countRuntimeResources(): StabilityCounts {
   const engine = safe(engineResources, { loops: 0, binanceFeeds: 0, chainlinkFeeds: 0 });
   const db = safe(databaseResources, { connections: 0, path: null as string | null });
   const lock = safe(lockResources, { locks: 0, path: null as string | null });
-  const twap = safe(twapResources, { services: 0, sockets: 0 } as { services: number; sockets?: number });
+  const twap = safe(twapResources, {
+    services: 0,
+    providers: 0,
+    connected: 0,
+    rtdsSockets: 0,
+  });
   const clob = safe(clobMarketResources, { sockets: 0 });
   const inbound = safe(telegramInboundResources, { pollers: 0, timers: 0 });
   const forwarding = safe(telegramForwardingResources, { forwarders: 0 });
@@ -132,7 +137,7 @@ export function countRuntimeResources(): StabilityCounts {
       engine.binanceFeeds
       + engine.chainlinkFeeds
       + clob.sockets
-      + ((twap as { rtdsSockets?: number }).rtdsSockets ?? 0),
+      + twap.rtdsSockets,
     databaseHandles: db.connections,
     locks: lock.locks,
     eventListeners: bus.handlers,
