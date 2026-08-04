@@ -159,7 +159,7 @@ function Replay() {
                   {window.orderTransitions.length > 0 && (
                     <ul className="mt-2 space-y-1 font-mono text-[10px] text-muted-foreground">
                       {window.orderTransitions.map((transition) => (
-                        <li key={`${transition.at}-${transition.toState}-${transition.sequence}`}>
+                        <li key={`${transition.at}-${transition.toState}`}>
                           order · {new Date(transition.at).toLocaleTimeString()} ·{" "}
                           {transition.fromState ?? "—"} → {transition.toState} · {transition.reason}
                         </li>
