@@ -96,10 +96,10 @@ export async function applyFailureScenario<T>(
     case "throw":
       throw new Error(scenario.errorMessage);
     case "timeout":
-      // A scenario that never settles would leak the caller's promise for the
-      // life of the process, so the hang is bounded and then reported as a
-      // timeout — which is what the real dependency does anyway.
-      await new Promise((resolve) => setTimeout(resolve, scenario.delayMs ?? 30_000));
+      // The delay above already held the caller. A scenario that never settles
+      // would leak that promise for the life of the process, so the hang is
+      // bounded and then reported as a timeout — which is what the real
+      // dependency does anyway.
       throw new Error(`${scenario.errorMessage} (simulated timeout)`);
     case "return":
       return scenario.returnValue as T;
