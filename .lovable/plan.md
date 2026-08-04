@@ -20,11 +20,17 @@ Verified by reading the code before writing this plan:
 
 A new `order_transitions` table: order id, intent id, from-state, to-state, at, venue order id, filled size, price, reason, error. Every state change writes a row inside the same transaction that updates `orders`, so a transition can never be applied without being recorded.
 
+`order_transitions` are append-only. Transitions may never be updated or deleted; a correction is represented as a new transition. The `orders` table remains the current-state projection and the transition ledger becomes the historical truth. Database triggers enforce this the same way they already do for `fills`.
+
 The lifecycle is normalised to the requested vocabulary — CREATED, VALIDATED, READY, SUBMITTED, ACKNOWLEDGED, PARTIALLY_FILLED, FILLED, SETTLED, with REJECTED / CANCELLED / EXPIRED / FAILED / RECOVERING as alternative terminals — mapped from the existing internal `OrderState` so no strategy or venue code changes meaning. Illegal transitions throw rather than silently applying.
 
-### 2. Position ledger (same migration)
+### 2. Position transition ledger (same migration)
 
-A `positions` table plus a `position_transitions` table covering opening, opened, increasing, reducing, partially closed, closed, settled. Positions stay derived from fills as they are today, but each derived transition is persisted, so position history survives restart and V1↔V2 switching. Each position exposes market, token, side, quantity, average price, current price, realised PnL, unrealised PnL, fees and execution latency, all sourced from the runtime.
+No mutable positions table is introduced. `fills` remains the canonical execution record and the current position stays derived from fills — the existing and correct architecture.
+
+Only an append-only `position_transitions` ledger is added, recording lifecycle changes: opening, opened, increasing, reducing, partially closed, closed, settled. If a transition can be regenerated from fills after restart, it must regenerate identically; a test asserts the regenerated ledger matches the persisted one exactly.
+
+Each position exposes market, token, side, quantity, average price, current price, realised PnL, unrealised PnL, fees and execution latency, all derived from the runtime's own records.
 
 ### 3. Single sizing decision
 
@@ -32,7 +38,9 @@ Extract sizing into one `sizing` module that produces an explicit decision objec
 
 ### 4. Parity harness
 
-A parity module that, for the current market, records the decision tuple both environments must agree on: discovered market, selected market, direction, PTB, confidence, settlement TWAP, trigger, risk verdict, sizing, order intent. It is computed once by the shared pipeline and stamped with the environment, so a divergence between V1 and V2 is a recorded defect rather than an opinion. A test drives the same inputs through the paper adapter and the live adapter in dry-run mode and asserts every field except the adapter identity matches.
+Every completed strategy evaluation records its decision tuple: discovered market, selected market, direction, PTB, confidence, settlement TWAP, trigger, risk verdict, sizing, order intent — stamped with the environment that produced it.
+
+Paper and Live decisions are compared automatically whenever both environments have evaluated the same market window. Differences are persisted as parity failures and surfaced in Diagnostics. Parity failures never modify trading behaviour; they are operator diagnostics only. A test additionally drives the same inputs through the paper adapter and the live adapter in dry-run mode and asserts every field except the adapter identity matches.
 
 ### 5. Pipeline completion
 
