@@ -48,15 +48,29 @@ Extend the Phase 2 pipeline stages to the full 16-stage list, adding position si
 
 ### 6. Replay and statistics reconciliation
 
-Replay reconstructs market, TWAP, PTB, signal, order, fill, position, settlement and PnL from persisted rows only — now possible because transitions are persisted. A reconciliation check compares statistics against replay for the same trade set and reports any divergence as a runtime health failure rather than letting the two drift silently.
+Replay reconstruction is performed exclusively from persisted database records — orders, fills, transition ledgers, TWAP history and market history. Replay must never read module memory or runtime state. It reconstructs market, TWAP, PTB, signal, order, fill, position, settlement and PnL, which is now possible because transitions are persisted.
+
+Statistics consumes the same canonical execution records Replay uses. Replay and Statistics must never perform independent calculations over different datasets. A reconciliation check compares the two for the same trade set, and if reconciliation fails the runtime reports FAILED rather than silently continuing.
+
+### 6b. Database transaction integrity
+
+Order updates, fills, transition writes and statistics updates that occur during one execution event complete inside one atomic database transaction. Partial persistence is treated as a runtime failure and surfaced to the operator, never swallowed.
 
 ### 7. Scheduler reporting
 
 Every task reports owner, interval, drift, runtime, last run, next run, skipped runs, failures and recovery, and the scheduler asserts a task is never registered twice.
 
+The scheduler also verifies execution jitter, skipped intervals and delayed runs, and detects overlapping executions: no task may execute concurrently with itself unless it is explicitly marked re-entrant.
+
 ### 8. Stress verification
 
-A harness runs 100 discovery cycles, 100 TWAP updates, 100 scheduler cycles, repeated market and window rollovers and repeated provider reconnects against the live runtime without restarting it, then asserts through the existing resource audit that timers, sockets, schedulers and event listeners return to their expected counts and heap does not grow monotonically.
+The harness runs against the live runtime without restarting it, until every subsystem has completed at least 100 discovery cycles, 100 TWAP updates, 100 scheduler executions, 25 provider reconnects, 25 market rollovers and 25 runtime snapshot regenerations.
+
+The pass condition is stable resource counts — timers, sockets, schedulers and event listeners return to their expected counts through the existing resource audit — and non-increasing heap growth.
+
+### 8b. Runtime snapshot verification
+
+Snapshot generation is verified to remain deterministic: multiple reads of the same runtime state produce byte-equivalent snapshot payloads, excluding timestamps and sequence numbers. Snapshot generation must never mutate runtime state.
 
 ### 9. Bug sweep
 
@@ -65,6 +79,8 @@ Execution inconsistencies, paper/live differences, stale order and position stat
 ## Verification gate
 
 Phase 3 passes only when a complete paper trade runs discovery through settlement; the live path is verified without placing a real order when credentials are absent; V1 and V2 produce identical strategy, risk and sizing decisions with only the adapter differing; replay reconstructs every completed trade and statistics match it; every order and position transition is persisted and visible; the scheduler is stable with no duplicate timers, sockets or listeners; TypeScript is clean; all tests pass; the production build succeeds; and there are zero React, hydration and console errors.
+
+Additionally: after a PM2 restart, a runtime restart and a V1↔V2 switch, Replay, Statistics, Orders, Positions and the transition ledgers regenerate the identical runtime state without operator intervention.
 
 ## Deliverables
 
