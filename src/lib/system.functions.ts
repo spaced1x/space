@@ -36,6 +36,7 @@ import { readRuntimeTarget } from "../core/runtime/target.server";
 import { systemClock } from "../core/shared/clock";
 import { createLogger } from "../core/logging/logger";
 import type { HealthReport } from "../core/health/types";
+import { applyFailureScenario } from "../core/validation/failure-simulation.server";
 
 const snapshotLog = createLogger("snapshot");
 
@@ -85,6 +86,7 @@ export const getSystemSnapshot = createServerFn({ method: "GET" }).handler(async
   // The runtime boots independently of the dashboard. A snapshot read never
   // triggers a boot; it reports whatever state currently exists.
   const startedAtMs = Date.now();
+  await applyFailureScenario("snapshot", () => undefined);
   const bootState = getBootState();
 
   // Refresh every connection from its live adapter before answering, so no two
