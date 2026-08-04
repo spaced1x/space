@@ -208,6 +208,15 @@ Phase 2 is not complete until all of these hold:
 - Production build identical to Preview.
 - VPS identical to Preview.
 - No React warnings, no hydration warnings, no console errors.
+- Runtime continues operating after every browser tab is closed.
+- Dashboard restart never restarts the runtime.
+- Runtime never depends on React.
+- Runtime never depends on browser state.
+- No mocked runtime values.
+- No fabricated telemetry.
+- No placeholder runtime data.
+- Every displayed value originates from the runtime snapshot.
+- Preview, Production and VPS display identical runtime information.
 
 Verified by Playwright across all 7 operator pages in Lovable Preview, the Preview URL, local `bun run build && bun run start`, and the VPS.
 
