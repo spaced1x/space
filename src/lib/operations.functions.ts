@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { boot } from "../core/boot.server";
 import { dispatchCommand } from "../core/bus/command-bus.server";
 import {
   activeOperations,
@@ -12,7 +11,6 @@ import {
 // already in flight; the strategy host promotes the staged document only when
 // a new market is discovered.
 export const getOperations = createServerFn({ method: "GET" }).handler(async () => {
-  await boot();
   return {
     staged: stagedOperations(),
     active: activeOperations(),
@@ -23,7 +21,6 @@ export const getOperations = createServerFn({ method: "GET" }).handler(async () 
 export const updateOperations = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => data)
   .handler(async ({ data }) => {
-    await boot();
     // Configuration edits are audited commands, not direct writes.
     const verdict = await dispatchCommand(
       { kind: "STAGE_OPERATIONS", document: data },

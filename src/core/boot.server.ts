@@ -33,12 +33,20 @@ import { acquireInstanceLock, releaseInstanceLock } from "./db/lock.server";
 import { runStartupValidation } from "./startup/validation.server";
 import { sampleAndPersistMetrics } from "./metrics/metrics.server";
 import { startTelegramInbound } from "./telegram/inbound.server";
-import { noteTimeline, reportConnection } from "./runtime/connections.server";
+import {
+  hydrateConnectionHistory,
+  noteTimeline,
+  reportConnection,
+} from "./runtime/connections.server";
 import { syncConnections } from "./runtime/connection-sync.server";
 import { readRuntimeTarget, requestEnvironmentSwitch, targetMatchesEnvironment } from "./runtime/target.server";
 import { resetEnvCache } from "./config/env.server";
 import { invalidatePeek, type EnvironmentCode } from "./runtime/peek.server";
-import { auditRuntimeResources, type RuntimeResourceAudit } from "./runtime/resources.server";
+import {
+  auditRuntimeResources,
+  hydrateResourceAuditHistory,
+  type RuntimeResourceAudit,
+} from "./runtime/resources.server";
 import { teardownRuntime } from "./shutdown.server";
 import { verifyChainId } from "./execution/wallet.server";
 import { refreshMarkets } from "./market/discovery.server";
@@ -48,12 +56,28 @@ import { refreshMarkets } from "./market/discovery.server";
 // (feeds + discovery) -> OBSERVE.
 // Wallet, Telegram and recovery attach in later milestones.
 let bootPromise: Promise<void> | undefined;
+let bootState: "NOT_STARTED" | "STARTING" | "COMPLETED" | "FAILED" = "NOT_STARTED";
+
+export function getBootState(): typeof bootState {
+  return bootState;
+}
 
 export async function boot(): Promise<void> {
-  // An operator STOP is a decision, not a fault: a page load must never
+  // An operator STOP is a decision, not a fault: a process restart must never
   // resurrect a runtime the operator deliberately shut down.
   if (stoppedByOperator) return;
-  if (!bootPromise) bootPromise = runBoot();
+  if (!bootPromise) {
+    bootState = "STARTING";
+    bootPromise = runBoot().then(
+      () => {
+        bootState = "COMPLETED";
+      },
+      (error) => {
+        bootState = "FAILED";
+        throw error;
+      },
+    );
+  }
   return bootPromise;
 }
 
@@ -176,6 +200,13 @@ async function runBoot(): Promise<void> {
   await stage("database-init", async () => {
     reportConnection("sqlite", { state: "CONNECTING", reason: "opening the SQLite database" });
     await initDatabase();
+  });
+
+  // Rehydrate persisted telemetry so the dashboard shows the previous session's
+  // connection history and resource audits immediately, even before new events
+  // arrive. This is the bridge between process restarts.
+  await stage("telemetry-rehydration", async () => {
+    await Promise.all([hydrateConnectionHistory(), hydrateResourceAuditHistory()]);
   });
 
   // Operational settings live in SQLite, never in .env. Restore the operator's

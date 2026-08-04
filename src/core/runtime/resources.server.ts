@@ -1,6 +1,7 @@
 import { eventBus } from "../bus/events";
 import { databaseResources } from "../db/database.server";
 import { lockResources } from "../db/lock.server";
+import { resourceAuditRepository } from "../db/repositories/resource-audit.repository";
 import { engineResources } from "../engine/loop.server";
 import { createLogger } from "../logging/logger";
 import { schedulerResources } from "../scheduler/scheduler.server";
@@ -151,10 +152,29 @@ export function auditRuntimeResources(
   history.push(audit);
   if (history.length > HISTORY_LIMIT) history.splice(0, history.length - HISTORY_LIMIT);
 
+  resourceAuditRepository.append(audit).catch((error) => {
+    log.warn("failed to persist resource audit", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  });
+
   if (audit.passed) log.info("runtime resource audit passed", { phase, expectation });
   else log.error("runtime resource audit failed", { phase, expectation, failures });
 
   return audit;
+}
+
+/** Load persisted resource audits into memory after the database is ready. */
+export async function hydrateResourceAuditHistory(limit = 50): Promise<void> {
+  try {
+    const persisted = await resourceAuditRepository.recent(limit);
+    history.length = 0;
+    history.push(...persisted);
+  } catch (error) {
+    log.warn("failed to hydrate resource audit history", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 export function lastResourceAudit(): RuntimeResourceAudit | null {

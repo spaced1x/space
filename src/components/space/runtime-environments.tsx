@@ -1,5 +1,6 @@
 import type { RuntimeState } from "../../core/state/store";
 import type { ConnectionRecord } from "../../core/runtime/connections.server";
+import { otherEnvironment } from "../../core/runtime/peek.server";
 import type { RuntimePeek } from "../../core/runtime/peek.server";
 import type { RuntimeResourceAudit } from "../../core/runtime/resources.server";
 import type { TwapServiceSnapshot } from "../../core/twap/service.server";
@@ -37,7 +38,7 @@ export function RuntimeEnvironments({
   connections: ConnectionRecord[];
   twap: TwapServiceSnapshot;
   audit: RuntimeResourceAudit | null;
-  inactive: RuntimePeek;
+  inactive: RuntimePeek | null;
   pending: boolean;
   onStart: (environment: string) => void;
   onStop: (environment: string) => void;
@@ -75,44 +76,57 @@ export function RuntimeEnvironments({
         canStop={runtime.lifecycle !== "STOPPED"}
       />
 
-      <RuntimeCard
-        environment={inactive.environment}
-        active={false}
-        lifecycle="STOPPED"
-        rows={[
-          ["Runtime", "STOPPED — not running in this process"],
-          ["Source", inactive.available ? "read-only peek into its database" : inactive.reason],
-          ["Database", inactive.dbPath],
-          [
-            "Database size",
-            inactive.sizeBytes === null ? "—" : `${(inactive.sizeBytes / 1024).toFixed(0)} KB`,
-          ],
-          ["Schema", inactive.schemaVersion === null ? "—" : `v${inactive.schemaVersion}`],
-          ["Stamp", inactive.environmentStamp ?? "—"],
-          ["Last mode", inactive.mode ?? "—"],
-          [
-            "Emergency stop",
-            inactive.emergencyStop === null ? "—" : inactive.emergencyStop ? "LATCHED" : "clear",
-          ],
-          ["TWAP provider", inactive.twapProvider?.toUpperCase() ?? "—"],
-          [
-            "Orders / fills",
-            inactive.counts.orders === null
-              ? "—"
-              : `${inactive.counts.orders} / ${inactive.counts.fills ?? 0}`,
-          ],
-          [
-            "Last session",
-            inactive.lastTransitionAt
-              ? `${new Date(inactive.lastTransitionAt).toLocaleString()} — ${inactive.lastTransitionReason ?? ""}`
-              : "never run on this host",
-          ],
-        ]}
-        pending={pending}
-        onStart={() => onStart(inactive.environment)}
-        onStop={() => onStop(inactive.environment)}
-        canStop={false}
-      />
+      {inactive ? (
+        <RuntimeCard
+          environment={inactive.environment}
+          active={false}
+          lifecycle="STOPPED"
+          rows={[
+            ["Runtime", "STOPPED — not running in this process"],
+            ["Source", inactive.available ? "read-only peek into its database" : inactive.reason],
+            ["Database", inactive.dbPath],
+            [
+              "Database size",
+              inactive.sizeBytes === null ? "—" : `${(inactive.sizeBytes / 1024).toFixed(0)} KB`,
+            ],
+            ["Schema", inactive.schemaVersion === null ? "—" : `v${inactive.schemaVersion}`],
+            ["Stamp", inactive.environmentStamp ?? "—"],
+            ["Last mode", inactive.mode ?? "—"],
+            [
+              "Emergency stop",
+              inactive.emergencyStop === null ? "—" : inactive.emergencyStop ? "LATCHED" : "clear",
+            ],
+            ["TWAP provider", inactive.twapProvider?.toUpperCase() ?? "—"],
+            [
+              "Orders / fills",
+              inactive.counts.orders === null
+                ? "—"
+                : `${inactive.counts.orders} / ${inactive.counts.fills ?? 0}`,
+            ],
+            [
+              "Last session",
+              inactive.lastTransitionAt
+                ? `${new Date(inactive.lastTransitionAt).toLocaleString()} — ${inactive.lastTransitionReason ?? ""}`
+                : "never run on this host",
+            ],
+          ]}
+          pending={pending}
+          onStart={() => onStart(inactive.environment)}
+          onStop={() => onStop(inactive.environment)}
+          canStop={false}
+        />
+      ) : (
+        <RuntimeCard
+          environment={otherEnvironment(activeEnvironment as "V1_TESTNET" | "V2_MAINNET")}
+          active={false}
+          lifecycle="STOPPED"
+          rows={[["Runtime", "STOPPED — peek not available yet"]]}
+          pending={pending}
+          onStart={() => {}}
+          onStop={() => {}}
+          canStop={false}
+        />
+      )}
     </div>
   );
 }

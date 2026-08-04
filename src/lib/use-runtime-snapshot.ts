@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 
-import { getSystemSnapshot } from "./system.functions";
+import { getSnapshotTransport } from "./runtime-snapshot.transport";
+import type { getSystemSnapshot } from "./system.functions";
 
 export const SNAPSHOT_QUERY_KEY = ["system-snapshot"] as const;
 const POLL_MS = 5_000;
 /** A snapshot older than this is shown as STALE, but the last values stay on screen. */
 const STALE_AFTER_MS = 15_000;
+/** Reject snapshots whose schema version does not match what this dashboard expects. */
+export const EXPECTED_SNAPSHOT_VERSION = 1;
 
 export type SnapshotLifecycle = "CONNECTING" | "WAITING" | "LIVE" | "STALE" | "RECOVERING";
 
@@ -29,14 +31,17 @@ export interface RuntimeSnapshotView {
  * uses this hook so all panels read one consistent payload, one poller, and one
  * connection lifecycle. The dashboard recovers on its own: a failed poll keeps
  * the last known values on screen and marks them STALE until the next success.
+ *
+ * The transport is swappable so the same dashboard can read from a local
+ * server function or a remote VPS runtime over HTTP without code changes.
  */
 export function useRuntimeSnapshot(): RuntimeSnapshotView {
   const queryClient = useQueryClient();
-  const fetchSnapshot = useServerFn(getSystemSnapshot);
+  const transport = getSnapshotTransport();
 
   const query = useQuery({
     queryKey: SNAPSHOT_QUERY_KEY,
-    queryFn: () => fetchSnapshot(),
+    queryFn: () => transport.fetch(),
     refetchInterval: POLL_MS,
     refetchIntervalInBackground: true,
     // Never blank the console on a failed poll: keep the last good snapshot.

@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { boot } from "../core/boot.server";
 import { manualDesk } from "../core/execution/manual.server";
 import { dispatchCommand } from "../core/bus/command-bus.server";
 
@@ -19,7 +18,6 @@ export const getManualDesk = createServerFn({ method: "GET" })
       .parse(data ?? {}),
   )
   .handler(async ({ data }) => {
-    await boot();
     return manualDesk(data.horizon);
   });
 
@@ -28,7 +26,6 @@ export const getManualDesk = createServerFn({ method: "GET" })
 export const submitManualOrder = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => requestSchema.parse(data))
   .handler(async ({ data }) => {
-    await boot();
     return dispatchCommand(
       {
         kind: "MANUAL_ORDER",

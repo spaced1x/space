@@ -1,37 +1,26 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
+import { useRuntimeSnapshot } from "../../lib/use-runtime-snapshot";
 import { Panel } from "./console-shell";
 import { StatusDot } from "./status-dot";
 import { Button } from "../ui/button";
 import {
   getConfigSnapshots,
   getReleaseArtifact,
-  getRuntimeMetrics,
-  getStartupValidation,
   getTelegramInbound,
   runReleaseGate,
 } from "../../lib/system.functions";
 
 export function ProductionPanel() {
-  const fetchValidation = useServerFn(getStartupValidation);
-  const fetchMetrics = useServerFn(getRuntimeMetrics);
+  const { data: snapshot } = useRuntimeSnapshot();
   const fetchRelease = useServerFn(getReleaseArtifact);
   const fetchInbound = useServerFn(getTelegramInbound);
   const fetchSnapshots = useServerFn(getConfigSnapshots);
   const runRelease = useServerFn(runReleaseGate);
 
-  const validation = useQuery({
-    queryKey: ["startup-validation"],
-    queryFn: () => fetchValidation(),
-    refetchInterval: 5000,
-  });
-
-  const metrics = useQuery({
-    queryKey: ["runtime-metrics"],
-    queryFn: () => fetchMetrics(),
-    refetchInterval: 5000,
-  });
+  const validation = snapshot?.validation;
+  const metrics = snapshot?.metrics;
 
   const release = useQuery({
     queryKey: ["release-artifact"],
@@ -59,20 +48,20 @@ export function ProductionPanel() {
   return (
     <>
       <Panel title="Pre-ARM validation gate">
-        {validation.data ? (
+        {validation ? (
           <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <StatusDot state={validation.data.valid ? "OK" : "FAILED"} />
+              <StatusDot state={validation.valid ? "OK" : "FAILED"} />
               <span className="font-mono text-sm text-card-foreground">
-                {validation.data.valid ? "READY TO ARM" : "BLOCKED"}
+                {validation.valid ? "READY TO ARM" : "BLOCKED"}
               </span>
               <span className="ml-auto font-mono text-xs text-muted-foreground">
-                {validation.data.at}
+                {validation.at}
               </span>
             </div>
-            {validation.data.blockers.length > 0 && (
+            {validation.blockers.length > 0 && (
               <ul className="space-y-1">
-                {validation.data.blockers.map((blocker) => (
+                {validation.blockers.map((blocker: string) => (
                   <li key={blocker} className="font-mono text-xs text-fail">
                     {blocker}
                   </li>
@@ -81,17 +70,17 @@ export function ProductionPanel() {
             )}
           </div>
         ) : (
-          <p className="font-mono text-sm text-muted-foreground">loading…</p>
+          <p className="font-mono text-sm text-muted-foreground">waiting for runtime snapshot…</p>
         )}
       </Panel>
 
       <Panel title="Runtime metrics" hint="30s sampling">
-        {metrics.data?.latest ? (
+        {metrics?.latest ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="RSS" value={`${(metrics.data.latest.memory_rss_mb ?? 0).toFixed(1)} MB`} />
-            <Metric label="Heap" value={`${(metrics.data.latest.memory_heap_mb ?? 0).toFixed(1)} MB`} />
-            <Metric label="DB size" value={`${((metrics.data.latest.db_size_bytes ?? 0) / 1024 / 1024).toFixed(2)} MB`} />
-            <Metric label="Tick drift" value={`${metrics.data.latest.scheduler_drift_ms ?? 0} ms`} />
+            <Metric label="RSS" value={`${(metrics.latest.memory_rss_mb ?? 0).toFixed(1)} MB`} />
+            <Metric label="Heap" value={`${(metrics.latest.memory_heap_mb ?? 0).toFixed(1)} MB`} />
+            <Metric label="DB size" value={`${((metrics.latest.db_size_bytes ?? 0) / 1024 / 1024).toFixed(2)} MB`} />
+            <Metric label="Tick drift" value={`${metrics.latest.scheduler_drift_ms ?? 0} ms`} />
           </div>
         ) : (
           <p className="font-mono text-sm text-muted-foreground">no samples yet</p>

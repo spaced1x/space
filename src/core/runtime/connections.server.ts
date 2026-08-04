@@ -1,5 +1,7 @@
 import { loadEnv } from "../config/env.server";
+import { connectionTimelineRepository } from "../db/repositories/connection-timeline.repository";
 import type { HealthResult, HealthState } from "../health/types";
+import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 
 // Runtime Connection Manager.
@@ -8,6 +10,8 @@ import { systemClock } from "../shared/clock";
 // connection SPACE depends on. Adapters report into it; the dashboard reads
 // from it. Nothing here invents a value: an unreported connection stays
 // NOT_STARTED until a real observation arrives.
+
+const log = createLogger("connection-manager");
 
 export const CONNECTION_IDS = [
   "configuration",
@@ -225,14 +229,21 @@ export function reportConnection(id: ConnectionId, report: ConnectionReport): Co
       next.lastFailureAt = at;
     }
     if (report.state === "RECONNECTING") next.reconnects += 1;
-    timeline.push({
+    const entry: ConnectionTimelineEntry = {
       at,
       id,
       label: CONNECTION_LABELS[id],
       state: report.state,
       message: report.reason,
-    });
+    };
+    timeline.push(entry);
     if (timeline.length > TIMELINE_LIMIT) timeline.splice(0, timeline.length - TIMELINE_LIMIT);
+    connectionTimelineRepository.append(entry).catch((error) => {
+      log.warn("failed to persist connection timeline entry", {
+        id,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   registry.set(id, next);
@@ -242,14 +253,34 @@ export function reportConnection(id: ConnectionId, report: ConnectionReport): Co
 /** Append a milestone to the timeline that is not a connection state change. */
 export function noteTimeline(id: ConnectionId, message: string): void {
   const record = registry.get(id) ?? seed(id);
-  timeline.push({
+  const entry: ConnectionTimelineEntry = {
     at: systemClock.iso(),
     id,
     label: CONNECTION_LABELS[id],
     state: record.state,
     message,
-  });
+  };
+  timeline.push(entry);
   if (timeline.length > TIMELINE_LIMIT) timeline.splice(0, timeline.length - TIMELINE_LIMIT);
+  connectionTimelineRepository.append(entry).catch((error) => {
+    log.warn("failed to persist connection timeline entry", {
+      id,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
+/** Load persisted timeline into memory after the database is ready. */
+export async function hydrateConnectionHistory(limit = 300): Promise<void> {
+  try {
+    const persisted = await connectionTimelineRepository.recent(limit);
+    timeline.length = 0;
+    timeline.push(...persisted);
+  } catch (error) {
+    log.warn("failed to hydrate connection history", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 export function getConnection(id: ConnectionId): ConnectionRecord {

@@ -2,12 +2,23 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { boot } from "./core/boot.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
+
+// The trading runtime boots exactly once per process, independent of any
+// browser request. The dashboard is a viewer; opening or closing tabs must
+// never start, stop or restart the runtime.
+void boot().catch((error) => {
+  console.error(
+    "Runtime boot failed at process start:",
+    error instanceof Error ? error.message : String(error),
+  );
+});
 
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
