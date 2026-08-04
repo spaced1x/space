@@ -1,14 +1,14 @@
-import { executionRepository } from "../db/repositories/execution.repository";
 import { replayRepository } from "../db/repositories/replay.repository";
-import { settlementRepository } from "../db/repositories/settlement.repository";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
 import type { MarketHorizon } from "../market/types";
+import { loadLedgerDataset } from "../stats/dataset.server";
 import { assembleReplay } from "./replay";
 import type { ReplayMarket, ReplayMarketSummary } from "./types";
 
-// Runtime host for Replay. It reads persisted rows and hands them to the pure
-// assembler. It holds no state of its own and never consults the live engine.
+// Runtime host for Replay. It reads the shared persisted dataset — the exact
+// rows Statistics reads — and hands them to the pure assembler. It holds no
+// state of its own and never consults the live engine.
 
 const log = createLogger("replay");
 
@@ -17,12 +17,12 @@ let reconstructions = 0;
 
 export async function listReplayMarkets(limit = 25): Promise<ReplayMarketSummary[]> {
   try {
-    const [discoveries, conditions, orders, fills] = await Promise.all([
+    const [discoveries, conditions, dataset] = await Promise.all([
       replayRepository.discoveries(limit),
       replayRepository.windowConditions(limit),
-      executionRepository.loadOrders(500),
-      executionRepository.loadFills(1000),
+      loadLedgerDataset(),
     ]);
+    const { orders, fills } = dataset;
     lastError = null;
 
     const byCondition = new Map<string, ReplayMarketSummary>();
@@ -98,9 +98,7 @@ export async function replayMarket(conditionId: string): Promise<ReplayMarket | 
       intents,
       risk,
       orderEvents,
-      allOrders,
-      allFills,
-      settlement,
+      dataset,
     ] =
       await Promise.all([
         replayRepository.discovery(conditionId),
@@ -110,13 +108,13 @@ export async function replayMarket(conditionId: string): Promise<ReplayMarket | 
         replayRepository.intents(conditionId),
         replayRepository.risk(conditionId),
         replayRepository.orderEvents(conditionId),
-        executionRepository.loadOrders(500),
-        executionRepository.loadFills(1000),
-        settlementRepository.get(conditionId),
+        loadLedgerDataset(),
       ]);
 
     if (!discovery && windows.length === 0) return null;
 
+    const orders = dataset.orders.filter((order) => order.conditionId === conditionId);
+    const orderIds = new Set(orders.map((order) => order.id));
     reconstructions += 1;
     lastError = null;
     return assembleReplay({
@@ -127,10 +125,12 @@ export async function replayMarket(conditionId: string): Promise<ReplayMarket | 
       transitions,
       intents,
       risk,
-      orders: allOrders.filter((order) => order.conditionId === conditionId),
+      orders,
       orderEvents,
-      fills: allFills.filter((fill) => fill.conditionId === conditionId),
-      settlement: settlement ?? null,
+      orderTransitions: dataset.orderTransitions.filter((row) => orderIds.has(row.orderId)),
+      fills: dataset.fills.filter((fill) => fill.conditionId === conditionId),
+      settlement:
+        dataset.settlements.find((row) => row.condition_id === conditionId) ?? null,
     });
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);

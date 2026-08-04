@@ -1,4 +1,5 @@
-import type { FillRecord, OrderRecord } from "../execution/types";
+import type { FillRecord, OrderRecord, OrderTransitionRecord } from "../execution/types";
+import { derivePositionTransitions } from "../execution/positions";
 import type { MarketHorizon } from "../market/types";
 import type { Direction, WindowState } from "../strategy/types";
 import type {
@@ -30,6 +31,8 @@ export interface ReplayInput {
   risk: RiskRow[];
   orders: OrderRecord[];
   orderEvents: OrderEventRow[];
+  /** Persisted order lifecycle ledger for this market. */
+  orderTransitions?: OrderTransitionRecord[];
   fills: FillRecord[];
   settlement?: SettlementRow | null;
 }
@@ -84,6 +87,13 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
   const eventsByOrder = new Map<string, OrderEventRow[]>();
   for (const event of input.orderEvents) {
     eventsByOrder.set(event.order_id, [...(eventsByOrder.get(event.order_id) ?? []), event]);
+  }
+  const transitionsByOrder = new Map<string, OrderTransitionRecord[]>();
+  for (const transition of input.orderTransitions ?? []) {
+    transitionsByOrder.set(transition.orderId, [
+      ...(transitionsByOrder.get(transition.orderId) ?? []),
+      transition,
+    ]);
   }
   const riskByIntent = new Map<string, RiskRow[]>();
   for (const decision of input.risk) {
@@ -156,6 +166,7 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
           reason: event.reason,
           attempt: event.attempt,
         })),
+        orderTransitions: order ? (transitionsByOrder.get(order.id) ?? []) : [],
         fills: fills.map((fill) => ({
           id: fill.id,
           size: fill.size,
@@ -235,5 +246,8 @@ export function assembleReplay(input: ReplayInput): ReplayMarket {
             : `${input.fills.length} fill(s) reconstructed from immutable venue trade ids; settlement not yet ingested`,
     },
     windows,
+    // Positions are never stored: the ledger is re-derived from the same
+    // immutable fills every time, so Replay and the runtime always agree.
+    positionTransitions: derivePositionTransitions(input.orders, input.fills),
   };
 }

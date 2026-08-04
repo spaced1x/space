@@ -1,4 +1,9 @@
-import type { OrderRecord, RiskDecision } from "../execution/types";
+import type {
+  OrderRecord,
+  OrderTransitionRecord,
+  PositionTransitionRecord,
+  RiskDecision,
+} from "../execution/types";
 import type { MarketHorizon } from "../market/types";
 import type { Direction, WindowState } from "../strategy/types";
 
@@ -76,6 +81,8 @@ export interface ReplayWindow {
   risk: RiskDecision[];
   order: OrderRecord | null;
   orderEvents: ReplayOrderEvent[];
+  /** Append-only lifecycle ledger for this window's order. */
+  orderTransitions: OrderTransitionRecord[];
   fills: ReplayFill[];
   /** Plain-language explanation of the outcome. Always populated. */
   outcome: string;
@@ -96,6 +103,8 @@ export interface ReplayMarket {
     discoveredAt: string | null;
   } | null;
   windows: ReplayWindow[];
+  /** Position lifecycle re-derived from the persisted fills of this market. */
+  positionTransitions: PositionTransitionRecord[];
   settlement: {
     settlementAt: string | null;
     status: string;

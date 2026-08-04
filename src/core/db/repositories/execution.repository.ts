@@ -1,7 +1,24 @@
-import type { ExecutionStore } from "../../execution/store";
-import type { FillRecord, OrderEventRecord, OrderRecord, RiskDecision } from "../../execution/types";
+import { loadEnv } from "../../config/env.server";
+import type { ExecutionCommit, ExecutionStore } from "../../execution/store";
+import type {
+  FillRecord,
+  OrderEventRecord,
+  OrderRecord,
+  OrderTransitionRecord,
+  PositionTransitionRecord,
+  RiskDecision,
+  SizingDecision,
+} from "../../execution/types";
 import { systemClock } from "../../shared/clock";
 import { requireDriver } from "../database.server";
+
+function environment(): string {
+  try {
+    return loadEnv().SPACE_ENVIRONMENT;
+  } catch {
+    return "V1_TESTNET";
+  }
+}
 
 // Strict repository rule: SQL text exists only inside db/repositories/**.
 //
@@ -161,6 +178,189 @@ export const executionRepository: ExecutionStore = {
         event.occurredAt,
       ],
     );
+  },
+
+  // One execution event, one transaction. Either the order projection, the
+  // event and the transition are all persisted, or none of them are.
+  async commit({ order, event, transition }: ExecutionCommit): Promise<void> {
+    const driver = await requireDriver();
+    const env = environment();
+    driver.transaction(() => {
+      driver.run(
+        `UPDATE orders SET
+           kind = ?, limit_price = ?, state = ?, attempt = ?, client_id = ?,
+           venue_order_id = ?, filled_size = ?, avg_price = ?, reason = ?,
+           last_error = ?, updated_at = ?, submitted_at = ?, terminal_at = ?
+         WHERE id = ?`,
+        [
+          order.kind,
+          order.limitPrice,
+          order.state,
+          order.attempt,
+          order.clientId,
+          order.venueOrderId,
+          order.filledSize,
+          order.avgPrice,
+          order.reason,
+          order.lastError,
+          order.updatedAt,
+          order.submittedAt,
+          order.terminalAt,
+          order.id,
+        ],
+      );
+      driver.run(
+        `INSERT INTO order_events (order_id, intent_id, state, reason, attempt, payload, occurred_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          event.orderId,
+          event.intentId,
+          event.state,
+          event.reason,
+          event.attempt,
+          JSON.stringify(event.payload ?? {}),
+          event.occurredAt,
+        ],
+      );
+      if (transition) {
+        driver.run(
+          `INSERT INTO order_transitions (
+             order_id, intent_id, from_state, to_state, from_lifecycle, to_lifecycle,
+             at, venue_order_id, filled_size, price, reason, error, environment
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            transition.orderId,
+            transition.intentId,
+            transition.fromState,
+            transition.toState,
+            transition.fromLifecycle,
+            transition.toLifecycle,
+            transition.at,
+            transition.venueOrderId,
+            transition.filledSize,
+            transition.price,
+            transition.reason,
+            transition.error,
+            env,
+          ],
+        );
+      }
+    });
+  },
+
+  async recordSizing(decision: SizingDecision): Promise<void> {
+    const driver = await requireDriver();
+    driver.run(
+      `INSERT INTO sizing_decisions (
+         intent_id, attempt, source, requested_size, applied_size, cap,
+         exposure_before, exposure_after, reason, at, environment
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        decision.intentId,
+        decision.attempt,
+        decision.source,
+        decision.requestedSize,
+        decision.appliedSize,
+        decision.cap,
+        decision.exposureBefore,
+        decision.exposureAfter,
+        decision.reason,
+        decision.at || systemClock.iso(),
+        environment(),
+      ],
+    );
+  },
+
+  async recordPositionTransitions(rows: PositionTransitionRecord[]): Promise<number> {
+    if (!rows.length) return 0;
+    const driver = await requireDriver();
+    const env = environment();
+    return driver.transaction(() => {
+      let written = 0;
+      for (const row of rows) {
+        const result = driver.run(
+          `INSERT OR IGNORE INTO position_transitions (
+             position_key, condition_id, token_id, outcome, transition, size,
+             avg_price, cost, fill_id, at, environment
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            row.positionKey,
+            row.conditionId,
+            row.tokenId,
+            row.outcome,
+            row.transition,
+            row.size,
+            row.avgPrice,
+            row.cost,
+            row.fillId,
+            row.at,
+            env,
+          ],
+        );
+        written += result.changes;
+      }
+      return written;
+    });
+  },
+
+  async loadPositionTransitions(limit = 1000): Promise<PositionTransitionRecord[]> {
+    const driver = await requireDriver();
+    const rows = driver.all<{
+      position_key: string;
+      condition_id: string;
+      token_id: string;
+      outcome: string;
+      transition: string;
+      size: number;
+      avg_price: number;
+      cost: number;
+      fill_id: string | null;
+      at: string;
+    }>(`SELECT * FROM position_transitions ORDER BY id ASC LIMIT ?`, [limit]);
+    return rows.map((row) => ({
+      positionKey: row.position_key,
+      conditionId: row.condition_id,
+      tokenId: row.token_id,
+      outcome: row.outcome as PositionTransitionRecord["outcome"],
+      transition: row.transition as PositionTransitionRecord["transition"],
+      size: row.size,
+      avgPrice: row.avg_price,
+      cost: row.cost,
+      fillId: row.fill_id,
+      at: row.at,
+    }));
+  },
+
+  async loadOrderTransitions(limit = 1000): Promise<OrderTransitionRecord[]> {
+    const driver = await requireDriver();
+    const rows = driver.all<{
+      order_id: string;
+      intent_id: string;
+      from_state: string;
+      to_state: string;
+      from_lifecycle: string;
+      to_lifecycle: string;
+      at: string;
+      venue_order_id: string | null;
+      filled_size: number;
+      price: number | null;
+      reason: string;
+      error: string | null;
+    }>(`SELECT * FROM order_transitions ORDER BY id DESC LIMIT ?`, [limit]);
+    return rows.map((row) => ({
+      orderId: row.order_id,
+      intentId: row.intent_id,
+      fromState: row.from_state as OrderTransitionRecord["fromState"],
+      toState: row.to_state as OrderTransitionRecord["toState"],
+      fromLifecycle: row.from_lifecycle as OrderTransitionRecord["fromLifecycle"],
+      toLifecycle: row.to_lifecycle as OrderTransitionRecord["toLifecycle"],
+      at: row.at,
+      venueOrderId: row.venue_order_id,
+      filledSize: row.filled_size,
+      price: row.price,
+      reason: row.reason,
+      error: row.error,
+    }));
   },
 
   async recordFill(fill: FillRecord): Promise<boolean> {

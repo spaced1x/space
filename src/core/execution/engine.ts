@@ -2,6 +2,7 @@ import type { ExecutionIntent } from "../strategy/types";
 import { clampPrice, lockExecutionConfig } from "./config";
 import { applyFillTotals, transitionOrder } from "./lifecycle";
 import { evaluateRisk } from "./risk";
+import { derivePositionTransitions } from "./positions";
 import type { ExecutionStore } from "./store";
 import type {
   ExecutionConfig,
@@ -11,8 +12,9 @@ import type {
   PositionRecord,
   RiskContext,
   RiskDecision,
+  SizingDecision,
 } from "./types";
-import { isTerminalOrderState, LIVE_ORDER_STATES } from "./types";
+import { isTerminalOrderState, LIVE_ORDER_STATES, orderLifecycleOf } from "./types";
 import type { VenueAdapter, VenueTrade } from "./venue";
 
 // The Execution Engine.
@@ -57,6 +59,7 @@ export interface ExecutionEngine {
   fills(): FillRecord[];
   positions(): PositionRecord[];
   lastRisk(): RiskDecision | null;
+  lastSizing(): SizingDecision | null;
   riskRejections(): RiskDecision[];
   intentsSeen(): number;
   reset(): void;
@@ -79,6 +82,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
   const runtime: Runtime = { submittedAtMs: new Map(), retryAtMs: new Map() };
   let last: RiskDecision | null = null;
   let rejections: RiskDecision[] = [];
+  let lastSizing: SizingDecision | null = null;
 
   const iso = () => new Date(ports.now()).toISOString();
   const config = () => lockExecutionConfig(ports.config());
@@ -98,17 +102,42 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
     });
   }
 
-  async function persist(order: OrderRecord, payload: Record<string, unknown> = {}): Promise<void> {
+  async function persist(
+    order: OrderRecord,
+    payload: Record<string, unknown> = {},
+    from: OrderState | null = null,
+  ): Promise<void> {
     orders.set(order.id, order);
-    await ports.store.updateOrder(order);
-    await ports.store.appendEvent({
-      orderId: order.id,
-      intentId: order.intentId,
-      state: order.state,
-      reason: order.reason,
-      attempt: order.attempt,
-      payload,
-      occurredAt: order.updatedAt,
+    // Projection, event and transition commit together. A partially persisted
+    // execution event is a runtime failure, never a silent divergence.
+    await ports.store.commit({
+      order,
+      event: {
+        orderId: order.id,
+        intentId: order.intentId,
+        state: order.state,
+        reason: order.reason,
+        attempt: order.attempt,
+        payload,
+        occurredAt: order.updatedAt,
+      },
+      transition:
+        from === null
+          ? null
+          : {
+              orderId: order.id,
+              intentId: order.intentId,
+              fromState: from,
+              toState: order.state,
+              fromLifecycle: orderLifecycleOf(from),
+              toLifecycle: orderLifecycleOf(order.state, order.venueOrderId),
+              at: order.updatedAt,
+              venueOrderId: order.venueOrderId,
+              filledSize: order.filledSize,
+              price: order.avgPrice ?? order.limitPrice,
+              reason: order.reason,
+              error: order.lastError,
+            },
     });
   }
 
@@ -120,7 +149,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
     payload: Record<string, unknown> = {},
   ): Promise<OrderRecord> {
     const next = transitionOrder(order, to, { reason, at: iso(), ...patch });
-    await persist(next, payload);
+    await persist(next, payload, order.state);
     return next;
   }
 
@@ -227,7 +256,12 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
     if (Math.abs(filledSize - order.filledSize) < 1e-9) return order;
 
     const { order: next, state } = applyFillTotals(order, { filledSize, avgPrice }, iso());
-    await persist(next, { fills: mine.length });
+    await persist(next, { fills: mine.length }, order.state);
+    // The position lifecycle is derived from fills and appended, never stored
+    // as mutable state. Re-deriving after a restart regenerates it identically.
+    await ports.store.recordPositionTransitions(
+      derivePositionTransitions([...orders.values()], [...fills.values()]),
+    );
     emit(
       state === "FILLED" ? "execution.order.filled" : "execution.order.partial_fill",
       state === "FILLED" ? "SUCCESS" : "INFO",
@@ -281,6 +315,10 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
     // the latest book, and re-checked by the Risk Engine.
     const cfg = config();
     const intentContext = ports.riskContext(intentOf(order), order.attempt + 1);
+    if (intentContext.sizing) {
+      lastSizing = intentContext.sizing;
+      await ports.store.recordSizing(intentContext.sizing);
+    }
     const decision = evaluateRisk(intentOf(order), { ...intentContext, alreadyExecuted: false });
     last = decision;
     await ports.store.recordRisk(decision, order.attempt + 1);
@@ -392,6 +430,11 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
 
       const cfg = { ...config(), ...overrides };
       const context = ports.riskContext(intent, 0);
+      // One sizing decision, taken before risk, persisted with the verdict.
+      if (context.sizing) {
+        lastSizing = context.sizing;
+        await ports.store.recordSizing(context.sizing);
+      }
       const decision = evaluateRisk(intent, context);
       last = decision;
       await ports.store.recordRisk(decision, 0);
@@ -546,6 +589,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
     fills: () => [...fills.values()].sort((a, b) => (a.filledAt < b.filledAt ? 1 : -1)),
     positions: () => buildPositions([...orders.values()], [...fills.values()]),
     lastRisk: () => last,
+    lastSizing: () => lastSizing,
     riskRejections: () => rejections,
     intentsSeen: () => seenIntents.size,
     reset: () => {
@@ -557,6 +601,7 @@ export function createExecutionEngine(ports: ExecutionPorts): ExecutionEngine {
       runtime.retryAtMs.clear();
       last = null;
       rejections = [];
+      lastSizing = null;
     },
   };
 }

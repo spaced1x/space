@@ -15,6 +15,7 @@ import {
   stopExecutionEngine,
 } from "../execution/execution.server";
 import { correlationId } from "../shared/ids";
+import { compareEnvironments, recordParityDecision } from "../execution/parity.server";
 import { ingestSettlements } from "../settlement/settlement.server";
 import {
   pollTwapService,
@@ -48,6 +49,9 @@ const EXECUTION_MS = 500;
 // Venue resolutions arrive minutes after a window closes; polling slowly is
 // enough and keeps Gamma requests far below the rate limit.
 const SETTLEMENT_MS = 30_000;
+// Parity is an operator diagnostic, not a trading input; a slow cadence is
+// enough and keeps the cross-environment read off the hot path.
+const PARITY_MS = 10_000;
 // The settlement TWAP needs sub-second resolution near the settlement window.
 const TWAP_MS = 250;
 
@@ -127,6 +131,16 @@ export async function startEngineLoop(): Promise<void> {
     runOnStart: true,
     run: () => ingestSettlements(),
   });
+  // Parity is diagnostics: it records the tuple this environment decided and
+  // compares it with the other environment's record for the same window.
+  registerTask({
+    name: "parity.compare",
+    intervalMs: PARITY_MS,
+    run: async () => {
+      await recordParityDecision();
+      await compareEnvironments();
+    },
+  });
 
   eventBus.publish({
     type: "engine.loop.started",
@@ -167,6 +181,7 @@ export async function stopEngineLoop(): Promise<void> {
     "strategy.evaluate",
     "execution.run",
     "settlement.ingest",
+    "parity.compare",
   ]) {
     unregisterTask(name);
   }

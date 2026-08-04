@@ -88,6 +88,9 @@ function memoryStore() {
   const fills = new Map<string, FillRecord>();
   const events: OrderEventRecord[] = [];
   const risks: RiskDecision[] = [];
+  const transitions: import("../../src/core/execution/types").OrderTransitionRecord[] = [];
+  const positionTransitions: import("../../src/core/execution/types").PositionTransitionRecord[] = [];
+  const sizings: import("../../src/core/execution/types").SizingDecision[] = [];
 
   const store: ExecutionStore = {
     async createOrder(order) {
@@ -101,6 +104,35 @@ function memoryStore() {
     },
     async appendEvent(event) {
       events.push(event);
+    },
+    async commit({ order, event, transition }) {
+      orders.set(order.id, order);
+      events.push(event);
+      if (transition) transitions.push(transition);
+    },
+    async recordSizing(decision) {
+      sizings.push(decision);
+    },
+    async recordPositionTransitions(rows) {
+      let written = 0;
+      for (const row of rows) {
+        const key = `${row.positionKey}|${row.transition}|${row.at}|${row.fillId ?? ""}`;
+        if (positionTransitions.some(
+          (existing) =>
+            `${existing.positionKey}|${existing.transition}|${existing.at}|${existing.fillId ?? ""}` === key,
+        )) {
+          continue;
+        }
+        positionTransitions.push(row);
+        written += 1;
+      }
+      return written;
+    },
+    async loadPositionTransitions() {
+      return [...positionTransitions];
+    },
+    async loadOrderTransitions() {
+      return [...transitions];
     },
     async recordFill(fill) {
       if (fills.has(fill.id)) return false;
@@ -117,7 +149,7 @@ function memoryStore() {
       return [...fills.values()];
     },
   };
-  return { store, orders, fills, events, risks };
+  return { store, orders, fills, events, risks, transitions, positionTransitions, sizings };
 }
 
 interface ScriptedVenue extends VenueAdapter {
