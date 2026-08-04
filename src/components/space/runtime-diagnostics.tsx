@@ -20,6 +20,72 @@ export function RuntimeDiagnostics() {
 
   return (
     <>
+      <Panel
+        title="Trading pipeline"
+        hint={
+          data.pipeline.blockedAt
+            ? `blocked at ${data.pipeline.blockedAt.label}`
+            : "every stage producing"
+        }
+      >
+        <div className="mb-3 grid gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-4">
+          <Fact label="Order lifecycle" value={data.pipeline.lifecycles.order} />
+          <Fact label="Position lifecycle" value={data.pipeline.lifecycles.position} />
+          <Fact label="TWAP lifecycle" value={data.pipeline.lifecycles.twap} />
+          <Fact label="Venue lifecycle" value={data.pipeline.lifecycles.venue} />
+        </div>
+        {data.pipeline.blockedAt ? (
+          <p className="mb-3 rounded-md border border-warn/40 bg-warn/10 p-3 text-label text-warn">
+            Pipeline blocked at {data.pipeline.blockedAt.label}: {data.pipeline.blockedAt.reason}
+          </p>
+        ) : null}
+        <table className="w-full overflow-hidden rounded-md border border-border bg-card text-table">
+          <thead className="bg-muted/60 text-label text-muted-foreground">
+            <tr>
+              <Th>Stage</Th>
+              <Th>State</Th>
+              <Th>Input</Th>
+              <Th>Output</Th>
+              <Th>Latency</Th>
+              <Th>Last success</Th>
+              <Th>Waiting / error</Th>
+              <Th>Recovery</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {data.pipeline.stages.map((stage) => (
+              <tr key={stage.id}>
+                <Td>{stage.label}</Td>
+                <Td
+                  mono
+                  className={
+                    stage.state === "OK"
+                      ? "text-ok"
+                      : stage.state === "FAILED"
+                        ? "text-fail"
+                        : stage.state === "DISABLED"
+                          ? "text-muted-foreground"
+                          : "text-warn"
+                  }
+                >
+                  {stage.state}
+                </Td>
+                <Td mono>{stage.input}</Td>
+                <Td mono>{stage.output}</Td>
+                <Td mono>{stage.latencyMs === null ? "—" : `${stage.latencyMs} ms`}</Td>
+                <Td mono>
+                  {stage.lastSuccessAt ? new Date(stage.lastSuccessAt).toLocaleTimeString() : "—"}
+                </Td>
+                <Td className={stage.lastError ? "text-fail" : undefined}>
+                  {stage.lastError ?? stage.waitingReason ?? "—"}
+                </Td>
+                <Td>{stage.recovery}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+
       <Panel title="Runtime process" hint="build, schema and uptime of this process">
         <div className="grid gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-3 xl:grid-cols-5">
           <Fact label="Build version" value={data.process.buildVersion} />
