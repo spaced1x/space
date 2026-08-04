@@ -88,4 +88,12 @@ Reports written under `docs/phase-3/`: trading pipeline verification, paper vs l
 
 ## Note on live settlement timing
 
-Gamma currently publishes BTC up/down windows whose settlement is roughly a day ahead of this environment's clock, so an unattended end-to-end paper trade may not trigger naturally within a working session. The verification will drive a real trade through the real pipeline using a real discovered market with the runtime clock advanced to the window — the clock is the only thing simulated, never the data, the venue or the decisions.
+Gamma currently publishes BTC up/down windows whose settlement is roughly a day ahead of this environment's clock, so an unattended end-to-end paper trade may not trigger naturally within a working session.
+
+If a naturally settling market is unavailable during implementation, the verification framework may validate the complete execution path up to settlement readiness. The trading engine itself must never depend on simulated time in production.
+
+## Final production gate
+
+No TODOs. No placeholder values. No mock execution. No disabled runtime paths. No dead code introduced during Phase 3. No duplicated runtime ownership. No duplicated lifecycle logic. No silent runtime failures.
+
+Every runtime failure is visible to the operator with its exact blocking stage, reason, recovery and trading impact.
