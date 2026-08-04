@@ -289,5 +289,12 @@ export function computeStatistics(input: StatisticsInput): StatisticsSnapshot {
       filled: sessionOrders.filter((order) => order.state === "FILLED").length,
       realizedPnl: realized,
     },
+    ledger: {
+      orderTransitions: input.orderTransitions?.length ?? 0,
+      positionTransitions: input.positionTransitions?.length ?? 0,
+      recentPositionTransitions: [...(input.positionTransitions ?? [])]
+        .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+        .slice(0, 12),
+    },
   };
 }
