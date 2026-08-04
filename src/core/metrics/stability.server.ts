@@ -56,7 +56,9 @@ export interface StabilityReport {
     ticks: number;
     maxTickDriftMs: number | null;
     overlaps: number;
-    jitterP95Ms: number | null;
+    duplicateRegistrations: number;
+    maxJitterMs: number | null;
+    missedRuns: number;
   };
   snapshots: {
     generated: number;
@@ -126,7 +128,11 @@ export function countRuntimeResources(): StabilityCounts {
 
   return {
     timers: scheduler.timers + inbound.timers,
-    sockets: engine.binanceFeeds + engine.chainlinkFeeds + clob.sockets + (twap.sockets ?? 0),
+    sockets:
+      engine.binanceFeeds
+      + engine.chainlinkFeeds
+      + clob.sockets
+      + ((twap as { rtdsSockets?: number }).rtdsSockets ?? 0),
     databaseHandles: db.connections,
     locks: lock.locks,
     eventListeners: bus.handlers,
@@ -179,12 +185,7 @@ export function measureStability(): StabilityReport {
     if (delta !== 0) countDrift[key] = delta;
   }
 
-  const status = safe(schedulerStatus, {
-    ticks: 0,
-    maxTickDriftMs: null as number | null,
-    overlaps: 0,
-    jitterSamples: [] as number[],
-  } as unknown as ReturnType<typeof schedulerStatus>);
+  const status = safe<ReturnType<typeof schedulerStatus> | null>(schedulerStatus, null);
 
   const findings: string[] = [];
   let state: StabilityVerdict["state"] = "OK";
@@ -232,10 +233,16 @@ export function measureStability(): StabilityReport {
     rssGrowthBytesPerHour: rssGrowth,
     countDrift,
     scheduler: {
-      ticks: status.ticks ?? 0,
-      maxTickDriftMs: status.maxTickDriftMs ?? null,
-      overlaps: (status as { overlaps?: number }).overlaps ?? 0,
-      jitterP95Ms: (status as { jitterP95Ms?: number | null }).jitterP95Ms ?? null,
+      ticks: status?.ticks ?? 0,
+      maxTickDriftMs: status?.maxTickDriftMs ?? null,
+      overlaps: status?.overlaps ?? 0,
+      duplicateRegistrations: status?.duplicateRegistrations ?? 0,
+      maxJitterMs: status
+        ? status.tasks.reduce((max, task) => Math.max(max, task.maxJitterMs ?? 0), 0)
+        : null,
+      missedRuns: status
+        ? status.tasks.reduce((sum, task) => sum + (task.missedRuns ?? 0), 0)
+        : 0,
     },
     snapshots: {
       generated: snapshotsGenerated,
