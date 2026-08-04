@@ -114,6 +114,18 @@ PM2 starts SPACE. SPACE boots itself. The runtime reaches READY on its own and b
 
 `boot()` moves to the process entry point and is invoked exactly once there. All 24 in-handler `boot()` calls are removed. A read that arrives before READY returns the current lifecycle state (including `NOT_BOOTED`) — it never triggers a boot.
 
+### Dashboard isolation
+
+The dashboard is a read-only operator terminal. Dashboard failures must never affect the runtime.
+
+- If the browser disconnects, the runtime continues operating normally.
+- If React crashes, the runtime continues operating normally.
+- If the dashboard cannot reach the runtime, the runtime continues operating normally.
+- If `/api/runtime/snapshot` temporarily fails, the runtime continues operating normally.
+- If every browser tab is closed, the runtime continues operating normally.
+
+The trading engine, scheduler, feeds, TWAP service, venue, replay and statistics never depend on the dashboard. The dashboard never owns any runtime state.
+
 ### 2. The snapshot API is the only runtime API
 
 Two endpoints, and nothing else, may be read by any page:
