@@ -7,9 +7,9 @@ import { createLogger } from "../logging/logger";
 import { systemClock } from "../shared/clock";
 import type { JsonObject } from "../shared/json";
 import { RateLimitError, rateLimitStatus, withRateLimit } from "./rate-limit.server";
+import { applyFailureScenario } from "../validation/failure-simulation.server";
 import { walletSigner, walletStatus } from "./wallet.server";
 import type {
-import { applyFailureScenario } from "../validation/failure-simulation.server";
   VenueAdapter,
   VenueDescription,
   VenueOrderAck,
