@@ -18,6 +18,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiRuntimeHealthRouteImport } from './routes/api/runtime/health'
+import { Route as ApiRuntimeSnapshotRouteImport } from './routes/api/runtime/snapshot'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +65,11 @@ const ApiRuntimeHealthRoute = ApiRuntimeHealthRouteImport.update({
   path: '/api/runtime/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiRuntimeSnapshotRoute = ApiRuntimeSnapshotRouteImport.update({
+  id: '/api/runtime/snapshot',
+  path: '/api/runtime/snapshot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/runtime/health': typeof ApiRuntimeHealthRoute
+  '/api/runtime/snapshot': typeof ApiRuntimeSnapshotRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/runtime/health': typeof ApiRuntimeHealthRoute
+  '/api/runtime/snapshot': typeof ApiRuntimeSnapshotRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   '/stats': typeof StatsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/runtime/health': typeof ApiRuntimeHealthRoute
+  '/api/runtime/snapshot': typeof ApiRuntimeSnapshotRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/stats'
     | '/api/public/health'
     | '/api/runtime/health'
+    | '/api/runtime/snapshot'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/stats'
     | '/api/public/health'
     | '/api/runtime/health'
+    | '/api/runtime/snapshot'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/stats'
     | '/api/public/health'
     | '/api/runtime/health'
+    | '/api/runtime/snapshot'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +157,7 @@ export interface RootRouteChildren {
   StatsRoute: typeof StatsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiRuntimeHealthRoute: typeof ApiRuntimeHealthRoute
+  ApiRuntimeSnapshotRoute: typeof ApiRuntimeSnapshotRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -212,6 +225,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiRuntimeHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/runtime/snapshot': {
+      id: '/api/runtime/snapshot'
+      path: '/api/runtime/snapshot'
+      fullPath: '/api/runtime/snapshot'
+      preLoaderRoute: typeof ApiRuntimeSnapshotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -225,17 +245,8 @@ const rootRouteChildren: RootRouteChildren = {
   StatsRoute: StatsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiRuntimeHealthRoute: ApiRuntimeHealthRoute,
+  ApiRuntimeSnapshotRoute: ApiRuntimeSnapshotRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

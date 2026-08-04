@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { boot, bootTimes, getBootTrace } from "../../../core/boot.server";
+import { bootTimes, getBootTrace } from "../../../core/boot.server";
 import { collectHealth } from "../../../core/health/registry";
 import { listConnections } from "../../../core/runtime/connections.server";
 import { syncConnections } from "../../../core/runtime/connection-sync.server";
@@ -9,14 +9,14 @@ import { activeEnvironment } from "../../../core/runtime/peek.server";
 
 /**
  * Machine-readable runtime health. Used by deployment verification and uptime
- * checks. Reports only real telemetry: never a hardcoded "ok".
+ * checks. Reports only real telemetry: never a hardcoded "ok". The runtime is
+ * started by the process entry point, never by this endpoint.
  */
 export const Route = createFileRoute("/api/runtime/health")({
   server: {
     handlers: {
       GET: async () => {
         try {
-          await boot();
           await syncConnections();
           const health = await collectHealth();
           const runtime = getRuntimeState();

@@ -1,4 +1,5 @@
 import type { ConnectionRecord, ConnectionState } from "../../core/runtime/connections.server";
+import { useRuntimeAgo } from "../../lib/use-runtime-now";
 import { StatusDot } from "./status-dot";
 
 const TONE: Record<ConnectionState, string> = {
@@ -15,14 +16,9 @@ const TONE: Record<ConnectionState, string> = {
   NOT_STARTED: "text-muted-foreground",
 };
 
-function ago(iso: string | null): string {
-  if (!iso) return "never";
-  const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms)) return "never";
-  if (ms < 1000) return "just now";
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
-  return new Date(iso).toLocaleTimeString();
+function Ago({ iso }: { iso: string | null }) {
+  const ago = useRuntimeAgo(iso);
+  return <>{ago}</>;
 }
 
 function fmt(value: string | number | boolean | null): string {
@@ -56,7 +52,7 @@ export function ConnectionCard({ record }: { record: ConnectionRecord }) {
         <Field label="Endpoint" value={record.endpoint ?? "—"} mono />
         <Field label="Latency" value={record.latencyMs === null ? "—" : `${record.latencyMs} ms`} />
         <Field label="Reconnects" value={String(record.reconnects)} />
-        <Field label="Last success" value={ago(record.lastSuccessAt)} />
+        <Field label="Last success" value={<Ago iso={record.lastSuccessAt} />} />
         <Field label="Last error" value={record.lastError ?? "none"} />
         {detailEntries.map(([key, value]) => (
           <Field key={key} label={humanize(key)} value={fmt(value)} />
@@ -78,11 +74,12 @@ function humanize(key: string): string {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
 }
 
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  const title = typeof value === "string" ? value : undefined;
   return (
     <div className="min-w-0">
       <dt className="text-label text-muted-foreground">{label}</dt>
-      <dd className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`} title={value}>
+      <dd className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`} title={title}>
         {value}
       </dd>
     </div>

@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { boot } from "../core/boot.server";
 import { loadEnv } from "../core/config/env.server";
 import { eventBus } from "../core/bus/events";
 import { engineRuntimeSnapshot } from "../core/engine/loop.server";
@@ -18,7 +17,6 @@ import {
 // Read-only diagnostics. Every value comes from the running engine; the page
 // itself owns nothing and can change nothing.
 export const getDiagnostics = createServerFn({ method: "GET" }).handler(async () => {
-  await boot();
   const events = eventBus.recent(60);
   return {
     runtime: getRuntimeState(),
@@ -53,7 +51,6 @@ function harnessView(): HarnessScenarioView[] {
 // Failure simulation harness. It exists so recovery paths can be exercised on a
 // staging host; on a production host it is refused outright.
 export const getFailureHarness = createServerFn({ method: "GET" }).handler(async () => {
-  await boot();
   const production = loadEnv().NODE_ENV === "production";
   return {
     enabled: !production,
@@ -72,7 +69,6 @@ const harnessCommand = z.object({
 export const setFailureScenario = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => harnessCommand.parse(data))
   .handler(async ({ data }) => {
-    await boot();
     if (loadEnv().NODE_ENV === "production") {
       return {
         ok: false,

@@ -434,4 +434,45 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    id: 8,
+    name: "runtime_telemetry_persistence",
+    sql: `
+      -- Connection timeline. Every state change reported by the Runtime
+      -- Connection Manager is persisted so the operator can reconstruct the
+      -- session after a refresh, PM2 restart, V1/V2 switch, or VPS reboot.
+      CREATE TABLE IF NOT EXISTS connection_timeline (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        at            TEXT NOT NULL,
+        connection_id TEXT NOT NULL,
+        label         TEXT NOT NULL,
+        state         TEXT NOT NULL,
+        message       TEXT NOT NULL,
+        environment   TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_connection_timeline_at
+        ON connection_timeline (at);
+      CREATE INDEX IF NOT EXISTS idx_connection_timeline_id
+        ON connection_timeline (connection_id);
+
+      -- Runtime resource audits. START, STOP, SWITCH and PERIODIC audits are
+      -- evidence that exactly one of every resource exists when RUNNING and
+      -- zero exist when STOPPED. Persisted so a restarted process can expose
+      -- the last audit immediately instead of waiting for the next transition.
+      CREATE TABLE IF NOT EXISTS resource_audits (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        at            TEXT NOT NULL,
+        phase         TEXT NOT NULL,
+        expectation   TEXT NOT NULL,
+        passed        INTEGER NOT NULL,
+        failures      TEXT NOT NULL,
+        checks        TEXT NOT NULL,
+        heap_used_bytes INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_resource_audits_at
+        ON resource_audits (at);
+    `,
+  },
 ];

@@ -1,7 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-
-import { getSystemSnapshot } from "../../lib/system.functions";
+import { useRuntimeSnapshot } from "../../lib/use-runtime-snapshot";
 import { Panel } from "./console-shell";
 
 /**
@@ -10,14 +7,16 @@ import { Panel } from "./console-shell";
  * disagree with Mission Control.
  */
 export function RuntimeDiagnostics() {
-  const fetchSnapshot = useServerFn(getSystemSnapshot);
-  const query = useQuery({
-    queryKey: ["system-snapshot"],
-    queryFn: () => fetchSnapshot(),
-    refetchInterval: 5000,
-  });
-  const data = query.data;
-  if (!data) return null;
+  const { data, error } = useRuntimeSnapshot();
+  if (!data) {
+    return (
+      <Panel title="Diagnostics" hint="runtime snapshot unavailable">
+        <p className="font-mono text-sm text-fail">
+          {error instanceof Error ? error.message : "runtime snapshot unavailable"}
+        </p>
+      </Panel>
+    );
+  }
 
   return (
     <>

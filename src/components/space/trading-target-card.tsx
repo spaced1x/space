@@ -1,15 +1,10 @@
 import type { DiscoveredMarket } from "../../core/market/types";
+import { useRuntimeCountdown } from "../../lib/use-runtime-now";
 import { EmptyState } from "./empty-state";
 
-function countdown(iso: string | null): string {
-  if (!iso) return "—";
-  const ms = Date.parse(iso) - Date.now();
-  if (!Number.isFinite(ms)) return "—";
-  if (ms <= 0) return "settled";
-  const total = Math.floor(ms / 1000);
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+function Countdown({ iso }: { iso: string | null }) {
+  const countdown = useRuntimeCountdown(iso);
+  return <>{countdown}</>;
 }
 
 function money(value: number | null): string {
@@ -50,7 +45,7 @@ export function TradingTargetCard({ market }: { market: DiscoveredMarket | null 
       <dl className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
         <Field label="Market status" value={market.status} />
         <Field label="Settlement" value={market.settlementAt ? new Date(market.settlementAt).toLocaleTimeString() : "—"} />
-        <Field label="Countdown" value={countdown(market.settlementAt)} accent />
+        <Field label="Countdown" value={<Countdown iso={market.settlementAt} />} accent />
         <Field label="Price to beat" value={market.ptb === null ? "—" : market.ptb.toFixed(2)} />
         <Field label="Probability (UP)" value={price(market.probability)} />
         <Field label="Best bid" value={price(market.bestBid)} />
@@ -84,16 +79,17 @@ function Field({
   accent,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   mono?: boolean;
   accent?: boolean;
 }) {
+  const title = typeof value === "string" ? value : undefined;
   return (
     <div className="min-w-0">
       <dt className="text-label text-muted-foreground">{label}</dt>
       <dd
         className={`truncate text-value ${accent ? "text-primary" : "text-foreground"} ${mono ? "font-mono" : ""}`}
-        title={value}
+        title={title}
       >
         {value}
       </dd>

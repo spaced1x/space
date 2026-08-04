@@ -1,13 +1,10 @@
 import type { ConnectionTimelineEntry } from "../../core/runtime/connections.server";
+import { useRuntimeAgo } from "../../lib/use-runtime-now";
 import { StatusDot } from "./status-dot";
 
-function ago(iso: string): string {
-  const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms)) return "—";
-  if (ms < 1000) return "just now";
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
-  return new Date(iso).toLocaleTimeString();
+function Ago({ iso }: { iso: string }) {
+  const ago = useRuntimeAgo(iso);
+  return <>{ago}</>;
 }
 
 /**
@@ -39,7 +36,7 @@ export function ConnectionHistory({ entries }: { entries: ConnectionTimelineEntr
             <tr key={`${entry.at}-${entry.id}`}>
               <td className="px-5 py-3 font-mono text-status whitespace-nowrap">
                 {new Date(entry.at).toLocaleTimeString()}
-                <span className="ml-2 text-muted-foreground">({ago(entry.at)})</span>
+                <span className="ml-2 text-muted-foreground">(<Ago iso={entry.at} />)</span>
               </td>
               <td className="px-5 py-3 font-medium text-card-foreground">{entry.label}</td>
               <td className="px-5 py-3">

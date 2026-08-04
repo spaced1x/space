@@ -1,5 +1,6 @@
 import type { TwapProviderState } from "../../core/twap/provider";
 import type { TwapServiceSnapshot } from "../../core/twap/service.server";
+import { useRuntimeAgo } from "../../lib/use-runtime-now";
 import { EmptyState } from "./empty-state";
 import { StatusDot } from "./status-dot";
 
@@ -7,14 +8,9 @@ function price(value: number | null): string {
   return value === null ? "—" : value.toFixed(4);
 }
 
-function ago(iso: string | null): string {
-  if (!iso) return "never";
-  const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms)) return "never";
-  if (ms < 1000) return "just now";
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
-  return new Date(iso).toLocaleTimeString();
+function Ago({ iso }: { iso: string | null }) {
+  const ago = useRuntimeAgo(iso);
+  return <>{ago}</>;
 }
 
 function projectHealth(state: TwapProviderState): "OK" | "DEGRADED" | "FAILED" | "DISABLED" | "NOT_INITIALIZED" {
@@ -77,7 +73,7 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
         <Field label="Samples" value={String(active?.samples ?? 0)} />
         <Field label="Errors" value={String(active?.errors ?? 0)} />
         <Field label="Published" value={String(twap.published)} />
-        <Field label="Last publish" value={ago(twap.lastPublishedAt)} />
+        <Field label="Last publish" value={<Ago iso={twap.lastPublishedAt} />} />
         <Field label="Endpoint" value={active?.endpoint ?? "—"} mono />
         <Field label="Symbol" value={active?.symbol ?? "—"} />
         <Field label="Transport" value={active?.transport ?? "—"} />
@@ -110,11 +106,12 @@ export function TwapProviderCard({ twap }: { twap: TwapServiceSnapshot }) {
   );
 }
 
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  const title = typeof value === "string" ? value : undefined;
   return (
     <div className="min-w-0">
       <dt className="text-label text-muted-foreground">{label}</dt>
-      <dd className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`} title={value}>
+      <dd className={`truncate text-value text-foreground ${mono ? "font-mono" : ""}`} title={title}>
         {value}
       </dd>
     </div>

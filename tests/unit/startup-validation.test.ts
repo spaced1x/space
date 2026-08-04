@@ -1,79 +1,81 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+const mockEnv = {
+  loadEnv: vi.fn(() => ({
+    DB_PATH: "./data/space.db",
+    SPACE_ENVIRONMENT: "V1_TESTNET",
+    NODE_ENV: "test",
+  })),
+  describeEnvReadiness: vi.fn(() => ({
+    valid: true,
+    missingForArmed: [],
+    message: "env ready",
+    environment: "V1_TESTNET",
+  })),
+};
+
+const mockDatabaseHealth = vi.fn(async () => ({ state: "OK", message: "db ok" }));
+const mockConformance = vi.fn(async () => ({
+  environment: "V1_TESTNET",
+  conformant: true,
+  at: new Date().toISOString(),
+  checks: [],
+  failures: [],
+}));
+
+const mockOperations = {
+  activeOperations: vi.fn(() => ({ version: 1 })),
+  operationsHealth: vi.fn(() => ({ state: "OK", message: "ops ok" })),
+};
+
+const mockLock = { instanceLockHeld: vi.fn(() => true) };
+const mockRecovery = { executionRecoveryStatus: vi.fn(() => ({ state: "OK", message: "recovered" })) };
+
+let runtimeState = {
+  engineStatus: "OBSERVE",
+  emergencyStop: false,
+  emergencyStopReason: null,
+};
+
+const mockStore = { getRuntimeState: vi.fn(() => runtimeState) };
+
+const mockHealth = {
+  collectHealth: vi.fn(async () => ({
+    state: "OK",
+    components: [
+      { component: "wallet", state: "OK", message: "wallet ok" },
+      { component: "polymarket", state: "OK", message: "polymarket ok" },
+      { component: "binance", state: "OK", message: "binance ok" },
+      { component: "chainlink", state: "OK", message: "chainlink ok" },
+    ],
+  })),
+};
+
+vi.mock("../../src/core/config/env.server", () => mockEnv);
+vi.mock("../../src/core/db/database.server", () => ({ databaseHealth: mockDatabaseHealth }));
+vi.mock("../../src/core/config/environment.server", () => ({
+  evaluateEnvironmentConformance: mockConformance,
+}));
+vi.mock("../../src/core/config/operations.server", () => mockOperations);
+vi.mock("../../src/core/db/lock.server", () => mockLock);
+vi.mock("../../src/core/execution/execution.server", () => mockRecovery);
+vi.mock("../../src/core/state/store", () => mockStore);
+vi.mock("../../src/core/health/registry", () => mockHealth);
 
 // Startup validation pulls in the whole core. We test the pure report-building
 // logic by mocking the heavy dependencies.
 
 describe("startup validation", () => {
   beforeEach(() => {
-    vi.resetModules();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    runtimeState = {
+      engineStatus: "OBSERVE",
+      emergencyStop: false,
+      emergencyStopReason: null,
+    };
   });
 
   it("reports valid when all required items are OK", async () => {
-    vi.doMock("../../src/core/config/env.server", () => ({
-      loadEnv: () => ({
-        DB_PATH: "./data/space.db",
-        SPACE_ENVIRONMENT: "V1_TESTNET",
-        NODE_ENV: "test",
-      }),
-      describeEnvReadiness: () => ({
-        valid: true,
-        missingForArmed: [],
-        message: "env ready",
-        environment: "V1_TESTNET",
-      }),
-    }));
-
-    vi.doMock("../../src/core/db/database.server", () => ({
-      databaseHealth: async () => ({ state: "OK", message: "db ok" }),
-    }));
-
-    vi.doMock("../../src/core/config/environment.server", () => ({
-      evaluateEnvironmentConformance: async () => ({
-        environment: "V1_TESTNET",
-        conformant: true,
-        at: new Date().toISOString(),
-        checks: [],
-        failures: [],
-      }),
-    }));
-
-    vi.doMock("../../src/core/config/operations.server", () => ({
-      activeOperations: () => ({ version: 1 }),
-      operationsHealth: () => ({ state: "OK", message: "ops ok" }),
-    }));
-
-    vi.doMock("../../src/core/db/lock.server", () => ({
-      instanceLockHeld: () => true,
-    }));
-
-    vi.doMock("../../src/core/execution/execution.server", () => ({
-      executionRecoveryStatus: () => ({ state: "OK", message: "recovered" }),
-    }));
-
-    vi.doMock("../../src/core/state/store", () => ({
-      getRuntimeState: () => ({
-        engineStatus: "OBSERVE",
-        emergencyStop: false,
-        emergencyStopReason: null,
-      }),
-    }));
-
-    vi.doMock("../../src/core/health/registry", () => ({
-      collectHealth: async () => ({
-        state: "OK",
-        components: [
-          { component: "wallet", state: "OK", message: "wallet ok" },
-          { component: "polymarket", state: "OK", message: "polymarket ok" },
-          { component: "binance", state: "OK", message: "binance ok" },
-          { component: "chainlink", state: "OK", message: "chainlink ok" },
-        ],
-      }),
-    }));
-
     const { runStartupValidation } = await import("../../src/core/startup/validation.server");
     const report = await runStartupValidation();
     expect(report.valid).toBe(true);
@@ -81,58 +83,12 @@ describe("startup validation", () => {
   });
 
   it("blocks when emergency stop is latched", async () => {
-    vi.doMock("../../src/core/config/env.server", () => ({
-      loadEnv: () => ({
-        DB_PATH: "./data/space.db",
-        SPACE_ENVIRONMENT: "V1_TESTNET",
-        NODE_ENV: "test",
-      }),
-      describeEnvReadiness: () => ({
-        valid: true,
-        missingForArmed: [],
-        message: "env ready",
-        environment: "V1_TESTNET",
-      }),
-    }));
-
-    vi.doMock("../../src/core/db/database.server", () => ({
-      databaseHealth: async () => ({ state: "OK", message: "db ok" }),
-    }));
-
-    vi.doMock("../../src/core/config/environment.server", () => ({
-      evaluateEnvironmentConformance: async () => ({
-        environment: "V1_TESTNET",
-        conformant: true,
-        at: new Date().toISOString(),
-        checks: [],
-        failures: [],
-      }),
-    }));
-
-    vi.doMock("../../src/core/config/operations.server", () => ({
-      activeOperations: () => ({ version: 1 }),
-      operationsHealth: () => ({ state: "OK", message: "ops ok" }),
-    }));
-
-    vi.doMock("../../src/core/db/lock.server", () => ({
-      instanceLockHeld: () => true,
-    }));
-
-    vi.doMock("../../src/core/execution/execution.server", () => ({
-      executionRecoveryStatus: () => ({ state: "OK", message: "recovered" }),
-    }));
-
-    vi.doMock("../../src/core/state/store", () => ({
-      getRuntimeState: () => ({
-        engineStatus: "OBSERVE",
-        emergencyStop: true,
-        emergencyStopReason: "operator panic",
-      }),
-    }));
-
-    vi.doMock("../../src/core/health/registry", () => ({
-      collectHealth: async () => ({ state: "OK", components: [] }),
-    }));
+    runtimeState = {
+      engineStatus: "OBSERVE",
+      emergencyStop: true,
+      emergencyStopReason: "operator panic",
+    };
+    mockHealth.collectHealth.mockResolvedValue({ state: "OK", components: [] });
 
     const { runStartupValidation } = await import("../../src/core/startup/validation.server");
     const report = await runStartupValidation();
