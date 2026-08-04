@@ -30,6 +30,8 @@ export async function statistics(): Promise<StatisticsSnapshot> {
       ),
       intents: dataset.intents,
       risk: dataset.risk,
+      orderTransitions: dataset.orderTransitions,
+      positionTransitions: dataset.positionTransitions,
     });
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);
