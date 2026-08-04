@@ -76,7 +76,7 @@ export function RuntimeDiagnostics() {
                 <Td mono>
                   {stage.lastSuccessAt ? new Date(stage.lastSuccessAt).toLocaleTimeString() : "—"}
                 </Td>
-                <Td className={stage.lastError ? "text-fail" : undefined}>
+                <Td className={stage.lastError ? "text-fail" : ""}>
                   {stage.lastError ?? stage.waitingReason ?? "—"}
                 </Td>
                 <Td>{stage.recovery}</Td>
