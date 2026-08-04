@@ -12,6 +12,7 @@ import { stopClobMarketFeed } from "./market/clob-ws.server";
 import { resetPaperVenue } from "./execution/paper.server";
 import { resetOperations } from "./config/operations.server";
 import { clearHealthChecks } from "./health/registry";
+import { resetStability } from "./metrics/stability.server";
 import { resetConnections } from "./runtime/connections.server";
 import { invalidatePeek } from "./runtime/peek.server";
 import { eventBus } from "./bus/events";
@@ -68,6 +69,8 @@ export async function teardownRuntime(reason: string): Promise<RuntimeResourceAu
     resetConnections();
     clearHealthChecks();
     invalidatePeek();
+    // Stability baselines belong to the runtime generation that produced them.
+    resetStability();
 
     // Persist the final state while storage is still attached.
     updateRuntimeState(
