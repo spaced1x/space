@@ -9,6 +9,7 @@ import type { JsonObject } from "../shared/json";
 import { RateLimitError, rateLimitStatus, withRateLimit } from "./rate-limit.server";
 import { walletSigner, walletStatus } from "./wallet.server";
 import type {
+import { applyFailureScenario } from "../validation/failure-simulation.server";
   VenueAdapter,
   VenueDescription,
   VenueOrderAck,
@@ -128,7 +129,9 @@ async function track<T>(fn: () => Promise<T>): Promise<T> {
   const current = init();
   current.lastCallAt = systemClock.iso();
   try {
-    const result = await fn();
+    // Every CLOB trading call funnels through here, so this is the single point
+    // where a trading-API outage can be injected for a recovery drill.
+    const result = await applyFailureScenario("clob_trading", fn);
     current.lastError = null;
     return result;
   } catch (error) {
