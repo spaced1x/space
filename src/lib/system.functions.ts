@@ -34,7 +34,10 @@ import { measureStability, recordSnapshotGeneration } from "../core/metrics/stab
 import { pipelineSnapshot } from "../core/runtime/pipeline.server";
 import { readRuntimeTarget } from "../core/runtime/target.server";
 import { systemClock } from "../core/shared/clock";
+import { createLogger } from "../core/logging/logger";
 import type { HealthReport } from "../core/health/types";
+
+const snapshotLog = createLogger("snapshot");
 
 // Single read surface: Mission Control, Overview and Statistics all subscribe
 // to this one snapshot so no two panels can disagree. It always carries both
