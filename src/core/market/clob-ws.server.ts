@@ -148,6 +148,7 @@ export function startClobMarketFeed(): void {
   started = true;
   client = createWsClient({
     name: "clob-market",
+    faultTarget: "clob_market_ws",
     url: () => loadEnv().POLYMARKET_CLOB_WS_URL,
     onOpen: (send) => resubscribe(send),
     onMessage: ingest,

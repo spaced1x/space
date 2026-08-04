@@ -78,6 +78,7 @@ export function createBinanceFeed(onSample: (sample: PriceSample) => void): Pric
 
   return {
     name: "binance",
+    faultTarget: "binance",
     source: "BINANCE",
 
     async start() {

@@ -148,6 +148,7 @@ function ensureClient(): WsClient {
   const env = loadEnv();
   client = createWsClient({
     name: "rtds",
+    faultTarget: "rtds",
     url: () => loadEnv().RTDS_WS_URL,
     onOpen: (send) => resubscribeAll(send),
     onMessage: ingest,
