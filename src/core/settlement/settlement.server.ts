@@ -5,6 +5,7 @@ import { eventBus } from "../bus/events";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
 import { correlationId } from "../shared/ids";
+import { spaceFetch } from "../shared/http.server";
 
 // Settlement ingestion. Fills alone say what SPACE paid; only the venue's
 // resolved outcome says what a position was worth. Without this loop Replay,
@@ -85,7 +86,9 @@ async function fetchResolution(conditionId: string): Promise<GammaResolution | n
   const env = loadEnv();
   const url = new URL("/markets", env.POLYMARKET_GAMMA_URL);
   url.searchParams.set("condition_ids", conditionId);
-  const response = await fetch(url, { headers: { accept: "application/json" } });
+  const { response } = await spaceFetch("settlement", url.toString(), {
+    headers: { accept: "application/json" },
+  });
   if (!response.ok) throw new Error(`gamma ${response.status}`);
   const body = (await response.json()) as GammaResolution[] | { data?: GammaResolution[] };
   const rows = Array.isArray(body) ? body : (body.data ?? []);

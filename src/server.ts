@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { boot } from "./core/boot.server";
+import { installProcessSignalHandlers } from "./core/process/signals.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -13,6 +14,9 @@ let serverEntryPromise: Promise<ServerEntry> | undefined;
 // The trading runtime boots exactly once per process, independent of any
 // browser request. The dashboard is a viewer; opening or closing tabs must
 // never start, stop or restart the runtime.
+// Signals are bound before boot so a stop during startup still tears down
+// cleanly and releases the instance lock.
+installProcessSignalHandlers();
 void boot().catch((error) => {
   console.error(
     "Runtime boot failed at process start:",

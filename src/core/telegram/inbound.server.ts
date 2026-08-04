@@ -6,6 +6,7 @@ import { createLogger } from "../logging/logger";
 import { correlationId } from "../shared/ids";
 import { loadEnv } from "../config/env.server";
 import { sendTelegramMessage } from "./telegram.service";
+import { spaceFetch } from "../shared/http.server";
 
 // Inbound Telegram command receiver.
 //
@@ -171,7 +172,7 @@ async function poll(): Promise<void> {
 
   const url = `https://api.telegram.org/bot${cfg.botToken}/getUpdates`;
   try {
-    const response = await fetch(url, {
+    const { response } = await spaceFetch("telegram", url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

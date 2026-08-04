@@ -1,5 +1,7 @@
 import { clock } from "../clock/clock.service";
 import { createLogger } from "../logging/logger";
+import { activeFailureScenario } from "../validation/failure-simulation.server";
+import type { FaultTarget } from "../validation/failure-simulation.server";
 
 // Reconnecting WebSocket client shared by every venue stream (Polymarket RTDS,
 // the Polymarket CLOB market channel, Binance).
@@ -17,6 +19,8 @@ export type SocketState = "IDLE" | "CONNECTING" | "CONNECTED" | "STALE" | "RECON
 
 export interface WsClientOptions {
   name: string;
+  /** Fault-injection target so recovery drills can drop this socket on demand. */
+  faultTarget?: FaultTarget;
   url: () => string;
   /** Frames sent immediately after every (re)connect. Resubscription lives here. */
   onOpen?: (send: (frame: string) => void) => void;
@@ -148,6 +152,14 @@ export function createWsClient(options: WsClientOptions): WsClient {
     }
     endpoint = target;
     state = state === "IDLE" ? "CONNECTING" : state;
+    const fault = options.faultTarget ? activeFailureScenario(options.faultTarget) : null;
+    if (fault) {
+      // Injected faults take the same path as a real refused connection, so the
+      // drill exercises the production reconnect and backoff logic.
+      errors += 1;
+      scheduleReconnect(`${fault.errorMessage} (injected)`);
+      return;
+    }
     try {
       const next = new WebSocket(target);
       socket = next;

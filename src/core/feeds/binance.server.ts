@@ -86,6 +86,7 @@ export function createBinanceFeed(onSample: (sample: PriceSample) => void): Pric
       stopped = false;
       client = createWsClient({
         name: "binance",
+        faultTarget: "binance",
         // Resubscription is the stream path itself: a reconnect re-opens the
         // documented combined-stream URL for the configured symbol.
         url: endpoint,

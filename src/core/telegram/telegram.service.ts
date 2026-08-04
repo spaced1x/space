@@ -2,6 +2,7 @@ import { loadEnv } from "../config/env.server";
 import { telegramRepository } from "../db/repositories/telegram.repository";
 import { createLogger } from "../logging/logger";
 import { eventBus } from "../bus/events";
+import { spaceFetch } from "../shared/http.server";
 
 const log = createLogger("telegram");
 
@@ -38,7 +39,7 @@ export async function sendTelegramMessage(text: string, type = "broadcast"): Pro
 
   const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
   try {
-    const response = await fetch(url, {
+    const { response } = await spaceFetch("telegram", url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

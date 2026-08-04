@@ -6,6 +6,7 @@ import type { DatabaseDiagnostics, HealthResult } from "../health/types";
 import type { SqlDriver } from "./driver";
 import { createSqliteDriver } from "./drivers/sqlite.server";
 import { migrations } from "./migrations";
+import { applyFailureScenario } from "../validation/failure-simulation.server";
 
 const log = createLogger("database");
 
@@ -109,6 +110,9 @@ function applyMigrations(driver: SqlDriver): void {
 
 // Repositories are the only callers. Nothing in app/** may reach past this.
 export async function requireDriver(): Promise<SqlDriver> {
+  // Repositories all pass through here, so an injected SQLite fault reaches
+  // every persistence path at once — the same blast radius as a real lock-up.
+  await applyFailureScenario("sqlite", () => undefined);
   const current = await initDatabase();
   if (!current.driver) {
     throw new DatabaseUnavailableError(

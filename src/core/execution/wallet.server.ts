@@ -4,6 +4,7 @@ import { loadEnv } from "../config/env.server";
 import type { HealthResult } from "../health/types";
 import { createLogger } from "../logging/logger";
 import type { WalletStatus } from "./types";
+import { spaceFetch } from "../shared/http.server";
 
 // The Wallet Layer.
 //
@@ -183,7 +184,7 @@ export async function verifyChainId(): Promise<ChainCheck> {
     return lastChainCheck;
   }
   try {
-    const response = await fetch(rpcUrl, {
+    const { response } = await spaceFetch("polygon_rpc", rpcUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),

@@ -80,14 +80,15 @@ function FailureHarnessPanel() {
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            {["venue-submit", "chain-read", "gamma-discovery"].map((name) => (
+            {harness.targets.map((target) => (
               <button
-                key={name}
+                key={target.name}
                 type="button"
-                onClick={() => void send("register", name)}
+                title={target.label}
+                onClick={() => void send("register", target.name)}
                 className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-[11px] text-card-foreground hover:border-primary"
               >
-                inject {name}
+                inject {target.name}
               </button>
             ))}
             <button

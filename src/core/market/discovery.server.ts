@@ -10,6 +10,7 @@ import { createLogger } from "../logging/logger";
 import type { HealthResult } from "../health/types";
 import { applyDiscovery } from "./state";
 import type { DiscoveredMarket, DiscoveryStats, MarketHorizon, MarketStatus } from "./types";
+import { spaceFetch } from "../shared/http.server";
 
 // Automatic discovery of the official active BTC up/down markets. Discovery
 // only: no selection prompt, no trading decision, no order data.
@@ -143,8 +144,8 @@ function classifyFailure(error: unknown): GammaFailure {
 }
 
 async function fetchGamma(url: URL): Promise<Response> {
-  const response = await withRateLimit("gamma_discovery", () =>
-    fetch(url, { headers: { accept: "application/json" } }),
+  const { response } = await withRateLimit("gamma_discovery", () =>
+    spaceFetch("gamma", url.toString(), { headers: { accept: "application/json" } }),
   );
   noteRateLimitWarning("gamma_discovery", response.headers);
   if (!response.ok) throw new Error(`gamma ${response.status}`);
