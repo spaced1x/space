@@ -475,4 +475,135 @@ export const migrations: Migration[] = [
         ON resource_audits (at);
     `,
   },
+  {
+    id: 9,
+    name: "execution_transition_ledgers",
+    sql: `
+      -- Order transition ledger. The orders table is the current-state
+      -- projection; this ledger is the history. Every state change is written
+      -- inside the same transaction that updates orders, so a transition can
+      -- never be applied without being recorded.
+      CREATE TABLE IF NOT EXISTS order_transitions (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id       TEXT NOT NULL,
+        intent_id      TEXT NOT NULL,
+        from_state     TEXT NOT NULL,
+        to_state       TEXT NOT NULL,
+        from_lifecycle TEXT NOT NULL,
+        to_lifecycle   TEXT NOT NULL,
+        at             TEXT NOT NULL,
+        venue_order_id TEXT,
+        filled_size    REAL NOT NULL DEFAULT 0,
+        price          REAL,
+        reason         TEXT NOT NULL,
+        error          TEXT,
+        environment    TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_order_transitions_order
+        ON order_transitions (order_id, id);
+      CREATE INDEX IF NOT EXISTS idx_order_transitions_at
+        ON order_transitions (at);
+
+      CREATE TRIGGER IF NOT EXISTS order_transitions_no_update
+        BEFORE UPDATE ON order_transitions
+        BEGIN SELECT RAISE(ABORT, 'order_transitions is append-only'); END;
+
+      CREATE TRIGGER IF NOT EXISTS order_transitions_no_delete
+        BEFORE DELETE ON order_transitions
+        BEGIN SELECT RAISE(ABORT, 'order_transitions is append-only'); END;
+
+      -- Position transition ledger. No mutable positions table exists: fills
+      -- remain the canonical execution record and the current position stays
+      -- derived from them. This ledger records the derived lifecycle so the
+      -- history survives restart and V1/V2 switching, and is regenerable from
+      -- fills byte-for-byte.
+      CREATE TABLE IF NOT EXISTS position_transitions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_key TEXT NOT NULL,
+        condition_id TEXT NOT NULL,
+        token_id     TEXT NOT NULL,
+        outcome      TEXT NOT NULL,
+        transition   TEXT NOT NULL,
+        size         REAL NOT NULL,
+        avg_price    REAL NOT NULL,
+        cost         REAL NOT NULL,
+        fill_id      TEXT,
+        at           TEXT NOT NULL,
+        environment  TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_position_transitions_unique
+        ON position_transitions (position_key, transition, at, fill_id);
+      CREATE INDEX IF NOT EXISTS idx_position_transitions_condition
+        ON position_transitions (condition_id, id);
+
+      CREATE TRIGGER IF NOT EXISTS position_transitions_no_update
+        BEFORE UPDATE ON position_transitions
+        BEGIN SELECT RAISE(ABORT, 'position_transitions is append-only'); END;
+
+      CREATE TRIGGER IF NOT EXISTS position_transitions_no_delete
+        BEFORE DELETE ON position_transitions
+        BEGIN SELECT RAISE(ABORT, 'position_transitions is append-only'); END;
+
+      -- One sizing decision per intent attempt. Automatic trading, manual
+      -- trading and both venues consume the same sizing module, so this row is
+      -- the record of why a given size was traded.
+      CREATE TABLE IF NOT EXISTS sizing_decisions (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        intent_id       TEXT NOT NULL,
+        attempt         INTEGER NOT NULL,
+        source          TEXT NOT NULL,
+        requested_size  REAL NOT NULL,
+        applied_size    REAL NOT NULL,
+        cap             TEXT NOT NULL,
+        exposure_before REAL NOT NULL,
+        exposure_after  REAL NOT NULL,
+        reason          TEXT NOT NULL,
+        at              TEXT NOT NULL,
+        environment     TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sizing_decisions_intent
+        ON sizing_decisions (intent_id);
+
+      CREATE TRIGGER IF NOT EXISTS sizing_decisions_no_update
+        BEFORE UPDATE ON sizing_decisions
+        BEGIN SELECT RAISE(ABORT, 'sizing_decisions is append-only'); END;
+
+      -- Paper/Live parity. Every completed strategy evaluation records the
+      -- decision tuple both environments must agree on, stamped with the
+      -- environment that produced it. Divergences are operator diagnostics and
+      -- never change trading behaviour.
+      CREATE TABLE IF NOT EXISTS parity_decisions (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        environment    TEXT NOT NULL,
+        condition_id   TEXT NOT NULL,
+        window_seconds INTEGER NOT NULL,
+        intent_id      TEXT,
+        tuple          TEXT NOT NULL,
+        at             TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_parity_decisions_unique
+        ON parity_decisions (environment, condition_id, window_seconds);
+
+      CREATE TABLE IF NOT EXISTS parity_failures (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        condition_id   TEXT NOT NULL,
+        window_seconds INTEGER NOT NULL,
+        field          TEXT NOT NULL,
+        v1_value       TEXT NOT NULL,
+        v2_value       TEXT NOT NULL,
+        at             TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_parity_failures_at
+        ON parity_failures (at);
+
+      CREATE TRIGGER IF NOT EXISTS parity_failures_no_update
+        BEFORE UPDATE ON parity_failures
+        BEGIN SELECT RAISE(ABORT, 'parity_failures is append-only'); END;
+    `,
+  },
 ];

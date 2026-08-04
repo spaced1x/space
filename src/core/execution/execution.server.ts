@@ -14,6 +14,7 @@ import { strategySnapshot } from "../strategy/strategy.server";
 import type { ExecutionIntent } from "../strategy/types";
 import { DEFAULT_EXECUTION_CONFIG } from "./config";
 import { createExecutionEngine, type ExecutionEngine } from "./engine";
+import { decideSize } from "./sizing";
 import { venueAdapter } from "./adapter.server";
 import { reconcileOpenOrders } from "./reconcile.server";
 import type { ExecutionConfig, ExecutionSnapshot, OrderMode, OrderRecord, ReconciliationResult, RiskContext } from "./types";
@@ -51,7 +52,9 @@ function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext
   const strategy = strategySnapshot();
   const market = getMarketState().markets[intent.horizon];
   const wallet = walletStatus();
-  const positions = engine ? engine.positions().filter((p) => p.status === "ACTIVE").length : 0;
+  const open = engine ? engine.positions().filter((p) => p.status === "ACTIVE") : [];
+  const positions = open.length;
+  const exposure = open.reduce((sum, position) => sum + position.size, 0);
   const ops = activeOperations();
   const manual = manualIntents.get(intent.id) ?? null;
   const marketEnabled =
@@ -67,9 +70,22 @@ function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext
       : market.downTokenId
     : null;
 
-  void attempt;
+  const at = clock().iso();
+  // Sizing is decided in exactly one place, for every path and both venues.
+  const sizing = decideSize({
+    intentId: intent.id,
+    attempt,
+    source: manual ? "MANUAL" : "STRATEGY",
+    requestedSize: manual ? manual.size : sizeForWindow(ops, intent.windowSeconds),
+    exposureBefore: exposure,
+    openPositions: positions,
+    maxPositions: config.maxPositions,
+    tradingEnabled: config.dailyTradingEnabled,
+    at,
+  });
+
   return {
-    at: clock().iso(),
+    at,
     manual: Boolean(manual),
     manualEnabled: ops.manualEnabled,
     engineArmed: runtime.lifecycle === "RUNNING",
@@ -86,7 +102,8 @@ function buildRiskContext(intent: ExecutionIntent, attempt: number): RiskContext
     activeConditionId: market?.conditionId ?? null,
     tokenId,
     alreadyExecuted: false,
-    size: manual ? manual.size : sizeForWindow(ops, intent.windowSeconds),
+    size: sizing.appliedSize,
+    sizing,
   };
 }
 
@@ -219,6 +236,7 @@ export function executionSnapshot(): ExecutionSnapshot {
       positions: positions.filter((position) => position.status === "ACTIVE").length,
     },
     lastRisk: engine?.lastRisk() ?? null,
+    lastSizing: engine?.lastSizing() ?? null,
     riskRejections: engine?.riskRejections() ?? [],
     intentsSeen: engine?.intentsSeen() ?? 0,
     lastError,

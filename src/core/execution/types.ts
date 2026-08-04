@@ -50,6 +50,109 @@ export const LIVE_ORDER_STATES: OrderState[] = [
   "PARTIAL_FILL",
 ];
 
+/**
+ * Operator-facing order lifecycle vocabulary. The internal `OrderState` is the
+ * engine's machine; this is the single vocabulary the ledger, the pipeline and
+ * the dashboard speak. The mapping is total and lossless in one direction:
+ * every internal state has exactly one lifecycle state.
+ */
+export type OrderLifecycleState =
+  | "CREATED"
+  | "VALIDATED"
+  | "READY"
+  | "SUBMITTED"
+  | "ACKNOWLEDGED"
+  | "PARTIALLY_FILLED"
+  | "FILLED"
+  | "SETTLED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "EXPIRED"
+  | "FAILED"
+  | "RECOVERING";
+
+const ORDER_LIFECYCLE: Record<OrderState, OrderLifecycleState> = {
+  INTENT_CREATED: "CREATED",
+  RISK_APPROVED: "VALIDATED",
+  RISK_REJECTED: "REJECTED",
+  ORDER_BUILD: "READY",
+  LIMIT_SUBMITTED: "SUBMITTED",
+  MARKET_SUBMITTED: "SUBMITTED",
+  LIMIT_TIMEOUT: "RECOVERING",
+  LIMIT_CANCELLED: "RECOVERING",
+  PARTIAL_FILL: "PARTIALLY_FILLED",
+  FILLED: "FILLED",
+  CANCELLED: "CANCELLED",
+  EXPIRED: "EXPIRED",
+  FAILED: "FAILED",
+};
+
+export function orderLifecycleOf(state: OrderState, venueOrderId?: string | null): OrderLifecycleState {
+  const lifecycle = ORDER_LIFECYCLE[state];
+  if (lifecycle === "SUBMITTED" && venueOrderId) return "ACKNOWLEDGED";
+  return lifecycle;
+}
+
+/** One append-only row per applied order state change. */
+export interface OrderTransitionRecord {
+  orderId: string;
+  intentId: string;
+  fromState: OrderState;
+  toState: OrderState;
+  fromLifecycle: OrderLifecycleState;
+  toLifecycle: OrderLifecycleState;
+  at: string;
+  venueOrderId: string | null;
+  filledSize: number;
+  price: number | null;
+  reason: string;
+  error: string | null;
+}
+
+export type PositionTransitionKind =
+  | "OPENING"
+  | "OPENED"
+  | "INCREASING"
+  | "REDUCING"
+  | "PARTIALLY_CLOSED"
+  | "CLOSED"
+  | "SETTLED";
+
+/** One append-only row per derived position lifecycle change. */
+export interface PositionTransitionRecord {
+  positionKey: string;
+  conditionId: string;
+  tokenId: string;
+  outcome: Direction;
+  transition: PositionTransitionKind;
+  size: number;
+  avgPrice: number;
+  cost: number;
+  fillId: string | null;
+  at: string;
+}
+
+/** The single sizing decision every trading path consumes. */
+export type SizingCap =
+  | "NONE"
+  | "WINDOW_SIZE"
+  | "MANUAL_REQUEST"
+  | "MAX_POSITIONS"
+  | "TRADING_DISABLED";
+
+export interface SizingDecision {
+  intentId: string;
+  attempt: number;
+  source: "STRATEGY" | "MANUAL";
+  requestedSize: number;
+  appliedSize: number;
+  cap: SizingCap;
+  exposureBefore: number;
+  exposureAfter: number;
+  reason: string;
+  at: string;
+}
+
 export type RiskStatus = "APPROVED" | "REJECTED";
 
 /** Deterministic rejection vocabulary. Replay renders these verbatim. */
@@ -216,6 +319,11 @@ export interface RiskContext {
   tokenId: string | null;
   alreadyExecuted: boolean;
   size: number;
+  /**
+   * The sizing decision that produced `size`. Always present in the runtime;
+   * optional only so hand-built test contexts stay terse.
+   */
+  sizing?: SizingDecision;
 }
 
 export interface ReconciliationResult {
@@ -253,6 +361,8 @@ export interface ExecutionSnapshot {
   lastError: string | null;
   startedAt: string | null;
   reconciliation: ReconciliationResult | null;
+  /** Last sizing decision, from the single sizing module. */
+  lastSizing: SizingDecision | null;
 }
 
 export type { ExecutionIntent };

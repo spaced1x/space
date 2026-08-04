@@ -156,6 +156,16 @@ function Replay() {
                         .join(", ")}
                     </p>
                   )}
+                  {window.orderTransitions.length > 0 && (
+                    <ul className="mt-2 space-y-1 font-mono text-[10px] text-muted-foreground">
+                      {window.orderTransitions.map((transition) => (
+                        <li key={`${transition.at}-${transition.toState}`}>
+                          order · {new Date(transition.at).toLocaleTimeString()} ·{" "}
+                          {transition.fromState ?? "—"} → {transition.toState} · {transition.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </article>
               ))}
               {market.data.windows.length === 0 && (
@@ -164,6 +174,39 @@ function Replay() {
                 </p>
               )}
             </div>
+          </Panel>
+
+          <Panel title="Position ledger" hint="re-derived from persisted fills only">
+            {market.data.positionTransitions.length === 0 ? (
+              <p className="font-mono text-xs text-muted-foreground">
+                no position activity recorded for this market
+              </p>
+            ) : (
+              <table className="w-full text-left font-mono text-table">
+                <thead className="text-muted-foreground">
+                  <tr>
+                    <th className="p-2 font-normal">time</th>
+                    <th className="p-2 font-normal">outcome</th>
+                    <th className="p-2 font-normal">transition</th>
+                    <th className="p-2 font-normal">size</th>
+                    <th className="p-2 font-normal">avg</th>
+                    <th className="p-2 text-right font-normal">cost</th>
+                  </tr>
+                </thead>
+                <tbody className="text-foreground">
+                  {market.data.positionTransitions.map((row) => (
+                    <tr key={`${row.fillId}-${row.transition}`} className="border-t border-border">
+                      <td className="p-2">{new Date(row.at).toLocaleTimeString()}</td>
+                      <td className="p-2">{row.outcome}</td>
+                      <td className="p-2 text-primary">{row.transition}</td>
+                      <td className="p-2">{row.size}</td>
+                      <td className="p-2">{row.avgPrice.toFixed(4)}</td>
+                      <td className="p-2 text-right">${row.cost.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </Panel>
         </>
       )}

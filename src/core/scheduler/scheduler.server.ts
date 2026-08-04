@@ -37,6 +37,18 @@ interface TaskRuntime {
   runs: number;
   failures: number;
   maxLagMs: number;
+  /** Difference between the intended slot and the actual start, per run. */
+  lastJitterMs: number | null;
+  maxJitterMs: number;
+  jitterSumMs: number;
+  jitterSamples: number;
+  /** Slots that elapsed without a run because a previous run overran. */
+  missedRuns: number;
+  /** A due slot that arrived while the previous run was still in flight. */
+  overlaps: number;
+  inFlight: boolean;
+  registeredAt: number;
+  duplicateRegistrations: number;
 }
 
 export interface TaskStatus extends JsonObject {
@@ -49,6 +61,14 @@ export interface TaskStatus extends JsonObject {
   lastError: string | null;
   overdueMs: number;
   maxLagMs: number;
+  lastJitterMs: number | null;
+  avgJitterMs: number | null;
+  maxJitterMs: number;
+  missedRuns: number;
+  overlaps: number;
+  duplicateRegistrations: number;
+  expectedRuns: number;
+  inFlight: boolean;
 }
 
 const tasks = new Map<string, TaskRuntime>();
@@ -59,6 +79,7 @@ let startedAt: number | null = null;
 let ticks = 0;
 let maxTickDriftMs = 0;
 let checkpointRestored = false;
+let duplicateRegistrations = 0;
 
 export function registerTask(definition: TaskDefinition): void {
   if (definition.intervalMs < TICK_MS) {
@@ -66,6 +87,9 @@ export function registerTask(definition: TaskDefinition): void {
   }
   const now = clock().now();
   const existing = tasks.get(definition.name);
+  // A second registration under the same name is a runtime defect: it would
+  // silently replace a live task. It is counted and surfaced, never hidden.
+  if (existing) duplicateRegistrations += 1;
   tasks.set(definition.name, {
     definition,
     nextDueAt: existing?.nextDueAt ?? (definition.runOnStart ? now : now + definition.intervalMs),
@@ -75,7 +99,19 @@ export function registerTask(definition: TaskDefinition): void {
     runs: existing?.runs ?? 0,
     failures: existing?.failures ?? 0,
     maxLagMs: 0,
+    lastJitterMs: null,
+    maxJitterMs: existing?.maxJitterMs ?? 0,
+    jitterSumMs: existing?.jitterSumMs ?? 0,
+    jitterSamples: existing?.jitterSamples ?? 0,
+    missedRuns: existing?.missedRuns ?? 0,
+    overlaps: existing?.overlaps ?? 0,
+    inFlight: false,
+    registeredAt: existing?.registeredAt ?? now,
+    duplicateRegistrations: existing ? existing.duplicateRegistrations + 1 : 0,
   });
+  if (existing) {
+    log.warn("task registered twice", { task: definition.name });
+  }
 }
 
 export function unregisterTask(name: string): void {
@@ -89,6 +125,7 @@ export function unregisterTask(name: string): void {
 export function clearTasks(): void {
   tasks.clear();
   checkpointRestored = false;
+  duplicateRegistrations = 0;
 }
 
 /** Live resource counts for the runtime resource audit. */
@@ -185,6 +222,11 @@ async function tick(targetAt: number): Promise<void> {
   try {
     for (const task of tasks.values()) {
       if (task.nextDueAt > now) continue;
+      if (task.inFlight) {
+        task.overlaps += 1;
+        log.warn("task slot overlapped a running execution", { task: task.definition.name });
+        continue;
+      }
       const lag = now - task.nextDueAt;
       if (lag > task.maxLagMs) task.maxLagMs = lag;
       const context: TaskContext = {
@@ -193,6 +235,12 @@ async function tick(targetAt: number): Promise<void> {
         correlationId: correlationId("task"),
       };
       const startedTaskAt = clock().now();
+      task.inFlight = true;
+      const jitter = startedTaskAt - task.nextDueAt;
+      task.lastJitterMs = jitter;
+      if (jitter > task.maxJitterMs) task.maxJitterMs = jitter;
+      task.jitterSumMs += Math.abs(jitter);
+      task.jitterSamples += 1;
       try {
         await task.definition.run(context);
         task.lastError = null;
@@ -200,6 +248,8 @@ async function tick(targetAt: number): Promise<void> {
         task.failures += 1;
         task.lastError = error instanceof Error ? error.message : String(error);
         log.error("task failed", { task: task.definition.name, reason: task.lastError });
+      } finally {
+        task.inFlight = false;
       }
       task.runs += 1;
       task.lastRunAt = startedTaskAt;
@@ -207,7 +257,9 @@ async function tick(targetAt: number): Promise<void> {
       // Skip missed slots instead of bursting after a stall.
       const interval = task.definition.intervalMs;
       const elapsed = clock().now();
-      task.nextDueAt = task.nextDueAt + Math.ceil((elapsed - task.nextDueAt) / interval) * interval;
+      const slots = Math.ceil((elapsed - task.nextDueAt) / interval);
+      if (slots > 1) task.missedRuns += slots - 1;
+      task.nextDueAt = task.nextDueAt + slots * interval;
     }
   } finally {
     ticking = false;
@@ -223,6 +275,8 @@ export function schedulerStatus(): {
   ticks: number;
   startedAt: string | null;
   maxTickDriftMs: number;
+  duplicateRegistrations: number;
+  overlaps: number;
   tasks: TaskStatus[];
 } {
   const now = clock().now();
@@ -232,6 +286,8 @@ export function schedulerStatus(): {
     ticks,
     startedAt: startedAt === null ? null : new Date(startedAt).toISOString(),
     maxTickDriftMs,
+    duplicateRegistrations,
+    overlaps: [...tasks.values()].reduce((sum, task) => sum + task.overlaps, 0),
     tasks: [...tasks.values()].map((task) => ({
       name: task.definition.name,
       intervalMs: task.definition.intervalMs,
@@ -242,6 +298,15 @@ export function schedulerStatus(): {
       lastError: task.lastError,
       overdueMs: Math.max(0, now - task.nextDueAt),
       maxLagMs: task.maxLagMs,
+      lastJitterMs: task.lastJitterMs,
+      avgJitterMs: task.jitterSamples ? task.jitterSumMs / task.jitterSamples : null,
+      maxJitterMs: task.maxJitterMs,
+      missedRuns: task.missedRuns,
+      overlaps: task.overlaps,
+      duplicateRegistrations: task.duplicateRegistrations,
+      // Expected runs since registration, so operators can see silent stalls.
+      expectedRuns: Math.max(0, Math.floor((now - task.registeredAt) / task.definition.intervalMs)),
+      inFlight: task.inFlight,
     })),
   };
 }
@@ -260,10 +325,12 @@ export function schedulerHealth(): HealthResult {
   }
   const failing = status.tasks.filter((task) => task.lastError !== null);
   const overdue = status.tasks.filter((task) => task.overdueMs > task.intervalMs * 3);
-  if (failing.length || overdue.length) {
+  if (failing.length || overdue.length || status.overlaps > 0 || status.duplicateRegistrations > 0) {
     return {
       state: "DEGRADED",
-      message: `${failing.length} failing, ${overdue.length} overdue task(s)`,
+      message:
+        `${failing.length} failing, ${overdue.length} overdue task(s), `
+        + `${status.overlaps} overlap(s), ${status.duplicateRegistrations} duplicate registration(s)`,
       details: { ...status },
     };
   }
@@ -296,6 +363,7 @@ export function resetSchedulerForTests(): void {
   ticks = 0;
   startedAt = null;
   maxTickDriftMs = 0;
+  duplicateRegistrations = 0;
   checkpointRestored = true;
   if (timer) clearTimeout(timer);
   timer = undefined;

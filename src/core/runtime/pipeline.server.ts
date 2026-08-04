@@ -1,5 +1,6 @@
 import { clock } from "../clock/clock.service";
 import { executionSnapshot } from "../execution/execution.server";
+import { parityStatus } from "../execution/parity.server";
 import { discoveryStats, gammaBreakerStatus } from "../market/discovery.server";
 import { getMarketState } from "../market/state";
 import { schedulerStatus } from "../scheduler/scheduler.server";
@@ -169,6 +170,7 @@ export function pipelineSnapshot(): PipelineSnapshot {
   const strategy = strategySnapshot();
   const execution = executionSnapshot();
   const scheduler = schedulerStatus();
+  const parity = parityStatus();
   const now = clock().now();
 
   const selected = strategy.market.conditionId;
@@ -300,6 +302,31 @@ export function pipelineSnapshot(): PipelineSnapshot {
       recovery: "Automatic — a trigger inside the frozen window creates the next intent",
     },
     {
+      id: "sizing",
+      label: "Sizing",
+      state: execution.lastSizing
+        ? execution.lastSizing.appliedSize > 0
+          ? "OK"
+          : "DEGRADED"
+        : "WAITING",
+      input: execution.lastSizing
+        ? `${execution.lastSizing.source} request ${execution.lastSizing.requestedSize}`
+        : "no sizing request yet",
+      output: execution.lastSizing
+        ? `applied ${execution.lastSizing.appliedSize} (cap ${execution.lastSizing.cap}) · ${execution.lastSizing.reason}`
+        : "no size decided",
+      latencyMs: null,
+      lastSuccessAt: execution.lastSizing?.at ?? null,
+      lastFailureAt: null,
+      lastError: null,
+      waitingReason: execution.lastSizing
+        ? execution.lastSizing.appliedSize > 0
+          ? null
+          : execution.lastSizing.reason
+        : "no intent has requested a size yet",
+      recovery: "Automatic — the next intent is sized by the same single sizing module",
+    },
+    {
       id: "venue",
       label: `Venue (${execution.venue.kind})`,
       state: execution.venue.ready ? "OK" : execution.lastError ? "FAILED" : "WAITING",
@@ -354,6 +381,26 @@ export function pipelineSnapshot(): PipelineSnapshot {
       lastError: null,
       waitingReason: null,
       recovery: "Automatic — the dashboard re-polls and recovers on its own",
+    },
+    {
+      id: "parity",
+      label: "V1/V2 parity",
+      state: parity.comparedAt === null
+        ? "WAITING"
+        : parity.divergentPairs > 0
+          ? "DEGRADED"
+          : "OK",
+      input: `${parity.environment} decisions vs the other environment's records`,
+      output: parity.message,
+      latencyMs: null,
+      lastSuccessAt: parity.comparedAt,
+      lastFailureAt: parity.failures.at(0)?.at ?? null,
+      lastError: parity.failures.at(0)
+        ? `${parity.failures[0]!.field}: V1 ${parity.failures[0]!.v1} vs V2 ${parity.failures[0]!.v2}`
+        : null,
+      waitingReason: parity.comparedAt === null ? "no parity comparison has run yet" : null,
+      recovery:
+        "Operator — run the same market window in both environments, then inspect the differing field",
     },
   ];
 

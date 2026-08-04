@@ -7,7 +7,15 @@ export function RuntimePanel({
   scheduler,
   feeds,
 }: {
-  scheduler: { running: boolean; tickMs: number; ticks: number; maxTickDriftMs: number; tasks: TaskStatus[] };
+  scheduler: {
+    running: boolean;
+    tickMs: number;
+    ticks: number;
+    maxTickDriftMs: number;
+    duplicateRegistrations?: number;
+    overlaps?: number;
+    tasks: TaskStatus[];
+  };
   feeds: { binance: FeedStats | null; chainlink: FeedStats | null };
 }) {
   return (
@@ -17,7 +25,8 @@ export function RuntimePanel({
           <h3 className="text-card-title font-semibold text-card-foreground">Scheduler</h3>
           <span className="font-mono text-status text-muted-foreground">
             {scheduler.running ? "running" : "stopped"} · {scheduler.tickMs}ms · drift{" "}
-            {scheduler.maxTickDriftMs}ms
+            {scheduler.maxTickDriftMs}ms · {scheduler.overlaps ?? 0} overlap(s) ·{" "}
+            {scheduler.duplicateRegistrations ?? 0} duplicate(s)
           </span>
         </div>
         <table className="mt-4 w-full text-left font-mono text-table">
@@ -27,6 +36,9 @@ export function RuntimePanel({
               <th className="pb-2 font-normal">every</th>
               <th className="pb-2 font-normal">runs</th>
               <th className="pb-2 font-normal">last</th>
+              <th className="pb-2 font-normal">jitter</th>
+              <th className="pb-2 font-normal">missed</th>
+              <th className="pb-2 font-normal">overlap</th>
               <th className="pb-2 text-right font-normal">fails</th>
             </tr>
           </thead>
@@ -39,6 +51,21 @@ export function RuntimePanel({
                 <td className="py-2 pr-2">
                   {task.lastDurationMs != null ? `${task.lastDurationMs}ms` : "—"}
                 </td>
+                <td className="py-2 pr-2">
+                  {task.lastJitterMs != null
+                    ? `${Math.round(task.lastJitterMs)}ms / max ${Math.round(task.maxJitterMs)}ms`
+                    : "—"}
+                </td>
+                <td
+                  className={`py-2 pr-2 ${task.missedRuns > 0 ? "text-warn" : "text-muted-foreground"}`}
+                >
+                  {task.missedRuns}
+                </td>
+                <td
+                  className={`py-2 pr-2 ${task.overlaps > 0 ? "text-fail" : "text-muted-foreground"}`}
+                >
+                  {task.overlaps}
+                </td>
                 <td
                   className={`py-2 text-right ${task.failures > 0 ? "text-fail" : "text-muted-foreground"}`}
                 >
@@ -48,7 +75,7 @@ export function RuntimePanel({
             ))}
             {scheduler.tasks.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-3 text-muted-foreground">
+                <td colSpan={8} className="py-3 text-muted-foreground">
                   no tasks registered
                 </td>
               </tr>
