@@ -177,6 +177,19 @@ Persist to SQLite so Diagnostics survives every restart: runtime lifecycle trans
 
 Identical behaviour on Lovable Preview, the Preview URL, `bun run build`, PM2 on the VPS, behind an Nginx reverse proxy, and behind Cloudflare later. No environment-specific code, no preview-only behaviour, no localhost assumptions, no hot-reload assumptions, no embedded-runtime assumptions. The dashboard reaches the runtime through a configured base URL defaulting to same-origin, so it can also view a remote VPS runtime unchanged.
 
+The operator terminal must render identically on:
+
+- Lovable Preview
+- Lovable Preview URL
+- Local Production (`bun run build && bun run start`)
+- VPS (PM2)
+- VPS behind Nginx
+- VPS behind Cloudflare (future)
+
+Mission Control, Operations Desk, Replay, Manual Trading, Statistics, Diagnostics and Settings must display identical layouts, runtime cards, timelines, connection states, typography and behaviour.
+
+There must be no Preview-only rendering, Preview-only runtime behaviour, VPS-only rendering or environment-specific UI logic.
+
 ### 9. Acceptance criteria
 
 Phase 2 is not complete until all of these hold:
