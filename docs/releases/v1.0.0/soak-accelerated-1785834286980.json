@@ -1,0 +1,304 @@
+{
+  "kind": "accelerated",
+  "startedAt": "2026-08-04T08:54:46.734Z",
+  "finishedAt": "2026-08-04T09:04:46.980Z",
+  "minutes": 10,
+  "compression": 10,
+  "compressedTasks": [
+    {
+      "task": "auto-disarm",
+      "intervalMs": 100
+    },
+    {
+      "task": "runtime-metrics",
+      "intervalMs": 3000
+    },
+    {
+      "task": "scheduled-backup",
+      "intervalMs": 8640000
+    },
+    {
+      "task": "engine.tick",
+      "intervalMs": 100
+    },
+    {
+      "task": "feed.binance.watchdog",
+      "intervalMs": 200
+    },
+    {
+      "task": "feed.chainlink.poll",
+      "intervalMs": 1500
+    },
+    {
+      "task": "market.discovery",
+      "intervalMs": 2000
+    },
+    {
+      "task": "twap.provider.poll",
+      "intervalMs": 100
+    },
+    {
+      "task": "strategy.evaluate",
+      "intervalMs": 100
+    },
+    {
+      "task": "execution.run",
+      "intervalMs": 100
+    },
+    {
+      "task": "settlement.ingest",
+      "intervalMs": 3000
+    },
+    {
+      "task": "parity.compare",
+      "intervalMs": 1000
+    },
+    {
+      "task": "clob-market-feed",
+      "intervalMs": 200
+    }
+  ],
+  "samples": 38,
+  "verdict": "WARN",
+  "findings": [
+    "heap growing 95.4 MB/hour"
+  ],
+  "heapGrowthBytesPerHour": 100024413,
+  "rssGrowthBytesPerHour": 30924289,
+  "countDrift": {},
+  "scheduler": {
+    "ticks": 6001,
+    "maxTickDriftMs": 79,
+    "overlaps": 0,
+    "duplicateRegistrations": 0,
+    "maxJitterMs": 219,
+    "missedRuns": 28
+  },
+  "schedulerTasks": [
+    {
+      "name": "auto-disarm",
+      "runs": 5999,
+      "failures": 0,
+      "maxJitterMs": 85,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "runtime-metrics",
+      "runs": 199,
+      "failures": 0,
+      "maxJitterMs": 10,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "scheduled-backup",
+      "runs": 0,
+      "failures": 0,
+      "maxJitterMs": 0,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "engine.tick",
+      "runs": 6000,
+      "failures": 0,
+      "maxJitterMs": 85,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "feed.binance.watchdog",
+      "runs": 2999,
+      "failures": 0,
+      "maxJitterMs": 85,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "feed.chainlink.poll",
+      "runs": 400,
+      "failures": 0,
+      "maxJitterMs": 43,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "market.discovery",
+      "runs": 301,
+      "failures": 0,
+      "maxJitterMs": 45,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "twap.provider.poll",
+      "runs": 5993,
+      "failures": 0,
+      "maxJitterMs": 219,
+      "missedRuns": 9,
+      "overlaps": 0
+    },
+    {
+      "name": "strategy.evaluate",
+      "runs": 5991,
+      "failures": 0,
+      "maxJitterMs": 219,
+      "missedRuns": 9,
+      "overlaps": 0
+    },
+    {
+      "name": "execution.run",
+      "runs": 5992,
+      "failures": 0,
+      "maxJitterMs": 219,
+      "missedRuns": 10,
+      "overlaps": 0
+    },
+    {
+      "name": "settlement.ingest",
+      "runs": 201,
+      "failures": 0,
+      "maxJitterMs": 178,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "parity.compare",
+      "runs": 599,
+      "failures": 0,
+      "maxJitterMs": 85,
+      "missedRuns": 0,
+      "overlaps": 0
+    },
+    {
+      "name": "clob-market-feed",
+      "runs": 2999,
+      "failures": 0,
+      "maxJitterMs": 85,
+      "missedRuns": 0,
+      "overlaps": 0
+    }
+  ],
+  "snapshots": {
+    "generated": 0,
+    "lastDurationMs": null,
+    "p50DurationMs": null,
+    "p95DurationMs": null
+  },
+  "reconnects": [
+    {
+      "connection": "Runtime Validator",
+      "reconnects": 0,
+      "disconnects": 1
+    }
+  ],
+  "totalReconnects": 0,
+  "finalCounts": {
+    "timers": 1,
+    "sockets": 4,
+    "databaseHandles": 1,
+    "locks": 1,
+    "eventListeners": 1,
+    "wildcardListeners": 1,
+    "schedulerTasks": 13,
+    "schedulers": 1,
+    "engineLoops": 1
+  },
+  "finalSample": {
+    "at": "2026-08-04T09:04:46.978Z",
+    "uptimeSeconds": 602,
+    "rssBytes": 300044288,
+    "heapUsedBytes": 67066400,
+    "heapTotalBytes": 93122560,
+    "externalBytes": 27075628,
+    "cpuUserSeconds": 21.54,
+    "cpuSystemSeconds": 1.92
+  },
+  "drills": [
+    {
+      "name": "reconnect storm",
+      "ran": true,
+      "detail": "6 cycles, 24 socket reconnect attempts, registry total 0",
+      "countsBefore": {
+        "timers": 1,
+        "sockets": 4,
+        "databaseHandles": 1,
+        "locks": 1,
+        "eventListeners": 1,
+        "wildcardListeners": 1,
+        "schedulerTasks": 13,
+        "schedulers": 1,
+        "engineLoops": 1
+      },
+      "countsAfter": {
+        "timers": 1,
+        "sockets": 4,
+        "databaseHandles": 1,
+        "locks": 1,
+        "eventListeners": 1,
+        "wildcardListeners": 1,
+        "schedulerTasks": 13,
+        "schedulers": 1,
+        "engineLoops": 1
+      },
+      "leaked": []
+    },
+    {
+      "name": "TWAP provider rollover",
+      "ran": true,
+      "detail": "rtds_twap_30:promoted rtds_twap_60:promoted chainlink_streams:refused rtds_twap_30:restored | services=1 rtdsSockets=1",
+      "countsBefore": {
+        "timers": 1,
+        "sockets": 4,
+        "databaseHandles": 1,
+        "locks": 1,
+        "eventListeners": 1,
+        "wildcardListeners": 1,
+        "schedulerTasks": 13,
+        "schedulers": 1,
+        "engineLoops": 1
+      },
+      "countsAfter": {
+        "timers": 1,
+        "sockets": 4,
+        "databaseHandles": 1,
+        "locks": 1,
+        "eventListeners": 1,
+        "wildcardListeners": 1,
+        "schedulerTasks": 13,
+        "schedulers": 1,
+        "engineLoops": 1
+      },
+      "leaked": []
+    },
+    {
+      "name": "market discovery rollover",
+      "ran": true,
+      "detail": "3 refreshes | {\"lastRefreshAt\":\"2026-08-04T08:55:29.104Z\",\"lastSuccessAt\":\"2026-08-04T08:55:29.147Z\",\"refreshes\":26,\"errors\":0,\"lastError\":null,\"candidatesSeen\":13,\"latencyMs\":43}",
+      "countsBefore": {
+        "timers": 1,
+        "sockets": 4,
+        "databaseHandles": 1,
+        "locks": 1,
+        "eventListeners": 1,
+        "wildcardListeners": 1,
+        "schedulerTasks": 13,
+        "schedulers": 1,
+        "engineLoops": 1
+      },
+      "countsAfter": {
+        "timers": 1,
+        "sockets": 4,
+        "databaseHandles": 1,
+        "locks": 1,
+        "eventListeners": 1,
+        "wildcardListeners": 1,
+        "schedulerTasks": 13,
+        "schedulers": 1,
+        "engineLoops": 1
+      },
+      "leaked": []
+    }
+  ]
+}

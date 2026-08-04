@@ -13,6 +13,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 interface Check {
@@ -25,6 +26,8 @@ interface Check {
 const checks: Check[] = [];
 const OUT_DIR = "docs/releases/v1.0.0";
 const PORT = Number(process.env["GATE_PORT"] ?? 8099);
+const JITI = "node_modules/.bin/jiti";
+const SOAK_MINUTES = Number(process.env["GATE_SOAK_MINUTES"] ?? 3);
 
 function record(stage: Check["stage"], name: string, passed: boolean, detail: string): void {
   checks.push({ stage, name, passed, detail });
@@ -306,6 +309,9 @@ async function main(): Promise<void> {
     run("static", "eslint", "bunx", ["eslint", "."]);
     run("static", "tests", "bunx", ["vitest", "run"]);
     run("static", "production build", "bunx", ["vite", "build"], { NITRO_PRESET: "node-server" });
+    run("static", "replay/statistics regeneration", "node", [JITI, "scripts/verify-replay.ts"], {
+      DB_PATH: process.env["DB_PATH"] ?? "./data/space-v1.db",
+    });
     dependencyAudit();
     secretScan();
     await migrationCheck();
@@ -339,6 +345,20 @@ async function main(): Promise<void> {
   }
 
   if (child) child.kill("SIGTERM");
+
+  // ── stage 3: accelerated soak ────────────────────────────────────────────
+  // Runs last, against an isolated database, so the single-instance lock is
+  // free and the harness cannot touch operator data.
+  if (!process.env["SKIP_SOAK"]) {
+    console.log("\n── stage 3: accelerated soak ──");
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const soakDb = join(tmpdir(), `space-gate-soak-${Date.now()}.db`);
+    run("static", `accelerated soak (${SOAK_MINUTES}m)`, "node", [JITI, "scripts/soak.ts"], {
+      SOAK_ACCELERATED: "1",
+      SOAK_MINUTES: String(SOAK_MINUTES),
+      DB_PATH: soakDb,
+    });
+  }
 
   const failures = checks.filter((check) => !check.passed);
   const passed = failures.length === 0;

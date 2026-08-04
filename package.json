@@ -15,8 +15,10 @@
     "build:vps": "NITRO_PRESET=node-server vite build",
     "start": "node dist/server/index.mjs",
     "env:example": "bun scripts/write-env-example.ts",
-    "soak": "bun scripts/soak.ts",
-    "release:gate": "bun scripts/release-gate.ts"
+    "soak": "node node_modules/.bin/jiti scripts/soak.ts",
+    "release:gate": "node node_modules/.bin/jiti scripts/release-gate.ts",
+    "soak:accelerated": "SOAK_ACCELERATED=1 node node_modules/.bin/jiti scripts/soak.ts",
+    "verify:replay": "node node_modules/.bin/jiti scripts/verify-replay.ts"
   },
   "dependencies": {
     "@polymarket/clob-client": "^5.8.1",
@@ -52,6 +54,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "jiti": "^2.7.0",
     "nitro": "3.0.260603-beta",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
