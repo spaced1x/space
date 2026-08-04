@@ -1,4 +1,11 @@
-import type { FillRecord, OrderRecord, PositionRecord, RiskDecision } from "../execution/types";
+import type {
+  FillRecord,
+  OrderRecord,
+  OrderTransitionRecord,
+  PositionRecord,
+  PositionTransitionRecord,
+  RiskDecision,
+} from "../execution/types";
 import type { ExecutionIntent } from "../strategy/types";
 
 // Statistics is a pure reduction over persisted execution evidence.
@@ -77,6 +84,12 @@ export interface StatisticsSnapshot {
     filled: number;
     realizedPnl: number;
   };
+  /** Append-only evidence behind every number above. */
+  ledger: {
+    orderTransitions: number;
+    positionTransitions: number;
+    recentPositionTransitions: PositionTransitionRecord[];
+  };
 }
 
 export interface StatisticsInput {
@@ -87,6 +100,8 @@ export interface StatisticsInput {
   positions: PositionRecord[];
   intents: ExecutionIntent[];
   risk: RiskDecision[];
+  orderTransitions?: OrderTransitionRecord[];
+  positionTransitions?: PositionTransitionRecord[];
 }
 
 function day(iso: string): string {
