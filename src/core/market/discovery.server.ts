@@ -169,11 +169,15 @@ export async function refreshMarkets(): Promise<void> {
   stats.lastRefreshAt = new Date(nowMs).toISOString();
 
   try {
-    const url = new URL("/markets", env.POLYMARKET_GAMMA_URL);
+    // The BTC up/down series is published as events, one event per window.
+    // `/markets` caps at 100 rows and, ordered by endDate ascending, returns
+    // long-dated unrelated markets only — the short-horizon crypto windows
+    // never appear in that page. Events ordered by newest start always do.
+    const url = new URL("/events", env.POLYMARKET_GAMMA_URL);
     url.searchParams.set("closed", "false");
-    url.searchParams.set("limit", "200");
-    url.searchParams.set("order", "endDate");
-    url.searchParams.set("ascending", "true");
+    url.searchParams.set("limit", "100");
+    url.searchParams.set("order", "startDate");
+    url.searchParams.set("ascending", "false");
 
     let response: Response;
     try {
@@ -187,8 +191,15 @@ export async function refreshMarkets(): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 500));
       response = await fetchGamma(url);
     }
-    const body = (await response.json()) as GammaMarket[] | { data?: GammaMarket[] };
-    const candidates = Array.isArray(body) ? body : (body.data ?? []);
+    const body = (await response.json()) as GammaEvent[] | { data?: GammaEvent[] };
+    const events = Array.isArray(body) ? body : (body.data ?? []);
+    // One candidate per BTC up/down window, earliest settlement first, so each
+    // horizon selects the next window that has not settled yet.
+    const candidates = events
+      .filter((event) => !event.closed && horizonFromSlug(event.slug) !== null)
+      .flatMap((event) => (event.markets ?? []).slice(0, 1))
+      .filter((market) => horizonFromSlug(market.slug) !== null)
+      .sort((a, b) => Date.parse(a.endDate ?? "") - Date.parse(b.endDate ?? ""));
     stats.candidatesSeen = candidates.length;
 
     const picked: Partial<Record<MarketHorizon, DiscoveredMarket | null>> = {
@@ -197,10 +208,12 @@ export async function refreshMarkets(): Promise<void> {
     };
 
     for (const candidate of candidates) {
-      if (!isBitcoinUpDown(candidate) || !candidate.conditionId) continue;
-      const horizon = classify(candidate);
+      if (!candidate.conditionId) continue;
+      const horizon = horizonFromSlug(candidate.slug);
       if (!horizon || picked[horizon]) continue;
       const endMs = Date.parse(candidate.endDate ?? "");
+      // Never select a window that has already settled.
+      if (!Number.isFinite(endMs) || endMs <= nowMs) continue;
       const tokens = asArray(candidate.clobTokenIds);
       const bestBid = asNumber(candidate.bestBid);
       const bestAsk = asNumber(candidate.bestAsk);
