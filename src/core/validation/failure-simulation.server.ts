@@ -73,6 +73,12 @@ export function getFailureScenarios(): FailureScenario[] {
   return Array.from(scenarios.values());
 }
 
+/** Sync probe for call sites that cannot await, such as socket construction. */
+export function activeFailureScenario(name: string): FailureScenario | null {
+  const scenario = scenarios.get(name);
+  return scenario && scenario.active ? scenario : null;
+}
+
 export async function applyFailureScenario<T>(
   name: string,
   normal: () => Promise<T> | T,
@@ -90,8 +96,11 @@ export async function applyFailureScenario<T>(
     case "throw":
       throw new Error(scenario.errorMessage);
     case "timeout":
-      await new Promise(() => undefined); // never resolves
-      throw new Error("unreachable");
+      // A scenario that never settles would leak the caller's promise for the
+      // life of the process, so the hang is bounded and then reported as a
+      // timeout — which is what the real dependency does anyway.
+      await new Promise((resolve) => setTimeout(resolve, scenario.delayMs ?? 30_000));
+      throw new Error(`${scenario.errorMessage} (simulated timeout)`);
     case "return":
       return scenario.returnValue as T;
     default:
