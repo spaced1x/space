@@ -32,6 +32,7 @@ import { performBackup } from "./backup/backup.service";
 import { acquireInstanceLock, releaseInstanceLock } from "./db/lock.server";
 import { runStartupValidation } from "./startup/validation.server";
 import { sampleAndPersistMetrics } from "./metrics/metrics.server";
+import { measureStability } from "./metrics/stability.server";
 import { startTelegramInbound } from "./telegram/inbound.server";
 import {
   hydrateConnectionHistory,
@@ -317,6 +318,9 @@ async function runBoot(): Promise<void> {
       intervalMs: 30_000,
       run: async () => {
         await sampleAndPersistMetrics();
+        // Leak detection runs on the same cadence in production, so a real VPS
+        // soak and the accelerated harness produce the same numbers.
+        measureStability();
       },
     }),
   );
