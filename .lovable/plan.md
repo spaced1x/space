@@ -114,6 +114,18 @@ PM2 starts SPACE. SPACE boots itself. The runtime reaches READY on its own and b
 
 `boot()` moves to the process entry point and is invoked exactly once there. All 24 in-handler `boot()` calls are removed. A read that arrives before READY returns the current lifecycle state (including `NOT_BOOTED`) — it never triggers a boot.
 
+### Dashboard isolation
+
+The dashboard is a read-only operator terminal. Dashboard failures must never affect the runtime.
+
+- If the browser disconnects, the runtime continues operating normally.
+- If React crashes, the runtime continues operating normally.
+- If the dashboard cannot reach the runtime, the runtime continues operating normally.
+- If `/api/runtime/snapshot` temporarily fails, the runtime continues operating normally.
+- If every browser tab is closed, the runtime continues operating normally.
+
+The trading engine, scheduler, feeds, TWAP service, venue, replay and statistics never depend on the dashboard. The dashboard never owns any runtime state.
+
 ### 2. The snapshot API is the only runtime API
 
 Two endpoints, and nothing else, may be read by any page:
@@ -139,6 +151,12 @@ Every snapshot carries: `snapshotVersion`, `runtimeVersion`, `buildVersion`, `en
 - A snapshot whose `sequence` is lower than the one already held is discarded.
 - The browser only ever renders the newest accepted snapshot.
 
+### Runtime data integrity
+
+No mocked runtime values. No placeholder telemetry. No fabricated connection states. No synthetic prices. No fake health values. No estimated execution status.
+
+If the runtime has not yet observed a value, the snapshot reports that explicitly together with its reason. Every value rendered anywhere in the operator terminal must originate from the runtime snapshot.
+
 ### 4. Abstract transport (future-proofing)
 
 The dashboard reads through a single transport interface — subscribe to snapshots, receive snapshots. Today it is implemented by polling. Tomorrow a WebSocket snapshot stream replaces the implementation with no change to any page or panel.
@@ -159,6 +177,19 @@ Persist to SQLite so Diagnostics survives every restart: runtime lifecycle trans
 
 Identical behaviour on Lovable Preview, the Preview URL, `bun run build`, PM2 on the VPS, behind an Nginx reverse proxy, and behind Cloudflare later. No environment-specific code, no preview-only behaviour, no localhost assumptions, no hot-reload assumptions, no embedded-runtime assumptions. The dashboard reaches the runtime through a configured base URL defaulting to same-origin, so it can also view a remote VPS runtime unchanged.
 
+The operator terminal must render identically on:
+
+- Lovable Preview
+- Lovable Preview URL
+- Local Production (`bun run build && bun run start`)
+- VPS (PM2)
+- VPS behind Nginx
+- VPS behind Cloudflare (future)
+
+Mission Control, Operations Desk, Replay, Manual Trading, Statistics, Diagnostics and Settings must display identical layouts, runtime cards, timelines, connection states, typography and behaviour.
+
+There must be no Preview-only rendering, Preview-only runtime behaviour, VPS-only rendering or environment-specific UI logic.
+
 ### 9. Acceptance criteria
 
 Phase 2 is not complete until all of these hold:
@@ -177,6 +208,15 @@ Phase 2 is not complete until all of these hold:
 - Production build identical to Preview.
 - VPS identical to Preview.
 - No React warnings, no hydration warnings, no console errors.
+- Runtime continues operating after every browser tab is closed.
+- Dashboard restart never restarts the runtime.
+- Runtime never depends on React.
+- Runtime never depends on browser state.
+- No mocked runtime values.
+- No fabricated telemetry.
+- No placeholder runtime data.
+- Every displayed value originates from the runtime snapshot.
+- Preview, Production and VPS display identical runtime information.
 
 Verified by Playwright across all 7 operator pages in Lovable Preview, the Preview URL, local `bun run build && bun run start`, and the VPS.
 
