@@ -39,7 +39,8 @@ export function RuntimeDiagnostics() {
             Pipeline blocked at {data.pipeline.blockedAt.label}: {data.pipeline.blockedAt.reason}
           </p>
         ) : null}
-        <table className="w-full overflow-hidden rounded-md border border-border bg-card text-table">
+        <div className="overflow-x-auto rounded-md border border-border bg-card">
+        <table className="w-full min-w-[64rem] text-table">
           <thead className="bg-muted/60 text-label text-muted-foreground">
             <tr>
               <Th>Stage</Th>
@@ -84,6 +85,7 @@ export function RuntimeDiagnostics() {
             ))}
           </tbody>
         </table>
+        </div>
       </Panel>
 
       <Panel title="Runtime process" hint="build, schema and uptime of this process">
