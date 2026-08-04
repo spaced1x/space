@@ -120,7 +120,7 @@ function positionLifecycle(execution: ReturnType<typeof executionSnapshot>): Pos
   if (!positions.length) return "WAITING";
   const latest = positions.at(-1)!;
   if (latest.status === "CLOSED") {
-    return latest.settlementValue === null || latest.settlementValue === undefined
+    return latest.settledValue === null || latest.settledValue === undefined
       ? "CLOSED"
       : "SETTLED";
   }
