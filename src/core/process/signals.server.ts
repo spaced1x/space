@@ -44,6 +44,11 @@ export function installProcessSignalHandlers(): void {
   process.once("SIGTERM", () => void gracefulExit("SIGTERM", 0));
   process.once("SIGINT", () => void gracefulExit("SIGINT", 0));
 
+  // A fatal fault must take the process down so PM2 restarts it clean. In
+  // development that would kill the dev server on a transient HMR error, so the
+  // fault handlers only latch in a production process.
+  if (process.env["NODE_ENV"] !== "production") return;
+
   process.on("uncaughtException", (error) => {
     log.error("uncaught exception", { reason: error.message, stack: error.stack });
     void gracefulExit(`uncaught exception: ${error.message}`, 1);
