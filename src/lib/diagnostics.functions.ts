@@ -10,6 +10,8 @@ import { getRuntimeState } from "../core/state/store";
 import {
   clearAllFailureScenarios,
   clearFailureScenario,
+  FAULT_TARGETS,
+  FAULT_TARGET_LABELS,
   getFailureScenarios,
   registerFailureScenario,
 } from "../core/validation/failure-simulation.server";
@@ -54,6 +56,9 @@ export const getFailureHarness = createServerFn({ method: "GET" }).handler(async
   const production = loadEnv().NODE_ENV === "production";
   return {
     enabled: !production,
+    // The catalogue is the injectable surface: every entry is wired to a real
+    // dependency call site, so the operator cannot arm a drill that does nothing.
+    targets: FAULT_TARGETS.map((target) => ({ name: target, label: FAULT_TARGET_LABELS[target] })),
     scenarios: production ? ([] as HarnessScenarioView[]) : harnessView(),
   };
 });
